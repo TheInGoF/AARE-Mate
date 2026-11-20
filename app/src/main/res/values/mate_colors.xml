@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Die Farben von Mate - die EINE Stelle, an der sie festgelegt sind (wie eine CSS-Datei).
+  Oberflaeche im Auto (ui/car/Mate.kt), Anmeldeseite der Musik und die Zeichen lesen alle von hier.
+  Ein anderes Farbthema = eine zweite Datei dieser Namen (z. B. values-night/ oder ein eigener Ordner), sonst nichts.
+-->
+<resources>
+    <!-- Grund des Bildschirms -->
+    <color name="mate_bg">#0D1117</color>
+    <!-- noch tiefer als der Grund -->
+    <color name="mate_bg_low">#080B10</color>
+    <!-- Kacheln und Flaechen -->
+    <color name="mate_surface">#161B22</color>
+    <!-- hervorgehobene Flaeche, gedrueckte Kachel -->
+    <color name="mate_surface_high">#21262D</color>
+    <!-- Linien und Raender -->
+    <color name="mate_line">#30363D</color>
+    <!-- Schrift -->
+    <color name="mate_text">#F0F6FC</color>
+    <!-- zurueckgenommene Schrift -->
+    <color name="mate_text_dim">#8B949E</color>
+    <!-- kleine Zeichen neben Schrift -->
+    <color name="mate_text_soft">#B8C0CC</color>
+    <!-- Randnotiz ueber Bildern -->
+    <color name="mate_text_faint">#99FFFFFF</color>
+    <!-- DIE Kontrastfarbe: Auswahl, aktive Zeichen, Hauptknopf, Route -->
+    <color name="mate_accent">#1DE9B6</color>
+    <!-- Schrift und Zeichen auf der Kontrastfarbe -->
+    <color name="mate_on_accent">#0E1B2C</color>
+    <!-- gewaehlte Kachel: dunkle Stufe der Kontrastfarbe -->
+    <color name="mate_accent_container">#0E3B36</color>
+    <!-- runde Knoepfe auf der Bedienleiste -->
+    <color name="mate_plate">#33FFFFFF</color>
+    <!-- Fleck hinter der Bedienleiste (70 %) -->
+    <color name="mate_scrim">#B3000000</color>
+    <!-- Abdunklung hinter dem Umschalter -->
+    <color name="mate_scrim_switcher">#99000000</color>
+    <!-- Grund einer Randnotiz -->
+    <color name="mate_scrim_note">#66000000</color>
+    <!-- schwebende Karte ueber der Karte -->
+    <color name="mate_card">#E6161B22</color>
+    <!-- Anrufkarte -->
+    <color name="mate_card_solid">#F2161B22</color>
+    <!-- Griff der Teilung -->
+    <color name="mate_handle">#6E7681</color>
+    <!-- Anruf annehmen, Anruf laeuft -->
+    <color name="mate_call">#2EA043</color>
+    <!-- Auflegen -->
+    <color name="mate_call_end">#DA3633</color>
+    <!-- Ziel, Warnung -->
+    <color name="mate_danger">#F85149</color>
+    <!-- Punkt: Mikrofon in Gebrauch -->
+    <color name="mate_mic">#FF9F0A</color>
+    <!-- Punkt: Kamera in Gebrauch -->
+    <color name="mate_camera">#30D158</color>
+    <!-- Kartenattrappe: Land -->
+    <color name="mate_map_land">#16212B</color>
+    <!-- Kartenattrappe: Gruen -->
+    <color name="mate_map_green">#1B2A24</color>
+    <!-- Kartenattrappe: Wasser -->
+    <color name="mate_map_water">#1F3B57</color>
+    <!-- Kartenattrappe: Strasse -->
+    <color name="mate_map_street">#2E3B47</color>
+    <!-- Kartenattrappe: Hauptstrasse -->
+    <color name="mate_map_street_main">#3F4E5C</color>
+    <!-- Rand der Route -->
+    <color name="mate_route_edge">#0A4A40</color>
+    <!-- Hof um die eigene Position -->
+    <color name="mate_route_halo">#551DE9B6</color>
+    <!-- leiser Hinweis: kein Internet -->
+    <color name="mate_warn">#FFA94D</color>
+    <!-- O210: the light plate the charging networks' logos stand on (their colours are made for white) -->
+    <color name="mate_logo_plate">#F4F6F5</color>
+    <!-- Route, die noch zu fahren ist: die Kontrastfarbe -->
+    <color name="mate_route">@color/mate_accent</color>
+    <!-- the edge of cards floating over the map (O207): a solid contour instead of a soft shadow - a shadow over the moving
+         map flickered in the car's video -->
+    <color name="mate_float_edge">#0A1018</color>
+    <!-- the routes not chosen in the preview (F5): quiet grey under the chosen one, as Google shows them -->
+    <color name="mate_route_alt">#8A9AA6</color>
+    <color name="mate_route_alt_edge">#4A5862</color>
+    <!-- Speed limit sign of Mate Navi (wish of 16.11.2026, N2: the country's own signs) - Germany: white face, red ring -->
+    <color name="mate_sign_face">#FFFFFF</color>
+    <color name="mate_sign_ring">#E1251B</color>
+    <color name="mate_sign_text">#111111</color>
+    <!-- Karte (erzeugt): Anfang -->
+    <!-- Mate Navi: Farben der IDmate-Karte (mapstyle.js/maprules.js), erzeugt von projekt/werkzeuge/navi-stil.mjs – dort ändern -->
+    <!-- F2: the traffic on the roads (TomTom's flow), as Google shows it - slow orange, jam red, standing dark red -->
+    <color name="mate_karte_verkehr_zaeh">#F59E0B</color>
+    <color name="mate_karte_verkehr_stau">#E53935</color>
+    <color name="mate_karte_verkehr_steht">#8E1B1B</color>
+    <color name="mate_karte_nacht_verkehr_zaeh">#F2A93B</color>
+    <color name="mate_karte_nacht_verkehr_stau">#F05A55</color>
+    <color name="mate_karte_nacht_verkehr_steht">#B23A3A</color>
+    <!-- a closed road: red cross in a red ring on a light ground -->
+    <color name="mate_traffic_closed">#E53935</color>
+    <color name="mate_traffic_ground">#FFFFFF</color>
+    <!-- a thin light edge, so the traffic stands apart from the reddish main roads of the map -->
+    <color name="mate_karte_verkehr_kontur">#FFFFFF</color>
+    <color name="mate_karte_nacht_verkehr_kontur">#1B1F24</color>
+    <color name="mate_karte_aerodrome">#dadbdf</color>
+    <color name="mate_karte_autobahn">#ffc542</color>
+    <color name="mate_karte_autobahn_rand">#d3391f</color>
+    <color name="mate_karte_bahn">#5b5f66</color>
+    <color name="mate_karte_bahn_schwelle">#f4f1ea</color>
+    <color name="mate_karte_beach">#e8e4d0</color>
+    <color name="mate_karte_buildings">#d8cbb6</color>
+    <color name="mate_karte_bundesstrasse">#e8553c</color>
+    <color name="mate_karte_bundesstrasse_rand">#a72f1c</color>
+    <color name="mate_karte_city_label">#2b2b2b</color>
+    <color name="mate_karte_city_label_halo">#f1efe6</color>
+    <color name="mate_karte_earth">#f1efe6</color>
+    <color name="mate_karte_erschliessung">#f7f3ea</color>
+    <color name="mate_karte_erschliessung_rand">#d6ccb8</color>
+    <color name="mate_karte_faehre">#4a8fb6</color>
+    <color name="mate_karte_glacier">#e7e7e7</color>
+    <color name="mate_karte_grenze">#9a6fb0</color>
+    <color name="mate_karte_haus_rand">#ab9c85</color>
+    <color name="mate_karte_hospital">#e4dad9</color>
+    <color name="mate_karte_industrial">#d7dee3</color>
+    <color name="mate_karte_kreisstrasse">#fcefb6</color>
+    <color name="mate_karte_kreisstrasse_rand">#d4bd72</color>
+    <color name="mate_karte_landstrasse">#f7d066</color>
+    <color name="mate_karte_landstrasse_rand">#c99b2e</color>
+    <color name="mate_karte_lc_barren">#f4e7c2</color>
+    <color name="mate_karte_lc_farmland">#e6e2b4</color>
+    <color name="mate_karte_lc_forest">#a6cf9c</color>
+    <color name="mate_karte_lc_glacier">#ffffff</color>
+    <color name="mate_karte_lc_grassland">#cde6b6</color>
+    <color name="mate_karte_lc_scrub">#dfe6b8</color>
+    <color name="mate_karte_lc_urban_area">#e2ddd3</color>
+    <color name="mate_karte_military">#dcdcdc</color>
+    <color name="mate_karte_nahverkehr">#2f9187</color>
+    <color name="mate_karte_nebenstrasse">#ffffff</color>
+    <color name="mate_karte_nebenstrasse_rand">#c4b9a5</color>
+    <color name="mate_karte_ocean_label">#728dd4</color>
+    <color name="mate_karte_park_a">#bfe0b0</color>
+    <color name="mate_karte_pedestrian">#ece5d2</color>
+    <color name="mate_karte_pier">#e0e0e0</color>
+    <color name="mate_karte_roads_label_major">#5d554f</color>
+    <color name="mate_karte_roads_label_major_halo">#ffffff</color>
+    <color name="mate_karte_roads_label_minor">#6f6862</color>
+    <color name="mate_karte_roads_label_minor_halo">#ffffff</color>
+    <color name="mate_karte_runway">#e9e9ed</color>
+    <color name="mate_karte_sand">#f0e3bf</color>
+    <color name="mate_karte_school">#e4ded7</color>
+    <color name="mate_karte_scrub_a">#d6e9b2</color>
+    <color name="mate_karte_sonderbahn">#6f8296</color>
+    <color name="mate_karte_subplace_label">#5d5a55</color>
+    <color name="mate_karte_subplace_label_halo">#f1efe6</color>
+    <color name="mate_karte_water">#6cc6e0</color>
+    <color name="mate_karte_weg">#9c8664</color>
+    <color name="mate_karte_wood_a">#a9d39e</color>
+    <color name="mate_karte_zoo">#c6dcdc</color>
+    <color name="mate_karte_nacht_aerodrome">#1e1e1e</color>
+    <color name="mate_karte_nacht_autobahn">#a87a2d</color>
+    <color name="mate_karte_nacht_autobahn_rand">#8c3524</color>
+    <color name="mate_karte_nacht_bahn">#5f6a78</color>
+    <color name="mate_karte_nacht_bahn_schwelle">#1f1f1f</color>
+    <color name="mate_karte_nacht_beach">#28282a</color>
+    <color name="mate_karte_nacht_buildings">#111111</color>
+    <color name="mate_karte_nacht_bundesstrasse">#8a4033</color>
+    <color name="mate_karte_nacht_bundesstrasse_rand">#5e251c</color>
+    <color name="mate_karte_nacht_city_label">#7a7a7a</color>
+    <color name="mate_karte_nacht_city_label_halo">#212121</color>
+    <color name="mate_karte_nacht_earth">#1f1f1f</color>
+    <color name="mate_karte_nacht_erschliessung">#333333</color>
+    <color name="mate_karte_nacht_erschliessung_rand">#222222</color>
+    <color name="mate_karte_nacht_faehre">#3b6f8c</color>
+    <color name="mate_karte_nacht_glacier">#1c1c1c</color>
+    <color name="mate_karte_nacht_grenze">#6e6478</color>
+    <color name="mate_karte_nacht_haus_rand">#2b2b2b</color>
+    <color name="mate_karte_nacht_hospital">#252424</color>
+    <color name="mate_karte_nacht_industrial">#222222</color>
+    <color name="mate_karte_nacht_kreisstrasse">#4c4837</color>
+    <color name="mate_karte_nacht_kreisstrasse_rand">#343125</color>
+    <color name="mate_karte_nacht_landstrasse">#6f6235</color>
+    <color name="mate_karte_nacht_landstrasse_rand">#4b4124</color>
+    <color name="mate_karte_nacht_lc_barren">#262624</color>
+    <color name="mate_karte_nacht_lc_farmland">#1f2420</color>
+    <color name="mate_karte_nacht_lc_forest">#1c2925</color>
+    <color name="mate_karte_nacht_lc_glacier">#2b2b2b</color>
+    <color name="mate_karte_nacht_lc_grassland">#1e291f</color>
+    <color name="mate_karte_nacht_lc_scrub">#22241e</color>
+    <color name="mate_karte_nacht_lc_urban_area">#1c1c1c</color>
+    <color name="mate_karte_nacht_military">#242323</color>
+    <color name="mate_karte_nacht_nahverkehr">#2b7b73</color>
+    <color name="mate_karte_nacht_nebenstrasse">#3d3d3d</color>
+    <color name="mate_karte_nacht_nebenstrasse_rand">#282828</color>
+    <color name="mate_karte_nacht_ocean_label">#717784</color>
+    <color name="mate_karte_nacht_park_a">#1c2421</color>
+    <color name="mate_karte_nacht_pedestrian">#1e1e1e</color>
+    <color name="mate_karte_nacht_pier">#333333</color>
+    <color name="mate_karte_nacht_roads_label_major">#666666</color>
+    <color name="mate_karte_nacht_roads_label_major_halo">#1f1f1f</color>
+    <color name="mate_karte_nacht_roads_label_minor">#525252</color>
+    <color name="mate_karte_nacht_roads_label_minor_halo">#1f1f1f</color>
+    <color name="mate_karte_nacht_runway">#333333</color>
+    <color name="mate_karte_nacht_sand">#212123</color>
+    <color name="mate_karte_nacht_school">#262323</color>
+    <color name="mate_karte_nacht_scrub_a">#222323</color>
+    <color name="mate_karte_nacht_sonderbahn">#55616f</color>
+    <color name="mate_karte_nacht_subplace_label">#525252</color>
+    <color name="mate_karte_nacht_subplace_label_halo">#1f1f1f</color>
+    <color name="mate_karte_nacht_water">#31353f</color>
+    <color name="mate_karte_nacht_weg">#4a463e</color>
+    <color name="mate_karte_nacht_wood_a">#202121</color>
+    <color name="mate_karte_nacht_zoo">#222323</color>
+    <!-- Karte (erzeugt): Ende -->
+</resources>

@@ -1,0 +1,215 @@
+package net.prototux.aare.ui.car.navi
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.material.icons.rounded.DragIndicator
+import androidx.compose.material.icons.rounded.Place
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import net.prototux.aare.R
+import net.prototux.aare.ui.car.Mate
+import org.maplibre.spatialk.geojson.Position
+import kotlin.math.roundToInt
+
+/**
+ * The trip plan (O209, 16.11.2026: "zwischenhalte und ladestops wie beim tesla überblicken ... wo man überall anhält und
+ * das auch ich während der navigation den plan wieder auf machen kann"): every stop still ahead in order - charging stops
+ * with the level on arrival, the minutes charging and the level leaving, the driver's own stops - and the destination
+ * with its level, each with the clock time of arrival and the way from here. Opened from the menu while guiding.
+ */
+internal object NaviTripPlan {
+    enum class Kind { CHARGE, OWN, DESTINATION }
+
+    /** One line: [arriveAtMillis] clock time of arrival, [metresLeft] the way from here; levels only for a charging stop. */
+    class Row(val kind: Kind, val name: String, val arriveAtMillis: Long, val metresLeft: Double,
+              val arrivePercent: Double? = null, val leavePercent: Double? = null, val chargeMinutes: Double? = null,
+              val network: String? = null, val at: Position? = null, val charger: Charger? = null,
+              val overLimit: Boolean = false)
+
+    /**
+     * [marks] the stops before the destination along the guided route (NaviStops), [charges] the planned charging stops,
+     * [own] the driver's own stops with their names, [drivenM]/[drivenS] how far and how long the car has come on the
+     * route, [routeM]/[routeS] the whole route, [destinationPercent] the level at the destination when known.
+     * The charging of the stops before one counts into its arrival, as the preview counts it.
+     */
+    fun rows(marks: List<NaviStops.Mark>, charges: List<ChargePlanner.Stop>, own: List<Pair<Position, String>>,
+             drivenM: Double, drivenS: Double, routeM: Double, routeS: Double, nowMillis: Long,
+             destination: String, destinationPercent: Double?, destinationAt: Position? = null): List<Row> {
+        val out = ArrayList<Row>()
+        var chargedS = 0.0
+        for (m in marks) {
+            if (m.metres <= drivenM + PASSED_M) continue
+            val arrive = nowMillis + (((m.seconds - drivenS).coerceAtLeast(0.0) + chargedS) * 1000).toLong()
+            val c = charges.firstOrNull { ChargerIndex.distanceM(it.charger.at, m.at) < SAME_M }
+            if (c != null) {
+                out += Row(Kind.CHARGE, chargerName(c.charger), arrive, m.metres - drivenM, c.arrivePercent, c.leavePercent, c.chargeMinutes, c.charger.network,
+                    charger = c.charger, overLimit = c.overLimit)
+                chargedS += c.chargeMinutes * 60
+            } else {
+                val mine = own.minByOrNull { ChargerIndex.distanceM(it.first, m.at) }?.takeIf { ChargerIndex.distanceM(it.first, m.at) < OWN_SNAP_M }
+                // the stop as the driver chose it (its place and name), for moving it in the plan
+                out += Row(Kind.OWN, mine?.second.orEmpty(), arrive, m.metres - drivenM, at = mine?.first ?: m.at)
+            }
+        }
+        out += Row(Kind.DESTINATION, destination, nowMillis + (((routeS - drivenS).coerceAtLeast(0.0) + chargedS) * 1000).toLong(),
+            (routeM - drivenM).coerceAtLeast(0.0), arrivePercent = destinationPercent, at = destinationAt)
+        return out
+    }
+
+    /** The network's name ("TotalEnergies", not its id "total"), else the operator's. */
+    fun chargerName(c: Charger, unnamed: String = ""): String = "${(ChargeNetworks.name(c.network) ?: c.operator).ifBlank { unnamed }} · ${c.kw} kW"
+
+    private const val PASSED_M = 30.0
+    /** A waypoint and a stop this close are the same place. */
+    private const val SAME_M = 150.0
+}
+
+/**
+ * The trip plan in the panel at the driver's side. With two or more of the driver's own stops each has a grip: held
+ * (long press) and drawn up or down, it goes where it is let go - the others make way, animated - and [onReorder] plans
+ * the trip in the new order (O222, 17.11.2026: "Lange drücken greifen und darein sortieren wo man mag ... Es braucht einen
+ * Greifer damit der User sieht dass das geht"). Charging stops and the destination stay; the charging is planned anew.
+ */
+@Composable
+internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(rows: List<NaviTripPlan.Row>, onBack: () -> Unit, onClose: () -> Unit,
+                               onReorder: (List<Pair<Position, String>>) -> Unit = {}, onEdit: ((List<Pair<Position, String>>) -> Unit)? = null,
+                               /** a charging stop taken out during the trip, null: all of them (19.11.2026) */
+                               onDropCharge: ((Charger?) -> Unit)? = null) {
+    PanelHeader(stringResource(R.string.mate_navi_plan), onBack, onClose)
+    Spacer(Modifier.size(16.dp))
+    var list by androidx.compose.runtime.remember(rows) { androidx.compose.runtime.mutableStateOf(rows) }
+    var dragKey by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    var dragY by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val sortable = rows.count { it.kind == NaviTripPlan.Kind.OWN && it.at != null } >= 2
+    val stepPx = with(androidx.compose.ui.platform.LocalDensity.current) { (88.dp + 12.dp).toPx() }
+    // one key per row of the plan, kept while rows move (two charging stops of one network have the same name - the
+    // same key brought Mate down, 17.11.2026)
+    val keys = androidx.compose.runtime.remember(rows) { java.util.IdentityHashMap<NaviTripPlan.Row, String>().apply { rows.forEachIndexed { i, r -> put(r, "$i") } } }
+    fun key(r: NaviTripPlan.Row) = keys[r] ?: r.hashCode().toString()
+    LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        items(list, key = { key(it) }) { r ->
+            val dragging = dragKey == key(r)
+            val canDrag = sortable && r.kind == NaviTripPlan.Kind.OWN && r.at != null
+            Row(Modifier.then(if (dragging) Modifier else Modifier.animateItem())
+                .zIndex(if (dragging) 1f else 0f)
+                .graphicsLayer { translationY = if (dragging) dragY else 0f; val sc = if (dragging) 1.03f else 1f; scaleX = sc; scaleY = sc }
+                .fillMaxWidth().heightIn(min = 88.dp).clip(RoundedCornerShape(18.dp)).background(if (dragging) Mate.surfaceHigh else Mate.surface)
+                .then(if (!canDrag) Modifier else Modifier.pointerInput(key(r)) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { dragKey = key(r); dragY = 0f },
+                        onDrag = { ch, d ->
+                            ch.consume()
+                            dragY += d.y
+                            val cur = list.indexOfFirst { key(it) == key(r) }
+                            // past half a row: it takes the place of the next own stop that way (charging stops are passed over)
+                            val target = when {
+                                dragY > stepPx / 2 -> (cur + 1 until list.size).firstOrNull { list[it].kind == NaviTripPlan.Kind.OWN && list[it].at != null }
+                                dragY < -stepPx / 2 -> (cur - 1 downTo 0).firstOrNull { list[it].kind == NaviTripPlan.Kind.OWN && list[it].at != null }
+                                else -> null
+                            }
+                            if (target != null) {
+                                list = list.toMutableList().apply { add(target, removeAt(cur)) }
+                                dragY -= stepPx * (target - cur)
+                            }
+                        },
+                        onDragEnd = {
+                            dragKey = null; dragY = 0f
+                            val order = list.filter { it.kind == NaviTripPlan.Kind.OWN && it.at != null }.map { it.at!! to it.name }
+                            val before = rows.filter { it.kind == NaviTripPlan.Kind.OWN && it.at != null }.map { it.at!! to it.name }
+                            if (order != before) onReorder(order)
+                        },
+                        onDragCancel = { dragKey = null; dragY = 0f; list = rows })
+                })
+                .padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                // a charging stop: its network's logo (O210); the others in a slot of the same width, so the names line up
+                if (r.kind == NaviTripPlan.Kind.CHARGE) NetworkLogo(r.network, 32.dp)
+                else androidx.compose.foundation.layout.Box(Modifier.size(32.dp * 1.6f, 32.dp), contentAlignment = Alignment.Center) {
+                    Icon(if (r.kind == NaviTripPlan.Kind.OWN) Icons.Rounded.Flag else Icons.Rounded.Place, null, tint = Mate.accent, modifier = Modifier.size(32.dp))
+                }
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(r.name.ifBlank { stringResource(R.string.mate_navi_plan_stop) }, style = MaterialTheme.typography.titleMedium,
+                        color = Mate.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val detail = when (r.kind) {
+                        NaviTripPlan.Kind.CHARGE -> stringResource(R.string.mate_navi_plan_charge, pct(r.arrivePercent), (r.chargeMinutes ?: 0.0).roundToInt(), pct(r.leavePercent))
+                        NaviTripPlan.Kind.DESTINATION -> r.arrivePercent?.let { stringResource(R.string.mate_navi_plan_destination, pct(it)) }
+                        NaviTripPlan.Kind.OWN -> null
+                    }
+                    if (detail != null) Text(detail, style = MaterialTheme.typography.bodyMedium, color = Mate.textDim, maxLines = 1)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(net.prototux.aare.ui.Clock.format(r.arriveAtMillis), style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold, color = Mate.accent)
+                    Text(km(r.metresLeft), style = MaterialTheme.typography.bodyMedium, color = Mate.textDim)
+                }
+                // 19.11.2026 ("Im Reiseplan der Navi-App möchte ich Ladestationen entfernen, damit ich auch ohne festgelegte
+                // Ladestops reisen kann"): a charging stop taken out right here, the route goes on without it
+                if (r.kind == NaviTripPlan.Kind.CHARGE && r.charger != null && onDropCharge != null) {
+                    Spacer(Modifier.width(8.dp))
+                    androidx.compose.foundation.layout.Box(Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(Mate.surfaceHigh)
+                        .clickable { onDropCharge(r.charger) }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.Close, stringResource(R.string.mate_navi_plan_remove_charge), tint = Mate.text, modifier = Modifier.size(28.dp))
+                    }
+                }
+                // the grip: here a stop can be held and moved
+                // the grip (O227: six dots for what can be moved, narrow - it takes little room)
+                if (canDrag) {
+                    Spacer(Modifier.width(4.dp))
+                    Icon(Icons.Rounded.DragIndicator, stringResource(R.string.mate_navi_plan_grip), tint = Mate.textDim,
+                        modifier = Modifier.size(width = 22.dp, height = 32.dp))
+                }
+            }
+        }
+    }
+    // all charging stops out at once: on to the destination on what the battery holds
+    if (onDropCharge != null && rows.count { it.kind == NaviTripPlan.Kind.CHARGE } >= 1) {
+        Spacer(Modifier.size(16.dp))
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(18.dp)).background(Mate.surface)
+            .clickable { onDropCharge(null) }, contentAlignment = Alignment.Center) {
+            Text(stringResource(R.string.mate_navi_plan_no_charging), style = MaterialTheme.typography.titleMedium, color = Mate.text)
+        }
+    }
+    // L-035: take charging stops out or in, or plan them anew - in the preview of the route from here
+    if (onEdit != null) {
+        Spacer(Modifier.size(16.dp))
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(18.dp)).background(Mate.surface)
+            .clickable { onEdit(rows.filter { it.kind == NaviTripPlan.Kind.OWN && it.at != null }.map { it.at!! to it.name }) },
+            contentAlignment = Alignment.Center) {
+            Text(stringResource(R.string.mate_navi_plan_edit), style = MaterialTheme.typography.titleMedium, color = Mate.text)
+        }
+    }
+}
+
+private fun pct(p: Double?) = "${(p ?: 0.0).coerceAtLeast(0.0).roundToInt()} %"
+private fun km(m: Double) = if (m < 1000) "${(m / 10).roundToInt() * 10} m" else "%.1f km".format(m / 1000)

@@ -1,0 +1,53 @@
+# Makes Mate's release key once, on GitHub (17.11.2026: "den Release-Schlüssel neu machen über GitHub, über dieses Repo,
+# damit ich nicht mehr lokal irgendwo einen Release-Schlüssel habe"). The key never exists in plain form outside this
+# run: it is put into the repository only encrypted (signing/mate-release.enc) with the password in the secret
+# MATE_KEY_PASS, which the owner sets by hand (Settings, Secrets and variables, Actions). Run by hand, once; it refuses
+# to replace a key that is there unless asked to (a new key means uninstalling Mate once more).
+name: Mate key
+
+on:
+  workflow_dispatch:
+    inputs:
+      replace:
+        description: "Replace an existing key (Mate must then be uninstalled once)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  key:
+    runs-on: ubuntu-latest
+    env:
+      MATE_KEY_PASS: ${{ secrets.MATE_KEY_PASS }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Make the key and keep it encrypted
+        run: |
+          set -eu
+          if [ -z "$MATE_KEY_PASS" ]; then echo "::error::The secret MATE_KEY_PASS is not set"; exit 1; fi
+          if [ -f signing/mate-release.enc ] && [ "${{ inputs.replace }}" != "true" ]; then
+            echo "::error::signing/mate-release.enc exists - run with 'replace' only if a new key is really wanted"; exit 1; fi
+          work="$RUNNER_TEMP/key"; mkdir -p "$work"
+          pass=$(openssl rand -hex 24)
+          keytool -genkeypair -keystore "$work/mate.jks" -storetype PKCS12 -alias mate -keyalg RSA -keysize 4096 \
+            -validity 36500 -dname "CN=Mate" -storepass "$pass" -keypass "$pass" >/dev/null
+          printf 'AARE_KEY_ALIAS=mate\nAARE_KEYSTORE_PASSWORD=%s\nAARE_KEY_PASSWORD=%s\n' "$pass" "$pass" > "$work/key.env"
+          mkdir -p signing
+          tar -C "$work" -cf - mate.jks key.env | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:MATE_KEY_PASS -out signing/mate-release.enc
+          # the certificate's fingerprint is public: it says which key signed an APK
+          keytool -list -v -keystore "$work/mate.jks" -storepass "$pass" -alias mate | grep -E 'SHA256:' | head -1 | sed 's/^[[:space:]]*//' > signing/mate-release.sha256
+          rm -rf "$work"
+          cat signing/mate-release.sha256
+      - name: Into the repository
+        run: |
+          git config user.name "Ingo Fredersdorf"
+          git config user.email "37311192+TheInGoF@users.noreply.github.com"
+          git add signing/mate-release.enc signing/mate-release.sha256
+          git commit -m "Mate's release key, made on GitHub, kept encrypted (signing/mate-release.enc)"
+          git push

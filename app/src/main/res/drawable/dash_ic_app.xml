@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Logo von IDmate: unveraenderte Formen und Farben aus IDMate triplog/static/logo.svg (AGPL-3.0, eigenes Projekt
+     des Benutzers), umgesetzt als Android-Vektor. Ganzes Logo mit dunklem Grund. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp" android:viewportWidth="128" android:viewportHeight="128">
+    <path android:fillColor="#0E1B2C" android:pathData="M28,0 h72 a28,28 0 0 1 28,28 v72 a28,28 0 0 1 -28,28 h-72 a28,28 0 0 1 -28,-28 v-72 a28,28 0 0 1 28,-28 z" />
+    <path android:fillColor="#1DE9B6" android:pathData="M32,34 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0 z" />
+    <path android:fillColor="#E8EEF7" android:pathData="M35,46 h6 a3,3 0 0 1 3,3 v50 a3,3 0 0 1 -3,3 h-6 a3,3 0 0 1 -3,-3 v-50 a3,3 0 0 1 3,-3 z" />
+    <path android:strokeColor="#E8EEF7" android:strokeWidth="6" android:pathData="M66,34 h24 a10,10 0 0 1 10,10 v48 a10,10 0 0 1 -10,10 h-24 a10,10 0 0 1 -10,-10 v-48 a10,10 0 0 1 10,-10 z" />
+    <path android:fillColor="#E8EEF7" android:pathData="M74,26 h8 a2,2 0 0 1 2,2 v6 a2,2 0 0 1 -2,2 h-8 a2,2 0 0 1 -2,-2 v-6 a2,2 0 0 1 2,-2 z" />
+    <path android:fillColor="#1DE9B6" android:pathData="M68,58 h20 a4,4 0 0 1 4,4 v28 a4,4 0 0 1 -4,4 h-20 a4,4 0 0 1 -4,-4 v-28 a4,4 0 0 1 4,-4 z" />
+    <path android:fillColor="#0E1B2C" android:pathData="M80,62 l-10,16 h8 l-4,12 14,-18 h-8 z" />
+</vector>

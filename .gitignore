@@ -1,0 +1,60 @@
+# Gradle files
+.gradle/
+build/
+.kotlin/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log/OS Files
+*.log
+
+# Android Studio generated files and folders
+captures/
+.externalNativeBuild/
+.cxx/
+*.aab
+*.apk
+output-metadata.json
+
+# IntelliJ
+*.iml
+.idea/
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+
+# Keystore files
+*.jks
+*.keystore
+
+# Google Services (e.g. APIs or Firebase)
+google-services.json
+
+# Android Profiling
+*.hprof
+
+# Kotlin
+.kotlin/
+
+# Certificates and keys you import or generate stay local
+*.p12
+*.pfx
+*.key
+*.pem
+*.pk8
+
+# Android Auto APK bundles used for research stay local
+*.apkm
+*.xapk
+
+
+# sherpa-onnx AAR: fetched by app/build.gradle.kts
+app/libs/*.aar
+
+# Python caches
+__pycache__/
+*.pyc
+
+# The release key lives in the Actions secret MATE_KEY_ENC, never in the repository
+signing/

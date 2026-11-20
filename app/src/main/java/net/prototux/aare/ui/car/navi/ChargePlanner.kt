@@ -1,0 +1,209 @@
+package net.prototux.aare.ui.car.navi
+
+import net.prototux.aare.host.EnergyModel
+import org.maplibre.spatialk.geojson.Position
+
+/**
+ * Charging stops for a route (O182, O187: "laderouten planung … von google abgucken, aber clean code"). The rules are
+ * what Google Maps visibly does, our own code:
+ *  - the battery is followed along the route with the car's energy model; below [Rules.atDestination] on arrival the
+ *    route needs stops;
+ *  - a stop is a fast charger close to the route, reached with at least [Rules.atCharger]; the chain of stops is the one
+ *    of least time from driving, the way to the chargers, stopping and charging ([ChargeChain], Navi L-029);
+ *  - it charges only what is needed for the rest of the way (plus the reserve and buffer), at most [Rules.chargeUpTo] -
+ *    above it the car charges slowly and the next stop is quicker;
+ *  - charging time from the car's charging curve, limited by the charger.
+ * Pure arithmetic: the route comes in as a [Track], the chargers from a lookup; replanning the route over the stops is
+ * the caller's (Valhalla), which then asks [plan] again for the times on the new route.
+ */
+internal object ChargePlanner {
+    data class Rules(val atCharger: Double = 10.0, val atDestination: Double = 10.0, val chargeUpTo: Double = 80.0,
+                     val minKw: Int = 100, val searchM: Double = 2_000.0, val preferred: Set<String> = emptySet(),
+                     val only: Boolean = false,
+                     /** O226: the driver's rating of a charger (0 none, 1-5), for choosing among those allowed. */
+                     val rating: (Charger) -> Int = { 0 },
+                     /** Navi L-029 step D: percent on top of the least levels for a stop this many km ahead. */
+                     val buffer: (Double) -> Double = { 0.0 }) {
+        /** Strictly the chosen networks (O213). */
+        val strict get() = only && preferred.isNotEmpty()
+        /** A charger outside the chosen networks, when there are some. */
+        fun outside(c: Charger) = preferred.isNotEmpty() && (c.network == null || c.network !in preferred)
+        companion object {
+            /** The driver's own values from the phone app (O205). */
+            fun of(s: net.prototux.aare.Settings) = Rules(s.chargeMinAtCharger.toDouble(), s.chargeMinAtDestination.toDouble(),
+                s.chargeMaxLevel.toDouble(), preferred = s.chargeNetworks, only = s.chargeNetworksOnly,
+                rating = { ch -> ChargerVisits.rating(s.appContext, ch) })
+        }
+    }
+
+    /** The route as the planner sees it: points with distance (m), time (s) and energy (Wh) from the start. */
+    class Track(val points: List<Position>, val metres: DoubleArray, val seconds: DoubleArray, val wh: DoubleArray,
+                /** What the energy was made of (climb, wind, temperature, rain), for the log. */
+                val parts: ChargeEnergy.Parts? = null) {
+        val size get() = points.size
+    }
+
+    /** [overLimit]: charged above the driver's highest level, because nothing else reaches on from there (O205). */
+    class Stop(val charger: Charger, val atM: Double, val arrivePercent: Double, val leavePercent: Double, val chargeMinutes: Double,
+               val overLimit: Boolean = false)
+    class Plan(val stops: List<Stop>, val arrivePercent: Double) {
+        val chargeMinutes get() = stops.sumOf { it.chargeMinutes }
+    }
+
+    /**
+     * The stops the route needs from [startPercent], with [chargers] looking up what lies near a point: the chain of least
+     * time by [ChargeChain] (Navi L-029 step C; until 18.11.2026 greedily the strongest charger late in the reach).
+     * Stops already on the route (it was planned over them) are found again as chargers on it and given their times.
+     */
+    fun plan(track: Track, car: EnergyModel.Car, startPercent: Double, chargers: (Position, Double, Int) -> List<Charger>,
+             rules: Rules = Rules()): Plan = ChargeChain.plan(track, car, startPercent, chargers, rules).let { Plan(it.stops(), it.arrivePercent) }
+
+    /**
+     * The times at [stops] once the route goes over them (Valhalla replanned it): each charger at its nearest point of
+     * the new track, charged to what the rest needs as in [plan].
+     */
+    fun replay(track: Track, car: EnergyModel.Car, startPercent: Double, stops: List<Charger>, rules: Rules = Rules(),
+               above: Set<Charger> = emptySet()): Plan {
+        val pct = { wh: Double -> wh / car.capacityWh * 100.0 }
+        // each stop's place on the new track, in order
+        var from = 0
+        val at = stops.map { c -> ((from until track.size).minByOrNull { ChargerIndex.distanceM(track.points[it], c.at) } ?: from).also { from = it } }
+        var level = startPercent; var fromI = 0
+        val out = stops.mapIndexed { k, c ->
+            val i = at[k]
+            val arrive = level - pct(track.wh[i] - track.wh[fromI])
+            // a stop the plan had to charge above the highest level (O205) may do so on the new route too
+            val cap = if (c in above) FULL else rules.chargeUpTo
+            var leave = minOf(cap, maxOf(arrive, pct(track.wh.last() - track.wh[i]) + rules.atDestination + MARGIN))
+            // enough at least for the next stop with its reserve - a stop moved earlier (F3, another charger chosen)
+            // left the next one at 8 % (16.11.2026); more than the highest level only then, marked as over it
+            at.getOrNull(k + 1)?.let { j ->
+                val needNext = pct(track.wh[j] - track.wh[i]) + rules.atCharger + MARGIN
+                if (leave < needNext) leave = minOf(FULL, needNext)
+            }
+            Stop(c, track.metres[i], arrive, leave, chargeMinutes(arrive, leave, c.kw, car), leave > rules.chargeUpTo + 0.5)
+                .also { level = leave; fromI = i }
+        }
+        return Plan(out, level - pct(track.wh.last() - track.wh[fromI]))
+    }
+
+    /**
+     * The chargers of a plan without the stops it does not need (16.11.2026: a stop 3 km before the destination charged
+     * 0 min, 13 -> 14 %, because the stop before it charged more on the route planned over both). A stop charging less
+     * than [TINY_MIN] is left out when the plan still works without it: every stop and the destination reached with
+     * their reserve, no stop charging above [PRUNE_UP_TO] % - a little more at the stop before rather than one more stop,
+     * as ABRP and Tesla plan.
+     */
+    /** For the log: what leaving out a stop gave the last time (tests in the desk window). */
+    @Volatile var lastPruneTry = ""
+
+    /**
+     * Other chargers to try when the routing service refuses the route over [stops] (18.11.2026, log: "plan failed for
+     * FAST, without charging stops: Route request failed with status code 400" - a 409 km trip from 70 % went without any
+     * stop): one stop at a time replaced by one of the [perStop] nearest chargers within [radiusM] of at least [minKw],
+     * not already among the stops; [max] lists at most, the nearest first.
+     */
+    fun substitutes(stops: List<Charger>, near: (Position, Double, Int) -> List<Charger>, minKw: Int,
+                    radiusM: Double = 15_000.0, perStop: Int = 2, max: Int = 6): List<List<Charger>> {
+        val out = ArrayList<List<Charger>>()
+        for (i in stops.indices) {
+            val others = near(stops[i].at, radiusM, minKw).filter { o -> stops.none { it.at == o.at } }
+                .sortedBy { ChargerIndex.distanceM(it.at, stops[i].at) }.take(perStop)
+            for (o in others) { if (out.size >= max) return out; out += stops.toMutableList().also { it[i] = o } }
+        }
+        return out
+    }
+
+    fun prune(track: Track, car: EnergyModel.Car, startPercent: Double, stops: List<Charger>, rules: Rules = Rules(),
+              above: Set<Charger> = emptySet()): List<Charger> {
+        var left = stops
+        while (true) {
+            val plan = replay(track, car, startPercent, left, rules, above)
+            val drop = plan.stops.withIndex().filter { it.value.chargeMinutes < TINY_MIN }.firstOrNull { (k, _) ->
+                val without = left.filterIndexed { i, _ -> i != k }
+                val p = replay(track, car, startPercent, without, rules, above + without)
+                lastPruneTry = "without stop ${k + 1}: %.1f %% at the end, stops ".format(p.arrivePercent) +
+                    p.stops.joinToString { "%.0f->%.0f".format(it.arrivePercent, it.leavePercent) }
+                // no stop arrives lower than the reserve - or than it did before, when the plan already had to (a stop
+                // reached with 9 % where nothing nearer is)
+                val before = plan.stops.associate { it.charger to it.arrivePercent }
+                p.arrivePercent >= rules.atDestination - 0.5 && p.stops.all {
+                    it.arrivePercent >= minOf(rules.atCharger, before[it.charger] ?: rules.atCharger) - 0.5 && it.leavePercent <= PRUNE_UP_TO }
+            } ?: return left
+            left = left.filterIndexed { i, _ -> i != drop.index }
+        }
+    }
+
+    /** Another charger for a stop: which, and how far before (negative) or after it lies along the route. */
+    class Alternative(val charger: Charger, val shiftM: Double)
+
+    /**
+     * Other chargers for [stop] on [track] (F3, as ABRP offers them): strong ones near the route from [BEFORE_M] before to
+     * [AFTER_M] after it, not the stop itself nor another planned one; preferred networks first, then the strongest,
+     * then the nearest to the stop; at most [max].
+     */
+    fun alternatives(track: Track, stop: Stop, planned: List<Charger>, chargers: (Position, Double, Int) -> List<Charger>,
+                     rules: Rules = Rules(), max: Int = 3): List<Alternative> {
+        val found = LinkedHashMap<Charger, Double>()
+        var lastM = -1e9
+        for (i in 0 until track.size) {
+            val m = track.metres[i]
+            if (m < stop.atM - BEFORE_M || m > stop.atM + AFTER_M || m - lastM < SAMPLE_M) continue
+            lastM = m
+            for (c in chargers(track.points[i], rules.searchM, rules.minKw)) {
+                if (planned.any { ChargerIndex.distanceM(it.at, c.at) < 150 } || c in found) continue
+                found[c] = m - stop.atM
+            }
+        }
+        // only the chosen networks offered (O213) - none of them near: no other (16.11.2026: Shell and Pfalzwerke were
+        // offered with only Tesla and IONITY chosen)
+        return (if (rules.strict) found.entries.filter { !rules.outside(it.key) } else found.entries).sortedWith(compareByDescending<Map.Entry<Charger, Double>> { it.key.network != null && it.key.network in rules.preferred }
+            .thenByDescending { it.key.kw }.thenBy { Math.abs(it.value) })
+            .distinctBy { "%.3f,%.3f".format(java.util.Locale.ROOT, it.key.at.latitude, it.key.at.longitude) }
+            .take(max).map { Alternative(it.key, it.value) }
+    }
+
+    private const val BEFORE_M = 25_000.0
+    private const val AFTER_M = 10_000.0
+
+    /** Minutes from [fromPercent] to [toPercent] in 1 % steps at the lower of the charger and the car's curve. */
+    fun chargeMinutes(fromPercent: Double, toPercent: Double, chargerKw: Int, car: EnergyModel.Car): Double {
+        var p = fromPercent; var hours = 0.0
+        val stepWh = car.capacityWh / 100.0
+        while (p < toPercent) {
+            val w = minOf(chargerKw * 1000.0, EnergyModel.dcCurveW(p / 100.0 * car.capacityWh, car)).coerceAtLeast(1_000.0)
+            hours += stepWh * minOf(1.0, toPercent - p) / w
+            p += 1.0
+        }
+        return hours * 60.0
+    }
+
+    /**
+     * The track of a Ferrostar route: each piece at the speed of the step it belongs to, its energy from [ChargeEnergy]
+     * (Navi L-029: climb from [heights], temperature, wind and rain from [weather] where and when the car gets there).
+     * [rainKwh100]: IDmate's learned extra for rain at a place reached so many seconds from now ([NaviRain]); while IDmate
+     * has learned none, the forecast's rain counts instead.
+     */
+    fun track(route: uniffi.ferrostar.Route, car: EnergyModel.Car,
+              rainKwh100: ((Position, Double) -> Double)? = if (NaviRain.active) NaviRain::kwh100At else null,
+              heights: ChargeEnergy.Heights? = null, weather: ChargeEnergy.Weather? = null): Track {
+        val pts = route.geometry.map { Position(longitude = it.lng, latitude = it.lat) }
+        val kmh = DoubleArray(pts.size)
+        // the steps' ends along the route, for each piece's speed
+        val stepEnd = route.steps.runningFold(0.0) { a, st -> a + st.distance }.drop(1)
+        var k = 0; var m = 0.0
+        for (i in 1 until pts.size) {
+            m += ChargerIndex.distanceM(pts[i - 1], pts[i])
+            while (k < route.steps.lastIndex && m > stepEnd[k]) k++
+            val st = route.steps[k]
+            kmh[i] = if (st.duration > 0) (st.distance / st.duration * 3.6).coerceIn(5.0, 200.0) else 50.0
+        }
+        return ChargeEnergy.track(pts, kmh, car, heights, weather, rainKwh100)
+    }
+
+    private const val FULL = 100.0
+    private const val TINY_MIN = 5.0
+    private const val PRUNE_UP_TO = 90.0
+    private const val MARGIN = 3.0          // % on top of the destination's reserve: the model is an estimate
+    private const val SAMPLE_M = 1_000.0
+}

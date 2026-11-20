@@ -1,0 +1,144 @@
+# Stack "karten": Routing, Suche, Kacheln, Verkehr und Regionspakete für Mate (und IDmate, Roundtrip).
+# Kein Watchtower-Label: Valhalla-Version und Kacheln gehören zusammen.
+# Vorher einmal: docker network create karten
+# Healthchecks: Portainer zeigt healthy/unhealthy; neu starten macht Docker bei "unhealthy" nicht selbst (README, "Gesundheit").
+# Umgebungsvariablen (Portainer): TOMTOM_KEY, REGIONEN_PASS, BASIS_URL, MATE_TOKEN (nur Übergang)
+services:
+  valhalla:
+    # Image per Digest festhalten (der Stand, mit dem die Kacheln gebaut sind), nicht :latest
+    image: ghcr.io/valhalla/valhalla-scripted@sha256:5402c8543f083350dade401673cd66071f17e3220983aef4cd10296c72dee77d   # 3.9.2
+    container_name: karten-valhalla
+    restart: unless-stopped
+    volumes:
+      - /volume1/docker/karten/valhalla:/custom_files
+    environment:
+      - tile_urls=https://download.geofabrik.de/europe-latest.osm.pbf
+      - use_tiles_ignore_pbf=True     # vorhandene Kacheln nutzen, nichts neu bauen
+      - force_rebuild=False
+      - build_admins=True
+      - build_time_zones=False
+      - build_elevation=False         # Höhenkacheln kommen über karten-regionen (README, "Höhen")
+      - serve_tiles=True
+      - server_threads=2
+      - update_existing_config=True
+    ports:
+      - "8002:8002"
+    healthcheck:                      # Kacheln geladen und Dienst antwortet
+      test: ["CMD", "curl", "-fs", "http://localhost:8002/status"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10m
+    networks: [karten]
+
+  photon:
+    # Index wird auf dem Build-PC geladen und kopiert (README, "Photon"); gleicher Digest auf beiden Seiten
+    image: rtuszik/photon-docker@sha256:c5babeb0ac396b485822036cf3c69e54fb6c79d699328a4e042e11bbd6f73f1a
+    container_name: karten-photon
+    restart: unless-stopped
+    environment:
+      - REGION=europe
+      - UPDATE_STRATEGY=DISABLED
+    volumes:
+      - /volume1/docker/karten/photon:/photon/data
+    ports:
+      - "2322:2322"
+    healthcheck:                      # eine echte Suche, nicht nur ein offener Port
+      test: ["CMD", "python3", "-c", "import urllib.request as u;u.urlopen('http://localhost:2322/api?q=berlin&limit=1',timeout=10)"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 10m
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    networks: [karten]
+
+  tiles:
+    # liefert /planet/{z}/{x}/{y}.mvt aus dem Protomaps-Planeten; den Ordner pflegt Roundtrip (README, "Kacheln").
+    # Image ohne Shell: der Healthcheck liest mit dem Programm selbst den Kopf der Planetdatei; den Server prüft das Tor.
+    image: protomaps/go-pmtiles:v1.30.1
+    container_name: karten-tiles
+    restart: unless-stopped
+    command: serve /data --port=8080 --cors=*
+    volumes:
+      - /volume1/docker/karten/tiles:/data:ro
+    ports:
+      - "8581:8080"
+    healthcheck:
+      test: ["CMD", "/go-pmtiles", "show", "/data/planet.pmtiles"]
+      interval: 5m
+      timeout: 30s
+      retries: 2
+    networks: [karten]
+
+  schluessel:
+    # Kopplung per Einmal-Code und Prüfung der Geräte-Tokens für das Tor
+    image: python:3.12-alpine
+    container_name: karten-schluessel
+    restart: unless-stopped
+    command: sh -c "apk add --no-cache libqrencode-tools >/dev/null 2>&1 || echo 'qrencode fehlt - QR nur als Text'; exec python -u /app/schluessel.py dienst"
+    environment:
+      - BASIS_URL=${BASIS_URL}        # Adresse des Tors für den QR-Code, z. B. http://<nas>.<tailnet>.ts.net:8090
+      - MATE_TOKEN=${MATE_TOKEN}      # Übergang: gemeinsamer Token; Zeile löschen, sobald alle Geräte gekoppelt sind
+    volumes:
+      - /volume1/docker/karten/schluessel/schluessel.py:/app/schluessel.py:ro
+      - /volume1/docker/karten/schluessel/daten:/daten
+    healthcheck:                      # /pruefen ohne Token muss 401 sagen
+      test: ["CMD", "python", "-c", "import urllib.request as u,urllib.error as e\ntry: u.urlopen('http://localhost:8000/pruefen',timeout=5)\nexcept e.HTTPError as x: raise SystemExit(x.code!=401)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks: [karten]
+
+  regionen:
+    # Weboberfläche: Regionen auswählen; baut daraus ein Gesamtpaket und lädt die Höhenkacheln (Port 8095, admin/REGIONEN_PASS)
+    image: python:3.12-alpine
+    container_name: karten-regionen
+    restart: unless-stopped
+    command: python -u /app/regionen_dienst.py
+    environment:
+      - ADMIN_PASS=${REGIONEN_PASS}
+    volumes:
+      - /volume1/docker/karten/regionen/regionen_dienst.py:/app/regionen_dienst.py:ro
+      - /volume1/docker/karten/regionen/daten:/daten
+      - /volume1/docker/karten/pakete:/p
+      - /volume1/docker/karten/tiles:/t:ro
+      - /volume1/docker/karten/valhalla/elevation_data:/hoehen   # Höhenkacheln für Valhalla (additional_data.elevation)
+    ports:
+      - "8095:8095"
+    healthcheck:                      # Oberfläche antwortet (ohne Passwort 401)
+      test: ["CMD", "python", "-c", "import urllib.request as u,urllib.error as e\ntry: u.urlopen('http://localhost:8095/',timeout=5)\nexcept e.HTTPError as x: raise SystemExit(x.code!=401)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+    networks: [karten]
+
+  tor:
+    # einziger Zugang für die App (Port 8090): Token prüfen, an die Dienste weiterreichen
+    image: caddy:2
+    container_name: karten-tor
+    restart: unless-stopped
+    environment:
+      - TOMTOM_KEY=${TOMTOM_KEY}
+    volumes:
+      - /volume1/docker/karten/tor/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /volume1/docker/karten/pakete:/srv/pakete:ro
+    ports:
+      - "8090:8090"
+    healthcheck:                      # Tor lebt (/gesund) und erreicht den Kachelserver
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8090/gesund && wget -q -O /dev/null http://tiles:8080/planet/metadata"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      schluessel:
+        condition: service_healthy
+    networks: [karten]
+
+networks:
+  karten:
+    external: true

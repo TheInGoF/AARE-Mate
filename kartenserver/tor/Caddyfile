@@ -1,0 +1,47 @@
+:8090 {
+	# Lebenszeichen für den Healthcheck: ohne Token, verrät nichts
+	handle /gesund {
+		respond "ok" 200
+	}
+
+	# Koppeln: ohne Token erreichbar, der Dienst prüft den Einmal-Code
+	handle /koppeln {
+		reverse_proxy schluessel:8000
+	}
+
+	# alles andere nur mit gültigem Geräte-Token
+	handle {
+		forward_auth schluessel:8000 {
+			uri /pruefen
+		}
+		handle_path /kacheln/* {
+			rewrite * /planet{path}
+			reverse_proxy tiles:8080
+		}
+		handle_path /route/* {
+			reverse_proxy valhalla:8002
+		}
+		handle_path /suche/* {
+			reverse_proxy photon:2322
+		}
+		handle_path /pakete/* {
+			root * /srv/pakete
+			file_server
+		}
+		# Verkehr von TomTom: Schlüssel bleibt auf dem Server, nur /traffic/… erlaubt
+		handle_path /verkehr/* {
+			@tomtom path /traffic/*
+			handle @tomtom {
+				uri query key {env.TOMTOM_KEY}
+				reverse_proxy https://api.tomtom.com {
+					header_up Host api.tomtom.com
+					# Geräte-Token und Cookies nicht an TomTom weitergeben
+					header_up -Authorization
+					header_up -Cookie
+				}
+			}
+			respond 404
+		}
+		respond 404
+	}
+}

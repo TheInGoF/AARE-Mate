@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zeichen des Musik-Bereichs von Mate: eine Doppelnote in den Farben des Projekts. Ganzes Zeichen mit dunklem Grund. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp" android:viewportWidth="128" android:viewportHeight="128">
+    <path android:fillColor="@color/mate_on_accent" android:pathData="M28,0 h72 a28,28 0 0 1 28,28 v72 a28,28 0 0 1 -28,28 h-72 a28,28 0 0 1 -28,-28 v-72 a28,28 0 0 1 28,-28 z" />
+    <group android:translateX="-8">
+    <path android:fillColor="@color/mate_text" android:pathData="M65,36 h0 a3,3 0 0 1 3,3 v50 a3,3 0 0 1 -3,3 h0 a3,3 0 0 1 -3,-3 v-50 a3,3 0 0 1 3,-3 z" />
+    <path android:fillColor="@color/mate_text" android:pathData="M97,30 h0 a3,3 0 0 1 3,3 v50 a3,3 0 0 1 -3,3 h0 a3,3 0 0 1 -3,-3 v-50 a3,3 0 0 1 3,-3 z" />
+    <path android:fillColor="@color/mate_text" android:pathData="M62,36 l38,-6 v12 l-38,6 z" />
+    <path android:fillColor="@color/mate_accent" android:pathData="M44,92 a12,12 0 1 0 24,0 a12,12 0 1 0 -24,0 z" />
+    <path android:fillColor="@color/mate_accent" android:pathData="M76,86 a12,12 0 1 0 24,0 a12,12 0 1 0 -24,0 z" />
+</group>
+</vector>

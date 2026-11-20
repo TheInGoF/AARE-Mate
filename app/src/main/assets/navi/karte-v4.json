@@ -1,0 +1,2796 @@
+{
+ "version": 8,
+ "name": "Mate Navi – IDmate-Karte (Protomaps v4), erzeugt von projekt/werkzeuge/navi-stil.mjs",
+ "glyphs": "asset://navi/glyphs/{fontstack}/{range}.pbf",
+ "sources": {
+  "pm": {
+   "type": "vector",
+   "tiles": [
+    "{TILES}"
+   ],
+   "minzoom": 0,
+   "maxzoom": 15,
+   "attribution": "© OpenStreetMap"
+  }
+ },
+ "layers": [
+  {
+   "id": "hintergrund",
+   "type": "background",
+   "paint": {
+    "background-color": "{k:earth}"
+   }
+  },
+  {
+   "id": "land",
+   "type": "fill",
+   "source": "pm",
+   "source-layer": "earth",
+   "paint": {
+    "fill-color": "{k:earth}"
+   }
+  },
+  {
+   "id": "bedeckung",
+   "type": "fill",
+   "source": "pm",
+   "source-layer": "landcover",
+   "maxzoom": 8,
+   "paint": {
+    "fill-color": [
+     "match",
+     [
+      "get",
+      "kind"
+     ],
+     "forest",
+     "{k:lc_forest}",
+     "grassland",
+     "{k:lc_grassland}",
+     "farmland",
+     "{k:lc_farmland}",
+     "scrub",
+     "{k:lc_scrub}",
+     "urban_area",
+     "{k:lc_urban_area}",
+     "barren",
+     "{k:lc_barren}",
+     "glacier",
+     "{k:lc_glacier}",
+     "{k:earth}"
+    ],
+    "fill-opacity": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     6,
+     1,
+     8,
+     0
+    ]
+   }
+  },
+  {
+   "id": "nutzung",
+   "type": "fill",
+   "source": "pm",
+   "source-layer": "landuse",
+   "filter": [
+    "in",
+    [
+     "get",
+     "kind"
+    ],
+    [
+     "literal",
+     [
+      "park",
+      "cemetery",
+      "golf_course",
+      "garden",
+      "grass",
+      "allotments",
+      "playground",
+      "recreation_ground",
+      "village_green",
+      "dog_park",
+      "pitch",
+      "wood",
+      "forest",
+      "nature_reserve",
+      "national_park",
+      "protected_area",
+      "scrub",
+      "grassland",
+      "meadow",
+      "heath",
+      "wetland",
+      "farmland",
+      "orchard",
+      "vineyard",
+      "farmyard",
+      "hospital",
+      "industrial",
+      "commercial",
+      "retail",
+      "railway",
+      "brownfield",
+      "quarry",
+      "landfill",
+      "school",
+      "university",
+      "college",
+      "kindergarten",
+      "pedestrian",
+      "platform",
+      "sand",
+      "beach",
+      "aerodrome",
+      "zoo",
+      "theme_park",
+      "military",
+      "naval_base",
+      "airfield",
+      "glacier"
+     ]
+    ]
+   ],
+   "paint": {
+    "fill-color": [
+     "match",
+     [
+      "get",
+      "kind"
+     ],
+     [
+      "park",
+      "cemetery",
+      "golf_course",
+      "garden",
+      "grass",
+      "allotments",
+      "playground",
+      "recreation_ground",
+      "village_green",
+      "dog_park",
+      "pitch"
+     ],
+     "{k:park_a}",
+     [
+      "wood",
+      "forest",
+      "nature_reserve",
+      "national_park",
+      "protected_area"
+     ],
+     "{k:wood_a}",
+     [
+      "scrub",
+      "grassland",
+      "meadow",
+      "heath",
+      "wetland",
+      "farmland",
+      "orchard",
+      "vineyard",
+      "farmyard"
+     ],
+     "{k:scrub_a}",
+     [
+      "hospital"
+     ],
+     "{k:hospital}",
+     [
+      "industrial",
+      "commercial",
+      "retail",
+      "railway",
+      "brownfield",
+      "quarry",
+      "landfill"
+     ],
+     "{k:industrial}",
+     [
+      "school",
+      "university",
+      "college",
+      "kindergarten"
+     ],
+     "{k:school}",
+     [
+      "pedestrian",
+      "platform"
+     ],
+     "{k:pedestrian}",
+     [
+      "sand"
+     ],
+     "{k:sand}",
+     [
+      "beach"
+     ],
+     "{k:beach}",
+     [
+      "aerodrome"
+     ],
+     "{k:aerodrome}",
+     [
+      "zoo",
+      "theme_park"
+     ],
+     "{k:zoo}",
+     [
+      "military",
+      "naval_base",
+      "airfield"
+     ],
+     "{k:military}",
+     [
+      "glacier"
+     ],
+     "{k:glacier}",
+     "{k:earth}"
+    ]
+   }
+  },
+  {
+   "id": "landebahn-flaeche",
+   "type": "fill",
+   "source": "pm",
+   "source-layer": "landuse",
+   "filter": [
+    "==",
+    [
+     "get",
+     "kind"
+    ],
+    "runway"
+   ],
+   "paint": {
+    "fill-color": "{k:runway}"
+   }
+  },
+  {
+   "id": "wasser",
+   "type": "fill",
+   "source": "pm",
+   "source-layer": "water",
+   "filter": [
+    "==",
+    [
+     "geometry-type"
+    ],
+    "Polygon"
+   ],
+   "paint": {
+    "fill-color": "{k:water}"
+   }
+  },
+  {
+   "id": "wasserlauf",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "water",
+   "minzoom": 11,
+   "filter": [
+    "==",
+    [
+     "geometry-type"
+    ],
+    "LineString"
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:water}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     11,
+     0.5,
+     12,
+     0.69,
+     13,
+     1,
+     14,
+     1.5,
+     15,
+     1.98,
+     16,
+     2.76,
+     17,
+     4,
+     18,
+     4,
+     19,
+     4
+    ]
+   }
+  },
+  {
+   "id": "grenze",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "boundaries",
+   "filter": [
+    "==",
+    [
+     "get",
+     "kind"
+    ],
+    "country"
+   ],
+   "paint": {
+    "line-color": "{k:grenze}",
+    "line-dasharray": [
+     3.3333333333333335,
+     2.0833333333333335
+    ],
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     0,
+     0.7,
+     1,
+     0.78,
+     2,
+     0.9,
+     3,
+     1.1,
+     4,
+     1.22,
+     5,
+     1.4,
+     6,
+     1.46,
+     7,
+     1.55,
+     8,
+     1.7,
+     9,
+     1.75,
+     10,
+     1.84,
+     11,
+     1.98,
+     12,
+     2.2,
+     13,
+     2.2
+    ]
+   }
+  },
+  {
+   "id": "meer",
+   "type": "fill",
+   "source": "pm",
+   "source-layer": "water",
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "geometry-type"
+     ],
+     "Polygon"
+    ],
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "ocean"
+    ]
+   ],
+   "paint": {
+    "fill-color": "{k:water}"
+   }
+  },
+  {
+   "id": "haus",
+   "type": "fill",
+   "source": "pm",
+   "source-layer": "buildings",
+   "minzoom": 13,
+   "paint": {
+    "fill-color": "{k:buildings}",
+    "fill-outline-color": "{k:haus_rand}"
+   }
+  },
+  {
+   "id": "landebahn",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 11,
+   "filter": [
+    "==",
+    [
+     "coalesce",
+     [
+      "get",
+      "kind_detail"
+     ],
+     ""
+    ],
+    "runway"
+   ],
+   "paint": {
+    "line-color": "{k:runway}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     10,
+     0,
+     11,
+     1.54,
+     12,
+     4,
+     13,
+     4.99,
+     14,
+     6.57,
+     15,
+     9.1,
+     16,
+     13.15,
+     17,
+     19.63,
+     18,
+     30,
+     19,
+     30
+    ]
+   }
+  },
+  {
+   "id": "rollbahn",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 14,
+   "filter": [
+    "==",
+    [
+     "coalesce",
+     [
+      "get",
+      "kind_detail"
+     ],
+     ""
+    ],
+    "taxiway"
+   ],
+   "paint": {
+    "line-color": "{k:runway}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     13,
+     0,
+     14,
+     2.29,
+     15,
+     6,
+     16,
+     6,
+     17,
+     6,
+     18,
+     6,
+     19,
+     6
+    ]
+   }
+  },
+  {
+   "id": "steg",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 13,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "path"
+    ],
+    [
+     "==",
+     [
+      "coalesce",
+      [
+       "get",
+       "kind_detail"
+      ],
+      ""
+     ],
+     "pier"
+    ]
+   ],
+   "paint": {
+    "line-color": "{k:pier}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     12,
+     0,
+     13,
+     0.62,
+     14,
+     0.98,
+     15,
+     1.55,
+     16,
+     2.47,
+     17,
+     3.93,
+     18,
+     6.27,
+     19,
+     10.01
+    ]
+   }
+  },
+  {
+   "id": "weg",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 14,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "path"
+    ],
+    [
+     "in",
+     [
+      "coalesce",
+      [
+       "get",
+       "kind_detail"
+      ],
+      ""
+     ],
+     [
+      "literal",
+      [
+       "footway",
+       "path",
+       "track",
+       "steps",
+       "cycleway",
+       "bridleway",
+       "pedestrian"
+      ]
+     ]
+    ]
+   ],
+   "paint": {
+    "line-color": "{k:weg}",
+    "line-dasharray": [
+     2.5,
+     2
+    ],
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     12,
+     0.5,
+     13,
+     0.65,
+     14,
+     0.9,
+     15,
+     1.11,
+     16,
+     1.45,
+     17,
+     2,
+     18,
+     2,
+     19,
+     2
+    ]
+   }
+  },
+  {
+   "id": "erschliessung-rand",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 13,
+   "filter": [
+    "==",
+    [
+     "get",
+     "kind"
+    ],
+    "other"
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:erschliessung_rand}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     13,
+     1.59,
+     14,
+     2.05,
+     15,
+     3.28,
+     16,
+     5.25,
+     17,
+     8.4,
+     18,
+     8.4,
+     19,
+     8.4
+    ]
+   }
+  },
+  {
+   "id": "nebenstrasse-rand",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 12,
+   "filter": [
+    "==",
+    [
+     "get",
+     "kind"
+    ],
+    "minor_road"
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:nebenstrasse_rand}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     12,
+     1.34,
+     13,
+     1.9,
+     14,
+     2.82,
+     15,
+     4.29,
+     16,
+     6.64,
+     17,
+     10.4,
+     18,
+     10.4,
+     19,
+     10.4
+    ]
+   }
+  },
+  {
+   "id": "kreisstrasse-rand",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 10,
+   "filter": [
+    "any",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "medium_road"
+    ],
+    [
+     "all",
+     [
+      "==",
+      [
+       "get",
+       "kind"
+      ],
+      "major_road"
+     ],
+     [
+      "!",
+      [
+       "any",
+       [
+        "==",
+        [
+         "get",
+         "is_link"
+        ],
+        true
+       ],
+       [
+        "in",
+        [
+         "coalesce",
+         [
+          "get",
+          "kind_detail"
+         ],
+         ""
+        ],
+        [
+         "literal",
+         [
+          "motorway_link",
+          "trunk_link",
+          "primary_link",
+          "secondary_link",
+          "tertiary_link"
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "==",
+      [
+       "coalesce",
+       [
+        "get",
+        "kind_detail"
+       ],
+       ""
+      ],
+      "tertiary"
+     ]
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:kreisstrasse_rand}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     10,
+     1.04,
+     11,
+     1.35,
+     12,
+     1.85,
+     13,
+     2.6,
+     14,
+     3.55,
+     15,
+     5.07,
+     16,
+     7.51,
+     17,
+     11.4,
+     18,
+     11.4,
+     19,
+     11.4
+    ]
+   }
+  },
+  {
+   "id": "auffahrt-rand",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 11,
+   "filter": [
+    "all",
+    [
+     "any",
+     [
+      "==",
+      [
+       "get",
+       "is_link"
+      ],
+      true
+     ],
+     [
+      "in",
+      [
+       "coalesce",
+       [
+        "get",
+        "kind_detail"
+       ],
+       ""
+      ],
+      [
+       "literal",
+       [
+        "motorway_link",
+        "trunk_link",
+        "primary_link",
+        "secondary_link",
+        "tertiary_link"
+       ]
+      ]
+     ]
+    ],
+    [
+     "in",
+     [
+      "get",
+      "kind"
+     ],
+     [
+      "literal",
+      [
+       "major_road",
+       "highway"
+      ]
+     ]
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": [
+     "case",
+     [
+      "any",
+      [
+       "==",
+       [
+        "get",
+        "kind"
+       ],
+       "highway"
+      ],
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "motorway",
+         "motorway_link"
+        ]
+       ]
+      ]
+     ],
+     "{k:autobahn_rand}",
+     [
+      "any",
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "trunk",
+         "trunk_link"
+        ]
+       ]
+      ],
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "primary",
+         "primary_link"
+        ]
+       ]
+      ]
+     ],
+     "{k:bundesstrasse_rand}",
+     [
+      "in",
+      [
+       "coalesce",
+       [
+        "get",
+        "kind_detail"
+       ],
+       ""
+      ],
+      [
+       "literal",
+       [
+        "secondary",
+        "secondary_link"
+       ]
+      ]
+     ],
+     "{k:landstrasse_rand}",
+     "{k:kreisstrasse_rand}"
+    ],
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     11,
+     1.11,
+     12,
+     1.45,
+     13,
+     2,
+     14,
+     2.69,
+     15,
+     3.8,
+     16,
+     5.57,
+     17,
+     8.4,
+     18,
+     8.4,
+     19,
+     8.4
+    ]
+   }
+  },
+  {
+   "id": "landstrasse-rand",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 8,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "major_road"
+    ],
+    [
+     "!",
+     [
+      "any",
+      [
+       "==",
+       [
+        "get",
+        "is_link"
+       ],
+       true
+      ],
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "motorway_link",
+         "trunk_link",
+         "primary_link",
+         "secondary_link",
+         "tertiary_link"
+        ]
+       ]
+      ]
+     ]
+    ],
+    [
+     "==",
+     [
+      "coalesce",
+      [
+       "get",
+       "kind_detail"
+      ],
+      ""
+     ],
+     "secondary"
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:landstrasse_rand}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     8,
+     0.81,
+     9,
+     1,
+     10,
+     1.3,
+     11,
+     1.59,
+     12,
+     2.06,
+     13,
+     2.8,
+     14,
+     3.95,
+     15,
+     5.78,
+     16,
+     8.71,
+     17,
+     13.4,
+     18,
+     13.4,
+     19,
+     13.4
+    ]
+   }
+  },
+  {
+   "id": "bundesstrasse-rand",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 6,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "major_road"
+    ],
+    [
+     "!",
+     [
+      "any",
+      [
+       "==",
+       [
+        "get",
+        "is_link"
+       ],
+       true
+      ],
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "motorway_link",
+         "trunk_link",
+         "primary_link",
+         "secondary_link",
+         "tertiary_link"
+        ]
+       ]
+      ]
+     ]
+    ],
+    [
+     "in",
+     [
+      "coalesce",
+      [
+       "get",
+       "kind_detail"
+      ],
+      ""
+     ],
+     [
+      "literal",
+      [
+       "trunk",
+       "primary"
+      ]
+     ]
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:bundesstrasse_rand}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     6,
+     0.76,
+     7,
+     0.94,
+     8,
+     1.23,
+     9,
+     1.43,
+     10,
+     1.75,
+     11,
+     2.2,
+     12,
+     2.7,
+     13,
+     3.51,
+     14,
+     4.55,
+     15,
+     6.65,
+     16,
+     10.02,
+     17,
+     15.4,
+     18,
+     15.4,
+     19,
+     15.4
+    ]
+   }
+  },
+  {
+   "id": "autobahn-rand",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 5,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "highway"
+    ],
+    [
+     "!",
+     [
+      "any",
+      [
+       "==",
+       [
+        "get",
+        "is_link"
+       ],
+       true
+      ],
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "motorway_link",
+         "trunk_link",
+         "primary_link",
+         "secondary_link",
+         "tertiary_link"
+        ]
+       ]
+      ]
+     ]
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:autobahn_rand}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     5,
+     1.1,
+     6,
+     1.75,
+     7,
+     1.92,
+     8,
+     2.19,
+     9,
+     2.63,
+     10,
+     2.96,
+     11,
+     3.5,
+     12,
+     4.52,
+     13,
+     6.15,
+     14,
+     8.75,
+     15,
+     12.14,
+     16,
+     17.57,
+     17,
+     26.25,
+     18,
+     26.25,
+     19,
+     26.25
+    ]
+   }
+  },
+  {
+   "id": "erschliessung",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 13,
+   "filter": [
+    "==",
+    [
+     "get",
+     "kind"
+    ],
+    "other"
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:erschliessung}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     13,
+     0.59,
+     14,
+     0.9,
+     15,
+     1.89,
+     16,
+     3.47,
+     17,
+     6,
+     18,
+     6,
+     19,
+     6
+    ]
+   }
+  },
+  {
+   "id": "nebenstrasse",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 12,
+   "filter": [
+    "==",
+    [
+     "get",
+     "kind"
+    ],
+    "minor_road"
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:nebenstrasse}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     12,
+     0.59,
+     13,
+     0.9,
+     14,
+     1.67,
+     15,
+     2.89,
+     16,
+     4.86,
+     17,
+     8,
+     18,
+     8,
+     19,
+     8
+    ]
+   }
+  },
+  {
+   "id": "kreisstrasse",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 10,
+   "filter": [
+    "any",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "medium_road"
+    ],
+    [
+     "all",
+     [
+      "==",
+      [
+       "get",
+       "kind"
+      ],
+      "major_road"
+     ],
+     [
+      "!",
+      [
+       "any",
+       [
+        "==",
+        [
+         "get",
+         "is_link"
+        ],
+        true
+       ],
+       [
+        "in",
+        [
+         "coalesce",
+         [
+          "get",
+          "kind_detail"
+         ],
+         ""
+        ],
+        [
+         "literal",
+         [
+          "motorway_link",
+          "trunk_link",
+          "primary_link",
+          "secondary_link",
+          "tertiary_link"
+         ]
+        ]
+       ]
+      ]
+     ],
+     [
+      "==",
+      [
+       "coalesce",
+       [
+        "get",
+        "kind_detail"
+       ],
+       ""
+      ],
+      "tertiary"
+     ]
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:kreisstrasse}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     10,
+     0.54,
+     11,
+     0.75,
+     12,
+     1.1,
+     13,
+     1.6,
+     14,
+     2.4,
+     15,
+     3.68,
+     16,
+     5.73,
+     17,
+     9,
+     18,
+     9,
+     19,
+     9
+    ]
+   }
+  },
+  {
+   "id": "auffahrt",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 11,
+   "filter": [
+    "all",
+    [
+     "any",
+     [
+      "==",
+      [
+       "get",
+       "is_link"
+      ],
+      true
+     ],
+     [
+      "in",
+      [
+       "coalesce",
+       [
+        "get",
+        "kind_detail"
+       ],
+       ""
+      ],
+      [
+       "literal",
+       [
+        "motorway_link",
+        "trunk_link",
+        "primary_link",
+        "secondary_link",
+        "tertiary_link"
+       ]
+      ]
+     ]
+    ],
+    [
+     "in",
+     [
+      "get",
+      "kind"
+     ],
+     [
+      "literal",
+      [
+       "major_road",
+       "highway"
+      ]
+     ]
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": [
+     "case",
+     [
+      "any",
+      [
+       "==",
+       [
+        "get",
+        "kind"
+       ],
+       "highway"
+      ],
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "motorway",
+         "motorway_link"
+        ]
+       ]
+      ]
+     ],
+     "{k:autobahn}",
+     [
+      "any",
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "trunk",
+         "trunk_link"
+        ]
+       ]
+      ],
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "primary",
+         "primary_link"
+        ]
+       ]
+      ]
+     ],
+     "{k:bundesstrasse}",
+     [
+      "in",
+      [
+       "coalesce",
+       [
+        "get",
+        "kind_detail"
+       ],
+       ""
+      ],
+      [
+       "literal",
+       [
+        "secondary",
+        "secondary_link"
+       ]
+      ]
+     ],
+     "{k:landstrasse}",
+     "{k:kreisstrasse}"
+    ],
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     11,
+     0.52,
+     12,
+     0.7,
+     13,
+     1,
+     14,
+     1.54,
+     15,
+     2.4,
+     16,
+     3.79,
+     17,
+     6,
+     18,
+     6,
+     19,
+     6
+    ]
+   }
+  },
+  {
+   "id": "landstrasse",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 8,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "major_road"
+    ],
+    [
+     "!",
+     [
+      "any",
+      [
+       "==",
+       [
+        "get",
+        "is_link"
+       ],
+       true
+      ],
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "motorway_link",
+         "trunk_link",
+         "primary_link",
+         "secondary_link",
+         "tertiary_link"
+        ]
+       ]
+      ]
+     ]
+    ],
+    [
+     "==",
+     [
+      "coalesce",
+      [
+       "get",
+       "kind_detail"
+      ],
+      ""
+     ],
+     "secondary"
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:landstrasse}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     8,
+     0.48,
+     9,
+     0.6,
+     10,
+     0.8,
+     11,
+     0.99,
+     12,
+     1.3,
+     13,
+     1.8,
+     14,
+     2.79,
+     15,
+     4.38,
+     16,
+     6.93,
+     17,
+     11,
+     18,
+     11,
+     19,
+     11
+    ]
+   }
+  },
+  {
+   "id": "bundesstrasse",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 6,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "major_road"
+    ],
+    [
+     "!",
+     [
+      "any",
+      [
+       "==",
+       [
+        "get",
+        "is_link"
+       ],
+       true
+      ],
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "motorway_link",
+         "trunk_link",
+         "primary_link",
+         "secondary_link",
+         "tertiary_link"
+        ]
+       ]
+      ]
+     ]
+    ],
+    [
+     "in",
+     [
+      "coalesce",
+      [
+       "get",
+       "kind_detail"
+      ],
+      ""
+     ],
+     [
+      "literal",
+      [
+       "trunk",
+       "primary"
+      ]
+     ]
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:bundesstrasse}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     6,
+     0.5,
+     7,
+     0.65,
+     8,
+     0.9,
+     9,
+     1.04,
+     10,
+     1.25,
+     11,
+     1.6,
+     12,
+     1.95,
+     13,
+     2.51,
+     14,
+     3.4,
+     15,
+     5.26,
+     16,
+     8.24,
+     17,
+     13,
+     18,
+     13,
+     19,
+     13
+    ]
+   }
+  },
+  {
+   "id": "autobahn",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 5,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "highway"
+    ],
+    [
+     "!",
+     [
+      "any",
+      [
+       "==",
+       [
+        "get",
+        "is_link"
+       ],
+       true
+      ],
+      [
+       "in",
+       [
+        "coalesce",
+        [
+         "get",
+         "kind_detail"
+        ],
+        ""
+       ],
+       [
+        "literal",
+        [
+         "motorway_link",
+         "trunk_link",
+         "primary_link",
+         "secondary_link",
+         "tertiary_link"
+        ]
+       ]
+      ]
+     ]
+    ]
+   ],
+   "layout": {
+    "line-cap": "round",
+    "line-join": "round"
+   },
+   "paint": {
+    "line-color": "{k:autobahn}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     5,
+     0.63,
+     6,
+     1,
+     7,
+     1.1,
+     8,
+     1.25,
+     9,
+     1.5,
+     10,
+     1.69,
+     11,
+     2,
+     12,
+     2.58,
+     13,
+     3.51,
+     14,
+     5,
+     15,
+     6.94,
+     16,
+     10.04,
+     17,
+     15,
+     18,
+     15,
+     19,
+     15
+    ]
+   }
+  },
+  {
+   "id": "bahn",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 10,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "rail"
+    ],
+    [
+     "!",
+     [
+      "has",
+      "service"
+     ]
+    ],
+    [
+     "in",
+     [
+      "coalesce",
+      [
+       "get",
+       "kind_detail"
+      ],
+      ""
+     ],
+     [
+      "literal",
+      [
+       "rail",
+       "narrow_gauge"
+      ]
+     ]
+    ]
+   ],
+   "paint": {
+    "line-color": "{k:bahn}",
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     10,
+     1.04,
+     11,
+     1.25,
+     12,
+     1.6,
+     13,
+     1.91,
+     14,
+     2.4,
+     15,
+     2.9,
+     16,
+     3.71,
+     17,
+     5,
+     18,
+     5,
+     19,
+     5
+    ]
+   }
+  },
+  {
+   "id": "bahn-schwelle",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 10,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "rail"
+    ],
+    [
+     "!",
+     [
+      "has",
+      "service"
+     ]
+    ],
+    [
+     "in",
+     [
+      "coalesce",
+      [
+       "get",
+       "kind_detail"
+      ],
+      ""
+     ],
+     [
+      "literal",
+      [
+       "rail",
+       "narrow_gauge"
+      ]
+     ]
+    ]
+   ],
+   "paint": {
+    "line-color": "{k:bahn_schwelle}",
+    "line-dasharray": [
+     1.5,
+     2.5
+    ],
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     10,
+     0.5,
+     11,
+     0.5,
+     12,
+     0.6,
+     13,
+     0.91,
+     14,
+     1.4,
+     15,
+     1.9,
+     16,
+     2.71,
+     17,
+     4,
+     18,
+     4,
+     19,
+     4
+    ]
+   }
+  },
+  {
+   "id": "nahverkehr",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 12,
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "rail"
+    ],
+    [
+     "!",
+     [
+      "has",
+      "service"
+     ]
+    ],
+    [
+     "in",
+     [
+      "coalesce",
+      [
+       "get",
+       "kind_detail"
+      ],
+      ""
+     ],
+     [
+      "literal",
+      [
+       "light_rail",
+       "subway",
+       "tram",
+       "monorail"
+      ]
+     ]
+    ]
+   ],
+   "paint": {
+    "line-color": "{k:nahverkehr}",
+    "line-dasharray": [
+     3,
+     2
+    ],
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     12,
+     0.95,
+     13,
+     1.3,
+     14,
+     1.54,
+     15,
+     1.92,
+     16,
+     2.53,
+     17,
+     3.5,
+     18,
+     3.5,
+     19,
+     3.5
+    ]
+   }
+  },
+  {
+   "id": "sonderbahn",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 11,
+   "filter": [
+    "any",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "aerialway"
+    ],
+    [
+     "==",
+     [
+      "coalesce",
+      [
+       "get",
+       "kind_detail"
+      ],
+      ""
+     ],
+     "funicular"
+    ]
+   ],
+   "layout": {
+    "line-cap": "round"
+   },
+   "paint": {
+    "line-color": "{k:sonderbahn}",
+    "line-dasharray": [
+     0.6,
+     2.6
+    ],
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     11,
+     1.12,
+     12,
+     1.3,
+     13,
+     1.6,
+     14,
+     1.77,
+     15,
+     2.05,
+     16,
+     2.49,
+     17,
+     3.2,
+     18,
+     3.2,
+     19,
+     3.2
+    ]
+   }
+  },
+  {
+   "id": "faehre",
+   "type": "line",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 10,
+   "filter": [
+    "==",
+    [
+     "get",
+     "kind"
+    ],
+    "ferry"
+   ],
+   "layout": {
+    "line-cap": "round"
+   },
+   "paint": {
+    "line-color": "{k:faehre}",
+    "line-dasharray": [
+     0.1,
+     2.6
+    ],
+    "line-width": [
+     "interpolate",
+     [
+      "exponential",
+      1.6
+     ],
+     [
+      "zoom"
+     ],
+     10,
+     1.2,
+     11,
+     1.32,
+     12,
+     1.5,
+     13,
+     1.8,
+     14,
+     1.97,
+     15,
+     2.25,
+     16,
+     2.69,
+     17,
+     3.4,
+     18,
+     3.4,
+     19,
+     3.4
+    ]
+   }
+  },
+  {
+   "id": "gewaessername",
+   "type": "symbol",
+   "source": "pm",
+   "source-layer": "water",
+   "minzoom": 11,
+   "filter": [
+    "all",
+    [
+     "has",
+     "name"
+    ],
+    [
+     "in",
+     [
+      "get",
+      "kind"
+     ],
+     [
+      "literal",
+      [
+       "lake",
+       "river",
+       "water",
+       "ocean",
+       "sea",
+       "bay",
+       "strait"
+      ]
+     ]
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "coalesce",
+     [
+      "get",
+      "name:de"
+     ],
+     [
+      "get",
+      "name"
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Italic"
+    ],
+    "text-size": 15,
+    "text-max-width": 8,
+    "symbol-placement": [
+     "case",
+     [
+      "==",
+      [
+       "geometry-type"
+      ],
+      "LineString"
+     ],
+     "line",
+     "point"
+    ]
+   },
+   "paint": {
+    "text-color": "{k:ocean_label}",
+    "text-halo-color": "{k:water}",
+    "text-halo-width": 1.6,
+    "text-halo-blur": 0.4
+   }
+  },
+  {
+   "id": "strassenname-neben",
+   "type": "symbol",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 14,
+   "filter": [
+    "all",
+    [
+     "has",
+     "name"
+    ],
+    [
+     "in",
+     [
+      "get",
+      "kind"
+     ],
+     [
+      "literal",
+      [
+       "minor_road",
+       "other"
+      ]
+     ]
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "get",
+     "name"
+    ],
+    "text-font": [
+     "Noto Sans Regular"
+    ],
+    "symbol-placement": "line",
+    "text-max-angle": 30,
+    "symbol-spacing": 320,
+    "text-size": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     14,
+     13,
+     17,
+     16
+    ]
+   },
+   "paint": {
+    "text-color": "{k:roads_label_minor}",
+    "text-halo-color": "{k:roads_label_minor_halo}",
+    "text-halo-width": 1.6,
+    "text-halo-blur": 0.4
+   }
+  },
+  {
+   "id": "strassenname-haupt",
+   "type": "symbol",
+   "source": "pm",
+   "source-layer": "roads",
+   "minzoom": 12,
+   "filter": [
+    "all",
+    [
+     "has",
+     "name"
+    ],
+    [
+     "in",
+     [
+      "get",
+      "kind"
+     ],
+     [
+      "literal",
+      [
+       "major_road",
+       "medium_road"
+      ]
+     ]
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "get",
+     "name"
+    ],
+    "text-font": [
+     "Noto Sans Medium"
+    ],
+    "symbol-placement": "line",
+    "text-max-angle": 30,
+    "symbol-spacing": 360,
+    "text-size": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     12,
+     13,
+     17,
+     17
+    ]
+   },
+   "paint": {
+    "text-color": "{k:roads_label_major}",
+    "text-halo-color": "{k:roads_label_major_halo}",
+    "text-halo-width": 1.6,
+    "text-halo-blur": 0.4
+   }
+  },
+  {
+   "id": "ortsteil",
+   "type": "symbol",
+   "source": "pm",
+   "source-layer": "places",
+   "minzoom": 11,
+   "filter": [
+    "all",
+    [
+     "in",
+     [
+      "get",
+      "kind"
+     ],
+     [
+      "literal",
+      [
+       "neighbourhood",
+       "macrohood"
+      ]
+     ]
+    ],
+    [
+     "<=",
+     [
+      "coalesce",
+      [
+       "get",
+       "min_zoom"
+      ],
+      0
+     ],
+     [
+      "-",
+      [
+       "zoom"
+      ],
+      -1
+     ]
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "coalesce",
+     [
+      "get",
+      "name:de"
+     ],
+     [
+      "get",
+      "name"
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Regular"
+    ],
+    "text-max-width": 7,
+    "text-size": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "zoom"
+     ],
+     11,
+     13,
+     15,
+     16
+    ],
+    "text-transform": "uppercase",
+    "text-letter-spacing": 0.08
+   },
+   "paint": {
+    "text-color": "{k:subplace_label}",
+    "text-halo-color": "{k:subplace_label_halo}",
+    "text-halo-width": 1.6,
+    "text-halo-blur": 0.4
+   }
+  },
+  {
+   "id": "ort",
+   "type": "symbol",
+   "source": "pm",
+   "source-layer": "places",
+   "filter": [
+    "all",
+    [
+     "==",
+     [
+      "get",
+      "kind"
+     ],
+     "locality"
+    ],
+    [
+     "<=",
+     [
+      "coalesce",
+      [
+       "get",
+       "min_zoom"
+      ],
+      0
+     ],
+     [
+      "-",
+      [
+       "zoom"
+      ],
+      -1
+     ]
+    ]
+   ],
+   "layout": {
+    "text-field": [
+     "coalesce",
+     [
+      "get",
+      "name:de"
+     ],
+     [
+      "get",
+      "name"
+     ]
+    ],
+    "text-font": [
+     "Noto Sans Medium"
+    ],
+    "text-max-width": 7,
+    "symbol-sort-key": [
+     "coalesce",
+     [
+      "get",
+      "sort_key"
+     ],
+     [
+      "-",
+      20,
+      [
+       "coalesce",
+       [
+        "get",
+        "population_rank"
+       ],
+       0
+      ]
+     ]
+    ],
+    "text-size": [
+     "interpolate",
+     [
+      "linear"
+     ],
+     [
+      "coalesce",
+      [
+       "get",
+       "population_rank"
+      ],
+      6
+     ],
+     6,
+     15,
+     12,
+     19,
+     15,
+     23
+    ]
+   },
+   "paint": {
+    "text-color": "{k:city_label}",
+    "text-halo-color": "{k:city_label_halo}",
+    "text-halo-width": 1.6,
+    "text-halo-blur": 0.4
+   }
+  }
+ ]
+}

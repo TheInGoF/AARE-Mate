@@ -1,0 +1,740 @@
+package net.prototux.aare.host
+
+import android.Manifest
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.Rect
+import android.location.Location
+import android.os.Handler
+import android.os.IBinder
+import android.os.IInterface
+import android.os.Looper
+import android.os.ParcelFileDescriptor
+import android.util.Log
+import android.view.Surface
+import androidx.car.app.AppInfo
+import androidx.car.app.FailureResponse
+import androidx.car.app.HandshakeInfo
+import androidx.car.app.IAppHost
+import androidx.car.app.IAppManager
+import androidx.car.app.ICarApp
+import androidx.car.app.ICarHost
+import androidx.car.app.IOnDoneCallback
+import androidx.car.app.ISurfaceCallback
+import androidx.car.app.SessionInfo
+import androidx.car.app.SessionInfoIntentEncoder
+import androidx.car.app.SurfaceContainer
+import androidx.car.app.constraints.IConstraintHost
+import androidx.car.app.hardware.ICarHardwareHost
+import androidx.car.app.hardware.ICarHardwareResult
+import androidx.car.app.media.CarAudioCallback
+import androidx.car.app.media.OpenMicrophoneRequest
+import androidx.car.app.media.OpenMicrophoneResponse
+import androidx.car.app.model.Alert
+import androidx.car.app.model.Template
+import androidx.car.app.model.TemplateInfo
+import androidx.car.app.model.TemplateWrapper
+import androidx.car.app.navigation.INavigationHost
+import androidx.car.app.navigation.INavigationManager
+import androidx.car.app.navigation.model.Trip
+import androidx.car.app.serialization.Bundleable
+import androidx.car.app.versioning.CarAppApiLevels
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.neverEqualPolicy
+import androidx.compose.runtime.setValue
+import java.io.IOException
+import java.io.OutputStream
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.atomic.AtomicBoolean
+import net.prototux.aare.R
+import net.prototux.aare.car.CarData
+
+/**
+ * One hosted Car App Library app: binds its CarAppService and plays the part Android Auto plays.
+ *
+ * Sequence (what the library expects from a host): bind → getAppInfo → negotiate the API level →
+ * onHandshakeCompleted (the app checks it trusts us here) → onAppCreate(our ICarHost) →
+ * getManager("app") → getTemplate → onAppStart/onAppResume while visible.
+ *
+ * All state is Compose state, mutated on the main thread; binder calls from the app arrive on
+ * binder threads and are posted to the main thread.
+ */
+class CarAppConnection(
+    private val context: Context,
+    val info: CarAppInfo,
+    private val env: HostEnvironment,
+    /** The instrument cluster's session of a navigation app (FEATURE_CLUSTER), not its main one. */
+    val cluster: Boolean = false,
+) {
+    enum class Status { IDLE, CONNECTING, READY, FAILED }
+
+    var status by mutableStateOf(Status.IDLE)
+        private set
+    /** Human-readable reason when [status] is FAILED. */
+    var error by mutableStateOf<String?>(null)
+        private set
+    /**
+     * Every reply is applied, even one equal to the current template: CarIcon.equals finds all bitmaps equal (a new
+     * maneuver arrow), and a refused toggle comes back unchanged but must still reset the optimistic UI state.
+     */
+    var template by mutableStateOf<Template?>(null, neverEqualPolicy())
+        private set
+    var templateId by mutableStateOf<String?>(null)
+        private set
+    var alert by mutableStateOf<Alert?>(null)
+        private set
+    var navigating by mutableStateOf(false)
+        private set
+    var trip by mutableStateOf<Trip?>(null)
+        private set
+    /** The app wants a map surface (it called setSurfaceCallback). */
+    var wantsSurface by mutableStateOf(false)
+        private set
+    var apiLevel = 0
+        private set
+    var libraryVersion: String = ""
+        private set
+
+    private val main = Handler(Looper.getMainLooper())
+    private var carApp: ICarApp? = null
+    private var appManager: IAppManager? = null
+    private var navManager: INavigationManager? = null
+    @Volatile private var surfaceCallback: ISurfaceCallback? = null
+    private var bound = false
+    /** Set once [cleanup] has run, so a subscribeCarHardwareResult racing in on a binder thread doesn't re-add a listener nothing will remove. */
+    @Volatile private var cleanedUp = false
+    @Volatile private var visible = false
+    /** On screen, the dashboard's map card or the assistant bar ([setVisible]). Any thread. */
+    val shown: Boolean get() = visible
+    private var started = false
+    private var pendingIntent: Intent? = null
+    private var retries = 0
+    /** Screen stack of the last template applied, top first (as ScreenManager lists it). */
+    private var screenStack: List<TemplateInfo> = emptyList()
+    /** getTemplate calls started / the newest one applied: replies can come back out of order. */
+    private var fetchSeq = 0
+    private var appliedSeq = 0
+
+    private var surfaceOwner: Any? = null
+    private var surface: SurfaceContainer? = null
+    private var visibleArea: Rect? = null
+    private var stableArea: Rect? = null
+
+    private val hardwareSubscriptions = HashMap<Int, ICarHardwareResult>()
+    /** The microphone the app has open, closed by [cleanup] so a released app doesn't keep the car's. */
+    @Volatile private var mic: MicPipe? = null
+
+    // ------------------------------------------------------------------ public API (main thread)
+
+    /** Binds the app. [intent] is delivered to its Session.onCreateScreen (e.g. a navigation request). */
+    fun connect(intent: Intent? = null) {
+        if (status == Status.CONNECTING || status == Status.READY) {
+            intent?.let { newIntent(it) }
+            return
+        }
+        pendingIntent = intent
+        status = Status.CONNECTING
+        error = null
+        cleanedUp = false
+        val bindIntent = Intent(CarAppInfo.SERVICE_ACTION).setComponent(info.service)
+        // A second session of the same app, for the cluster display: the library tells them apart by SessionInfo.
+        if (cluster) SessionInfoIntentEncoder.encode(SessionInfo(SessionInfo.DISPLAY_TYPE_CLUSTER, "aare-cluster"), bindIntent)
+        val ok = runCatching {
+            context.bindService(bindIntent, serviceConnection,
+                Context.BIND_AUTO_CREATE or Context.BIND_INCLUDE_CAPABILITIES or Context.BIND_IMPORTANT)
+        }.getOrElse { log("bind failed", it); false }
+        bound = ok
+        if (!ok) fail(context.getString(R.string.carapp_error_start, info.label))
+    }
+
+    /** On screen (map on the dashboard counts) or not: drives the app's Screen lifecycle. */
+    fun setVisible(v: Boolean) {
+        if (visible == v) return
+        visible = v
+        if (status == Status.READY) applyVisibility()
+        else if (v && (status == Status.IDLE || status == Status.FAILED)) connect()
+    }
+
+    fun newIntent(intent: Intent) {
+        val app = carApp
+        if (status == Status.READY && app != null) { call("onNewIntent") { app.onNewIntent(intent, it) }; return }
+        // connect() without the intent would reset the pending one
+        if (status == Status.CONNECTING || status == Status.READY) pendingIntent = intent else connect(intent)
+    }
+
+    fun back() {
+        val m = appManager ?: return
+        call("onBackPressed") { m.onBackPressed(it) }
+    }
+
+    /** The driver stopped navigation from the car UI. */
+    fun stopNavigation() {
+        val n = navManager ?: return
+        call("onStopNavigation") { n.onStopNavigation(it) }
+    }
+
+    fun dismissAlert() {
+        val a = alert ?: return
+        alert = null
+        runCatching { a.callbackDelegate?.sendDismiss(templateDone) }
+    }
+
+    fun release() {
+        visible = false
+        if (status == Status.READY) applyVisibility()
+        surfaceOwner?.let { surfaceDestroyed(it) }
+        // cleanup() is what removes the CarData listener (and clears hardware subs); without it a
+        // finished nav app leaks its listener and this whole connection for the process's life.
+        cleanup()
+        unbind()
+        status = Status.IDLE
+    }
+
+    /** Pushes a new screen configuration (night mode or size changed). */
+    fun configurationChanged() {
+        val app = carApp ?: return
+        call("onConfigurationChanged") { app.onConfigurationChanged(configuration(), it) }
+    }
+
+    // ------------------------------------------------------------------ surface (main thread)
+
+    fun surfaceAvailable(owner: Any, s: Surface, width: Int, height: Int, dpi: Int) {
+        surfaceOwner?.takeIf { it !== owner }?.let { surfaceDestroyed(it) }
+        surfaceOwner = owner
+        surface = SurfaceContainer(s, width, height, dpi)
+        withSurface += this
+        sendSurface()
+    }
+
+    fun surfaceDestroyed(owner: Any) {
+        if (surfaceOwner !== owner) return
+        val container = surface
+        surfaceOwner = null
+        surface = null
+        withSurface -= this
+        val cb = surfaceCallback ?: return
+        if (container != null) call("onSurfaceDestroyed") { cb.onSurfaceDestroyed(Bundleable.create(container), it) }
+    }
+
+    fun setVisibleArea(r: Rect) {
+        if (r == visibleArea) return
+        visibleArea = Rect(r)
+        val cb = surfaceCallback ?: return
+        if (surface != null) call("onVisibleAreaChanged") { cb.onVisibleAreaChanged(r, it) }
+    }
+
+    fun setStableArea(r: Rect) {
+        if (r == stableArea) return
+        stableArea = Rect(r)
+        val cb = surfaceCallback ?: return
+        if (surface != null) call("onStableAreaChanged") { cb.onStableAreaChanged(r, it) }
+    }
+
+    fun scroll(dx: Float, dy: Float) = surfaceCallback?.let { runCatching { it.onScroll(dx, dy) } }
+    fun fling(vx: Float, vy: Float) = surfaceCallback?.let { runCatching { it.onFling(vx, vy) } }
+    fun scale(fx: Float, fy: Float, factor: Float) = surfaceCallback?.let { runCatching { it.onScale(fx, fy, factor) } }
+    fun click(x: Float, y: Float) = surfaceCallback?.let { if (apiLevel >= CarAppApiLevels.LEVEL_5) runCatching { it.onClick(x, y) } }
+
+    private fun sendSurface() {
+        val cb = surfaceCallback ?: return
+        val container = surface ?: return
+        if (container.surface?.isValid != true) { net.prototux.aare.DiagLog.warn("car app ${info.label}: the screen's surface is no longer valid - not handed", "CONN"); return }
+        if (info.packageName == context.packageName) net.prototux.aare.DiagLog.add("car app ${info.label}: surface handed (${container.width}x${container.height})", area = "CONN")
+        call("onSurfaceAvailable") { cb.onSurfaceAvailable(Bundleable.create(container), it) }
+        visibleArea?.let { r -> call("onVisibleAreaChanged") { cb.onVisibleAreaChanged(r, it) } }
+        stableArea?.let { r -> call("onStableAreaChanged") { cb.onStableAreaChanged(r, it) } }
+    }
+
+    // ------------------------------------------------------------------ handshake
+
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            runCatching { binder.linkToDeath({ main.post { onAppDied() } }, 0) }
+            val app = ICarApp.Stub.asInterface(binder)
+            carApp = app
+            handshake(app)
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) = onAppDied()
+        override fun onBindingDied(name: ComponentName) = onAppDied()
+        override fun onNullBinding(name: ComponentName) = fail(context.getString(R.string.carapp_error_refused, info.label))
+    }
+
+    private fun handshake(app: ICarApp) {
+        call("getAppInfo", onSuccess = { result ->
+            val appInfo = result as? AppInfo
+            val hostMax = CarAppApiLevels.getLatest()
+            val appLatest = appInfo?.latestCarAppApiLevel ?: CarAppApiLevels.LEVEL_1
+            val appMin = appInfo?.minCarAppApiLevel ?: CarAppApiLevels.LEVEL_1
+            libraryVersion = appInfo?.libraryDisplayVersion ?: ""
+            if (appMin > hostMax) {
+                fail(context.getString(R.string.carapp_error_api_level, info.label, appMin, hostMax))
+                return@call
+            }
+            apiLevel = minOf(appLatest, hostMax)
+            Log.i(TAG, "${info.packageName}: library $libraryVersion, API $appMin..$appLatest, negotiated $apiLevel")
+            val handshake = Bundleable.create(HandshakeInfo(context.packageName, apiLevel))
+            call("onHandshakeCompleted", onSuccess = { create(app) }) { app.onHandshakeCompleted(handshake, it) }
+        }) { app.getAppInfo(it) }
+    }
+
+    private fun create(app: ICarApp) {
+        val intent = pendingIntent ?: Intent(CarAppInfo.SERVICE_ACTION).setComponent(info.service)
+        pendingIntent = null
+        call("onAppCreate", onSuccess = {
+            call("getManager(app)", onSuccess = { m ->
+                appManager = (m as? IInterface)?.let { IAppManager.Stub.asInterface(it.asBinder()) }
+                if (info.isNavigation) {
+                    call("getManager(navigation)", onSuccess = { n ->
+                        navManager = (n as? IInterface)?.let { INavigationManager.Stub.asInterface(it.asBinder()) }
+                    }) { app.getManager("navigation", it) }
+                }
+                status = Status.READY
+                retries = 0
+                screenStack = emptyList() // a new session: its first template is never a refresh
+                fetchTemplate()
+                applyVisibility()
+                // An intent that came in after onAppCreate took the pending one (still CONNECTING then).
+                pendingIntent?.let { pendingIntent = null; newIntent(it) }
+            }) { app.getManager("app", it) }
+        }) { app.onAppCreate(carHost, intent, configuration(), it) }
+    }
+
+    private fun fetchTemplate() {
+        val m = appManager ?: return
+        val seq = ++fetchSeq
+        call("getTemplate", onSuccess = { w ->
+            val wrapper = w as? TemplateWrapper ?: return@call
+            if (seq < appliedSeq) return@call
+            appliedSeq = seq
+            val stack = runCatching { wrapper.templateInfosForScreenStack }.getOrNull().orEmpty()
+            val refresh = templateId != null && isRefresh(screenStack, stack)
+            screenStack = stack
+            template = wrapper.template
+            // A refresh of the same screen (search results while typing, a navigation update, a
+            // toggled row) keeps the on-screen state: what's typed, pan mode, the scroll position.
+            if (!refresh) templateId = wrapper.id
+        }) { m.getTemplate(it) }
+    }
+
+    /**
+     * The library never sets TemplateWrapper.isRefresh and wraps every template with a new id, so
+     * decide like Android Auto from the screen stack: same depth, same screens below the top
+     * (class and id: their ids are stable) and the same template class on top. The list is top first.
+     */
+    private fun isRefresh(old: List<TemplateInfo>, new: List<TemplateInfo>): Boolean =
+        new.isNotEmpty() && new.size == old.size && new.drop(1) == old.drop(1) &&
+            new[0].templateClass == old[0].templateClass
+
+    private fun applyVisibility() {
+        val app = carApp ?: return
+        if (visible && !started) {
+            started = true
+            call("onAppStart") { app.onAppStart(it) }
+            call("onAppResume") { app.onAppResume(it) }
+            surface?.let { sendSurface() }
+        } else if (!visible && started) {
+            started = false
+            call("onAppPause") { app.onAppPause(it) }
+            call("onAppStop") { app.onAppStop(it) }
+        }
+    }
+
+    private fun configuration(): Configuration = Configuration(context.resources.configuration).apply {
+        screenWidthDp = env.screenWidthDp
+        screenHeightDp = env.screenHeightDp
+        smallestScreenWidthDp = minOf(env.screenWidthDp, env.screenHeightDp)
+        densityDpi = env.densityDpi
+        orientation = if (env.screenWidthDp >= env.screenHeightDp) Configuration.ORIENTATION_LANDSCAPE else Configuration.ORIENTATION_PORTRAIT
+        uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+            (if (env.night) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO)
+    }
+
+    private fun onAppDied() {
+        if (status == Status.IDLE) return
+        Log.w(TAG, "${info.packageName} died or unbound")
+        // It won't send navigationEnded any more: don't leave its trip on the dashboard and cluster.
+        if (navigating) { navigating = false; trip = null; env.navigationEnded(this) }
+        cleanup()
+        // Unbind the dead/failed binding before any reconnect: rebinding a live ServiceConnection
+        // (onBindingDied especially) leaks bindings and keeps the service alive.
+        unbind()
+        status = Status.FAILED
+        error = context.getString(R.string.carapp_error_stopped, info.label)
+        // Reconnect while it's on screen, a few times: apps get killed and restarted by the OS.
+        if (visible && retries++ < 3) main.postDelayed({ if (visible && status == Status.FAILED) connect() }, 1_000L * retries)
+    }
+
+    private fun fail(message: String) {
+        Log.w(TAG, "${info.packageName}: $message")
+        cleanup()
+        unbind()
+        status = Status.FAILED
+        error = message
+    }
+
+    private fun cleanup() {
+        carApp = null
+        appManager = null
+        navManager = null
+        surfaceCallback = null
+        wantsSurface = false
+        started = false
+        navigating = false
+        alert = null
+        // The listener changes under the same lock as the subscriptions: a binder thread subscribing at the same
+        // time can't add it back after this removal (CarData's add/remove don't lock, so no lock order issue).
+        synchronized(hardwareSubscriptions) { cleanedUp = true; hardwareSubscriptions.clear(); CarData.removeListener(carDataListener) }
+        mic?.stop()
+    }
+
+    private fun unbind() {
+        if (!bound) return
+        bound = false
+        runCatching { context.unbindService(serviceConnection) }
+    }
+
+    // ------------------------------------------------------------------ calls into the app
+
+    /**
+     * Calls a oneway app method with a done-callback. Results are unwrapped from their Bundleable
+     * and delivered on the main thread; failures are logged and, during the handshake, end the
+     * connection with an explanation.
+     */
+    private fun call(name: String, onSuccess: ((Any?) -> Unit)? = null, block: (IOnDoneCallback) -> Unit) {
+        val cb = object : IOnDoneCallback.Stub() {
+        override fun getInterfaceVersion(): Int = IOnDoneCallback.VERSION
+
+            override fun onSuccess(response: Bundleable?) {
+                val value = runCatching { response?.get() }.getOrElse { e -> main.post { onFailure(name, e.toString()) }; return }
+                main.post { onSuccess?.invoke(value) }
+            }
+
+            override fun onFailure(response: Bundleable) {
+                val msg = runCatching { (response.get() as FailureResponse).stackTrace }.getOrDefault("unknown error")
+                main.post { onFailure(name, msg) }
+            }
+        }
+        try {
+            block(cb)
+        } catch (e: Exception) {
+            onFailure(name, e.toString())
+        }
+    }
+
+    private fun onFailure(call: String, message: String) {
+        // (the apps that refuse this host are remembered in HostRejections, for shells that can offer another app)
+        Log.w(TAG, "${info.packageName}.$call failed: ${message.lineSequence().firstOrNull()}")
+        if (status == Status.CONNECTING) {
+            fail(when {
+                "Unknown host" in message || "not allowed" in message || "SecurityException" in message -> {
+                    if (info.packageName !in HostRejections.packages) HostRejections.packages += info.packageName
+                    HostRejections.remember(context, info.packageName)
+                    context.getString(R.string.carapp_error_google_only, info.label)
+                }
+                else -> context.getString(R.string.carapp_error_cant_start, info.label, message.lineSequence().first().take(120))
+            })
+        }
+    }
+
+    // ------------------------------------------------------------------ host binders (app → us)
+
+    private val carHost = object : ICarHost.Stub() {
+        override fun getInterfaceVersion(): Int = ICarHost.VERSION
+
+        override fun startCarApp(intent: Intent) {
+            main.post { env.startCarApp(this@CarAppConnection, intent) }
+        }
+
+        override fun getHost(type: String): IBinder = when (type) {
+            "app" -> appHost.asBinder()
+            "navigation" -> navigationHost.asBinder()
+            "constraints" -> constraintHost.asBinder()
+            "hardware" -> hardwareHost.asBinder()
+            else -> throw IllegalArgumentException("Unknown host type: $type")
+        }
+
+        override fun finish() {
+            main.post { env.finish(this@CarAppConnection) }
+        }
+    }
+
+    private val appHost = object : IAppHost.Stub() {
+        override fun getInterfaceVersion(): Int = IAppHost.VERSION
+
+        override fun invalidate() {
+            main.post { fetchTemplate() }
+        }
+
+        override fun showToast(text: CharSequence, duration: Int) {
+            main.post { env.toast(this@CarAppConnection, text, duration == 1) }
+        }
+
+        override fun setSurfaceCallback(callback: ISurfaceCallback?) {
+            main.post {
+                surfaceCallback = callback
+                wantsSurface = callback != null
+                if (callback != null) {
+                    // which side lacks it when an app stays grey (19.11.2026, the dashboard after a reconnect)
+                    if (surface == null) net.prototux.aare.DiagLog.add("car app ${info.label}: asks for a surface - none on the screen yet", area = "CONN")
+                    sendSurface()
+                }
+            }
+        }
+
+        override fun sendLocation(location: Location) = Unit
+
+        override fun showAlert(alertBundle: Bundleable) {
+            val a = runCatching { alertBundle.get() as Alert }.getOrNull() ?: return
+            main.post { alert = a }
+        }
+
+        override fun dismissAlert(alertId: Int) {
+            main.post { if (alert?.id == alertId) alert = null }
+        }
+
+        override fun openMicrophone(request: Bundleable): Bundleable? = openMic(request)
+    }
+
+    private val navigationHost = object : INavigationHost.Stub() {
+        override fun getInterfaceVersion(): Int = INavigationHost.VERSION
+
+        override fun navigationStarted() {
+            main.post { navigating = true; env.navigationStarted(this@CarAppConnection) }
+        }
+
+        override fun navigationEnded() {
+            main.post { navigating = false; trip = null; env.navigationEnded(this@CarAppConnection) }
+        }
+
+        override fun updateTrip(tripBundle: Bundleable) {
+            val t = runCatching { tripBundle.get() as Trip }.getOrNull() ?: return
+            main.post { trip = t; env.tripUpdated(this@CarAppConnection, t) }
+        }
+    }
+
+    private val constraintHost = object : IConstraintHost.Stub() {
+        override fun getInterfaceVersion(): Int = IConstraintHost.VERSION
+
+        override fun getContentLimit(contentType: Int): Int = env.contentLimit(contentType)
+        override fun isAppDrivenRefreshEnabled(): Boolean = false
+    }
+
+    /**
+     * Car hardware for apps: CarInfo (model, energy, speed, mileage, toll card) and CarSensors
+     * (compass, GPS, accelerometer, gyroscope) from what the head unit reports (see
+     * CarHardwareResults). CoMaps and Organic Maps subscribe to the compass and the car's GPS and
+     * crash if there is no hardware host at all.
+     */
+    private val hardwareHost = object : ICarHardwareHost.Stub() {
+        override fun getInterfaceVersion(): Int = ICarHardwareHost.VERSION
+
+        override fun getCarHardwareResult(resultType: Int, params: Bundleable?, callback: ICarHardwareResult) {
+            deliverHardware(resultType, callback)
+        }
+
+        override fun subscribeCarHardwareResult(resultType: Int, params: Bundleable?, callback: ICarHardwareResult) {
+            // Refuse an unpermitted location subscription up front instead of failing on every GPS fix.
+            if (resultType == CarHardwareResults.CAR_LOCATION && !hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+                deliverHardware(resultType, callback)
+                return
+            }
+            // Binder thread: cleanup() may already have torn this connection down.
+            synchronized(hardwareSubscriptions) {
+                if (cleanedUp) return
+                hardwareSubscriptions[resultType] = callback
+                CarData.addListener(carDataListener)
+            }
+            // Outside the lock: a call back into the app.
+            deliverHardware(resultType, callback)
+        }
+
+        override fun unsubscribeCarHardwareResult(resultType: Int, params: Bundleable?) {
+            synchronized(hardwareSubscriptions) {
+                hardwareSubscriptions.remove(resultType)
+                if (hardwareSubscriptions.isEmpty()) CarData.removeListener(carDataListener)
+            }
+        }
+    }
+
+    /** Result types waiting to be pushed: bursts of sensor batches (accelerometer...) collapse into one push. */
+    private val pendingHardware = HashSet<Int>()
+
+    /**
+     * New car data (reader thread). GPS and compass keep their own path ([carSensorsChanged], after
+     * the runtime has stored them); everything else is pushed from here.
+     */
+    private val carDataListener = CarData.Listener { _, changed ->
+        val types = CarHardwareResults.typesFor(changed) - CarHardwareResults.COMPASS - CarHardwareResults.CAR_LOCATION
+        if (types.isEmpty()) return@Listener
+        val wanted = synchronized(hardwareSubscriptions) { types.filter { it in hardwareSubscriptions } }
+        if (wanted.isEmpty()) return@Listener
+        val first = synchronized(pendingHardware) { pendingHardware.isEmpty().also { pendingHardware += wanted } }
+        if (first) main.post {
+            val due = synchronized(pendingHardware) { pendingHardware.toList().also { pendingHardware.clear() } }
+            val subs = synchronized(hardwareSubscriptions) { hardwareSubscriptions.toMap() }
+            for (type in due) subs[type]?.let { deliverHardware(type, it) }
+        }
+    }
+
+    /** Pushes fresh car GPS/compass values to subscribed apps (called by the runtime on sensor updates). */
+    fun carSensorsChanged() {
+        val subs = synchronized(hardwareSubscriptions) { hardwareSubscriptions.toMap() }
+        for ((type, cb) in subs) if (type == CarHardwareResults.COMPASS || type == CarHardwareResults.CAR_LOCATION) deliverHardware(type, cb)
+        // System L-001: IDmate's new battery level to the apps that asked for it (ABRP) - it is no car data, so the car's
+        // own changes never pushed it; looked at with the GPS, at most every 10 s
+        if (CarHardwareResults.ENERGY_LEVEL in subs || CarHardwareResults.ENERGY_PROFILE in subs) {
+            val t = android.os.SystemClock.uptimeMillis()
+            if (t - socLookedAt < SOC_LOOK_MS) return
+            socLookedAt = t
+            val at = CarHardwareResults.idmateSocAt()
+            if (at != 0L && at != socPushedAt) {
+                socPushedAt = at
+                subs[CarHardwareResults.ENERGY_LEVEL]?.let { deliverHardware(CarHardwareResults.ENERGY_LEVEL, it) }
+                subs[CarHardwareResults.ENERGY_PROFILE]?.let { deliverHardware(CarHardwareResults.ENERGY_PROFILE, it) }
+            }
+        }
+    }
+    private var socLookedAt = 0L
+    private var socPushedAt = 0L
+    private val SOC_LOOK_MS = 10_000L
+
+    private fun deliverHardware(type: Int, cb: ICarHardwareResult) {
+        // The car's position is location data: like Android Auto, only hand it to an app that holds the permission itself.
+        val result = if (type == CarHardwareResults.CAR_LOCATION && !hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            log("car location refused: ACCESS_FINE_LOCATION not granted")
+            null
+        } else runCatching { CarHardwareResults.build(type, CarData.state.value, env.carLocation, env.carHeading) }
+            .onFailure { Log.w(TAG, "hardware result $type: $it") }.getOrNull()
+        runCatching {
+            if (result != null) cb.onCarHardwareResult(type, true, Bundleable.create(result), LoggingDone.asBinder())
+            else cb.onCarHardwareResult(type, false, null, LoggingDone.asBinder())
+        }.onFailure { Log.w(TAG, "hardware result $type to ${info.packageName} failed: $it") }
+    }
+
+    // ------------------------------------------------------------------ microphone
+
+    /**
+     * IAppHost.openMicrophone is synchronous: we return a pipe whose read end the app reads
+     * 16 kHz mono PCM from, and keep the write end fed with the car's microphone.
+     */
+    private fun openMic(requestBundle: Bundleable): Bundleable? {
+        // The car's microphone is the cabin audio: only an app that holds RECORD_AUDIO itself may open it (null = refused, as when no mic is available).
+        if (!hasPermission(Manifest.permission.RECORD_AUDIO)) {
+            log("microphone refused: RECORD_AUDIO not granted")
+            return null
+        }
+        val request = runCatching { requestBundle.get() as OpenMicrophoneRequest }.getOrNull()
+        val pipe = ParcelFileDescriptor.createReliablePipe()
+        val p = MicPipe(ParcelFileDescriptor.AutoCloseOutputStream(pipe[1]))
+        val handle = env.openMicrophone(this, sink = p::write, onStopped = {
+            runCatching { request?.carAudioCallbackDelegate?.onStopRecording() }
+            p.stop()
+        })
+        if (handle == null) {
+            runCatching { pipe[0].close() }; p.stop()
+            return null
+        }
+        mic = p
+        p.attach(handle)
+        // cleanup() ran meanwhile (binder thread): it couldn't see this one.
+        if (cleanedUp) p.stop()
+        val response = OpenMicrophoneResponse.Builder(object : CarAudioCallback {
+            override fun onStopRecording() { main.post { p.stop() } }
+        }).setCarMicrophoneDescriptor(pipe[0]).build()
+        return Bundleable.create(response)
+    }
+
+    /**
+     * One opened microphone: the PCM goes through a bounded queue to a thread of its own that writes the app's
+     * pipe. The sink runs on the AAP reader thread, which must never block, and a pipe the app stops reading
+     * fills up in about 2 s: when the app falls that far behind, chunks are dropped (whole, so samples stay aligned).
+     */
+    private inner class MicPipe(private val out: OutputStream) {
+        private val queue = ArrayBlockingQueue<ByteArray>(MIC_QUEUE_CHUNKS)
+        private val stopped = AtomicBoolean()
+        @Volatile private var handle: MicHandle? = null
+        private val writer = Thread({
+            try {
+                while (true) out.write(queue.take())
+            } catch (_: InterruptedException) {
+            } catch (_: IOException) {
+                main.post { stop() } // the app closed its end
+            }
+        }, "aare-mic-pipe").apply { isDaemon = true; start() }
+
+        /** Any thread, never blocks. The caller may reuse [data]: it is copied. */
+        fun write(data: ByteArray, off: Int, len: Int) {
+            if (!stopped.get()) queue.offer(data.copyOfRange(off, off + len))
+        }
+
+        fun attach(h: MicHandle) {
+            handle = h
+            if (stopped.get()) h.close() // stopped before the runtime answered
+        }
+
+        /** Idempotent, any thread: the app, the router (another listener took over) or [cleanup]. */
+        fun stop() {
+            if (!stopped.compareAndSet(false, true)) return
+            if (mic === this) mic = null
+            handle?.close()
+            writer.interrupt()
+            runCatching { out.close() }
+        }
+    }
+
+    private fun hasPermission(permission: String): Boolean =
+        context.packageManager.checkPermission(permission, info.packageName) == PackageManager.PERMISSION_GRANTED
+
+    private fun log(msg: String, t: Throwable? = null) = Log.w(TAG, "${info.packageName}: $msg", t)
+
+    private object LoggingDone : IOnDoneCallback.Stub() {
+        override fun getInterfaceVersion(): Int = IOnDoneCallback.VERSION
+
+        override fun onSuccess(response: Bundleable?) = Unit
+        override fun onFailure(response: Bundleable) {
+            Log.w(TAG, "callback failed: ${runCatching { (response.get() as FailureResponse).stackTrace.lineSequence().first() }.getOrNull()}")
+        }
+    }
+
+    companion object {
+        private const val TAG = "AareCarApp"
+        /** The connections holding a map surface right now (main thread), for a size change to reach them all. */
+        val withSurface: MutableSet<CarAppConnection> = java.util.Collections.newSetFromMap(java.util.WeakHashMap())
+        /** Microphone chunks queued for an app that reads slowly: about a second of 20 ms chunks. */
+        private const val MIC_QUEUE_CHUNKS = 50
+
+        /** The OnDoneCallback handed to template delegates: logs failures. */
+        val templateDone = object : androidx.car.app.OnDoneCallback {
+            override fun onSuccess(response: Bundleable?) = Unit
+            override fun onFailure(response: Bundleable) {
+                Log.w(TAG, "template callback failed: ${runCatching { (response.get() as FailureResponse).stackTrace.lineSequence().first() }.getOrNull()}")
+            }
+        }
+    }
+}
+
+/**
+ * The apps that refused this host in this run (they accept Google's Android Auto only). Observable: a shell can
+ * step over them when it picks the app of an area. Not kept across runs - a later system may make them accept us.
+ */
+object HostRejections {
+    val packages = androidx.compose.runtime.mutableStateListOf<String>()
+
+    /**
+     * System I-013: the apps that refused Mate as their host (they let only Google's Android Auto in), kept, so the
+     * phone app can say so beside them in the app list - before, they just did not open in the car.
+     */
+    fun remember(context: android.content.Context, pkg: String) {
+        val p = context.getSharedPreferences("mate_apps", android.content.Context.MODE_PRIVATE)
+        p.edit().putStringSet("refused", (p.getStringSet("refused", emptySet()).orEmpty() + pkg)).apply()
+    }
+    fun refused(context: android.content.Context): Set<String> =
+        context.getSharedPreferences("mate_apps", android.content.Context.MODE_PRIVATE).getStringSet("refused", emptySet()).orEmpty()
+
+}

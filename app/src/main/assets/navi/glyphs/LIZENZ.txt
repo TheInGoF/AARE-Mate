@@ -1,0 +1,3 @@
+Schrift: Noto Sans (Regular, Medium, Italic) als MapLibre-Glyphen (SDF, Bereiche Latein),
+aus github.com/protomaps/basemaps-assets (fonts/), Stand 16.11.2026.
+Lizenz der Schrift: SIL Open Font License 1.1 (https://openfontlicense.org), © Google / Noto-Projekt.

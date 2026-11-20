@@ -1,0 +1,414 @@
+package net.prototux.aare.ui.car.navi
+
+import com.stadiamaps.ferrostar.core.FerrostarCore
+import com.stadiamaps.ferrostar.core.NavigationState
+import com.stadiamaps.ferrostar.core.http.OkHttpClientProvider
+import com.stadiamaps.ferrostar.core.location.NavigationLocationProvider
+import com.stadiamaps.ferrostar.core.location.SimulatedLocationProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import org.maplibre.spatialk.geojson.Position
+import uniffi.ferrostar.CourseFiltering
+import uniffi.ferrostar.GeographicCoordinate
+import uniffi.ferrostar.LocationBias
+import uniffi.ferrostar.NavigationControllerConfig
+import uniffi.ferrostar.Route
+import uniffi.ferrostar.RouteDeviationTracking
+import uniffi.ferrostar.UserLocation
+import uniffi.ferrostar.Waypoint
+import uniffi.ferrostar.WaypointAdvanceMode
+import uniffi.ferrostar.WaypointKind
+import uniffi.ferrostar.WellKnownRouteProvider
+import uniffi.ferrostar.stepAdvanceDistanceEntryAndExit
+import uniffi.ferrostar.stepAdvanceDistanceToEndOfStep
+import java.time.Instant
+
+/**
+ * One guided trip (step 3b of projekt/navi-app_v0.1.md): Ferrostar asks the own Valhalla for the route, follows the
+ * position along it, advances the steps and notices a deviation. The position is the real one (F1: the car's GPS,
+ * else the phone's - NaviLiveLocation), simulated along the route only for tests (the desk window, the test hooks);
+ * pictures are taken of simulated drives only.
+ */
+internal class NaviSession(private val scope: CoroutineScope, private val valhalla: String = NaviRoute.DEV_VALHALLA, private val http: OkHttpClient = OkHttpClient(),
+                           val routeOptions: RouteOptions = RouteOptions(), val live: NaviLiveLocation? = null) {
+    val simulated = SimulatedLocationProvider(scope)
+    /**
+     * F2 step 3: points on closed roads that the routes keep away from (Valhalla's exclude_locations) - set from TomTom's
+     * closures along the planned routes; kept for the charging replans of the same trip.
+     * Declared first: the core below is made from options() when the session is (it read null - the crash of 17.11. 05:12).
+     */
+    var closures: List<Position> = emptyList()
+    /** The closed stretches the last planning found on its routes (shown on the map, O220) and the areas kept from. */
+    var closureLines: List<List<Position>> = emptyList(); private set
+    private var closureAreas: List<List<Position>> = emptyList()
+
+
+    /** Ferrostar's switch between the real position and the simulation. */
+    private val provider = live?.let { NavigationLocationProvider(it, simulated) }
+    private val positions get() = provider ?: simulated
+
+    private val config = NavigationControllerConfig(
+        WaypointAdvanceMode.WaypointWithinRange(100.0),
+        stepAdvanceDistanceEntryAndExit(30u, 5u, 32u),
+        // the destination counts as reached 25 m from the route's end (it was 10: "wenn ich wirklich auf 1 Meter genau
+        // zum Ziel fahren muss", 18.11.2026); coming to a stop near it ends the trip as well (NaviKeep, arriveNow)
+        stepAdvanceDistanceToEndOfStep(25u, 32u),
+        // off the route from 30 m on (F1: Google turns to the new route right after the junction; 50 m was a block late)
+        RouteDeviationTracking.StaticThreshold(15u, DEVIATION_M),
+        CourseFiltering.SNAP_TO_ROUTE,
+    )
+
+    private val core = FerrostarCore(
+        // German instructions (specification F-06); without it Valhalla answers in English
+        // with the driver's route settings, so that a new route after leaving it keeps them too (O181)
+        WellKnownRouteProvider.Valhalla("$valhalla/route", "auto", options(false, 0, routeOptions)),
+        OkHttpClientProvider(http),
+        positions,
+        config,
+        null,
+    )
+
+    val state: StateFlow<NavigationState> get() = core.state
+
+    /** The route being guided; changes when Ferrostar replaces it after a deviation (F1). */
+    private val _route = MutableStateFlow<Route?>(null)
+    val route: StateFlow<Route?> get() = _route
+    /** Recalculations of this trip and the time from noticing the deviation to the new route, for the log and tests. */
+    var reroutes = 0; private set
+    private var offSince = 0L
+    /** Whether Mate Navi's position comes from the simulation (tests) rather than the car or the phone. */
+    var simulating = live == null; private set
+    private var wasOff = false
+    /** Off the route and no new one yet (Google's "Route wird neu berechnet"): the hint over the map. */
+    val offRoute = kotlinx.coroutines.flow.MutableStateFlow(false)
+    private var lastOff = 0L
+
+    init {
+        // F1 "Neuberechnung sofort": ask again 2 s after the last new route at the earliest (Ferrostar's default waits
+        // longer), and after 20 m of movement - a car that went the wrong way is far enough away by then
+        core.minimumTimeBeforeRecalculation = kotlin.time.Duration.parse("2s")
+        core.minimumMovementBeforeRecalculation = 20.0
+        // the new route goes to the guidance and, in a simulated drive, to the simulated car (it drives the new one on)
+        core.alternativeRouteProcessor = com.stadiamaps.ferrostar.core.AlternativeRouteProcessor { c, routes ->
+            val r = routes.firstOrNull() ?: return@AlternativeRouteProcessor
+            c.replaceRoute(r, config)
+            if (simulating) simulated.setRoute(r, LocationBias.None)
+            reroutes++
+            pace()
+            val ms = if (offSince > 0) android.os.SystemClock.elapsedRealtime() - offSince else -1
+            offSince = 0
+            offRoute.value = false
+            android.util.Log.i(TAG, "reroute %d: new route %.1f km after %d ms off the route".format(reroutes, r.distance / 1000, ms))
+            _route.value = r
+        }
+        scope.launch {
+            core.state.collect { s ->
+                val off = (s.tripState as? uniffi.ferrostar.TripState.Navigating)?.deviation is uniffi.ferrostar.RouteDeviation.Deviation
+                // the moment it first left the route; kept until the new route is there (Ferrostar's states between
+                // may already read "no deviation" while the new route is asked for)
+                if (off && !wasOff && offSince == 0L) { offSince = android.os.SystemClock.elapsedRealtime(); android.util.Log.i(TAG, "off the route") }
+                wasOff = off
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (off) lastOff = now
+                offRoute.value = offSince > 0 && now - lastOff < 5_000
+                calm()
+            }
+        }
+    }
+
+    /** When the last new routes came (elapsedRealtime), to slow them down when they come in a row. */
+    private val recentReroutes = ArrayDeque<Long>()
+
+    /**
+     * New routes in a row slow down (19.11.2026: "dass ich mich in der gesperrten Straße scheinbar wiederfinde von der
+     * Autobahnbaustelle und er im Sekundentakt versucht, eine neue Route zu planen, was wahrscheinlich zum Dauerspam auf
+     * meinen Server folgt"): in road works the traffic runs where the map has no road (switched over to the other
+     * carriageway) - every new route is left at once again. More than [BURST] in a minute: the next one not before 30 s,
+     * more than [BURST_HARD]: not before 60 s; after two minutes without one, at once again (2 s).
+     */
+    private fun pace() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        recentReroutes.addLast(now)
+        while (recentReroutes.isNotEmpty() && now - recentReroutes.first() > 60_000) recentReroutes.removeFirst()
+        val wait = when {
+            recentReroutes.size > BURST_HARD -> 60
+            recentReroutes.size > BURST -> 30
+            else -> 2
+        }
+        val was = core.minimumTimeBeforeRecalculation.inWholeSeconds.toInt()
+        if (wait != was) {
+            core.minimumTimeBeforeRecalculation = kotlin.time.Duration.parse("${wait}s")
+            if (wait > 2) net.prototux.aare.DiagLog.warn("route: ${recentReroutes.size} new routes in a minute (left again at once - road works where the map has no road?): the next not before $wait s", "NAVI")
+        }
+    }
+
+    /** Back to new routes at once after a calm while (called with every position). */
+    private fun calm() {
+        val last = recentReroutes.lastOrNull() ?: return
+        if (android.os.SystemClock.elapsedRealtime() - last > 120_000 && core.minimumTimeBeforeRecalculation.inWholeSeconds > 2) {
+            core.minimumTimeBeforeRecalculation = kotlin.time.Duration.parse("2s")
+            recentReroutes.clear()
+            net.prototux.aare.DiagLog.add("route: calm again - new routes at once again", area = "NAVI")
+        }
+    }
+
+    /**
+     * Test of F1 in a simulated drive: the car keeps straight on at the next manoeuvre instead of turning - it is sent
+     * on a route of its own to a point 400 m beyond the junction in the direction it comes from. Returns what it did.
+     */
+    suspend fun missTurn(): String {
+        val trip = core.state.value.tripState as? uniffi.ferrostar.TripState.Navigating ?: return "no trip"
+        val step = trip.remainingSteps.firstOrNull() ?: return "no step"
+        val g = step.geometry
+        if (g.size < 2) return "step without line"
+        val a = g[g.size - 2]; val b = g.last()
+        val bearing = Math.atan2(b.lng - a.lng, (b.lat - a.lat) / Math.cos(Math.toRadians(b.lat)))
+        val dLat = 400.0 / 111_320 * Math.cos(bearing)
+        val dLng = 400.0 / (111_320 * Math.cos(Math.toRadians(b.lat))) * Math.sin(bearing)
+        val past = GeographicCoordinate(b.lat + dLat, b.lng + dLng)
+        val here = trip.userLocation
+        val detour = withContext(Dispatchers.IO) {
+            planner(options(false, 0, routeOptions)).getRoutes(here, listOf(Waypoint(past, WaypointKind.BREAK, null))).first()
+        }
+        simulated.setRoute(detour, LocationBias.None)
+        if (NaviDebug.offlineAfterMiss) { NaviDebug.offlineAfterMiss = false; NaviDebug.offline = true; android.util.Log.i(TAG, "test: offline now") }
+        android.util.Log.i(TAG, "test: straight on past \"${step.instruction}\", detour %.2f km".format(detour.distance / 1000))
+        return "straight on past: ${step.instruction}"
+    }
+
+    /** Plans a route from [from] over [via] (stops on the way) to [to], for the preview; starts nothing. */
+    suspend fun plan(from: Position, to: Position, via: List<Position> = emptyList()): Route {
+        val here = UserLocation(GeographicCoordinate(from.latitude, from.longitude), 5.0, null, Instant.now(), null)
+        val points = (via + listOf(to)).map { Waypoint(GeographicCoordinate(it.latitude, it.longitude), WaypointKind.BREAK, null) }
+        return withContext(Dispatchers.IO) { core.getRoutes(here, points) }.first()
+    }
+
+    /** What the driver chooses between (O180): the fastest, an economical one (fast too), an alternative. */
+    enum class Kind { FAST, ECO, ALT }
+    class Choice(val kind: Kind, val route: Route, val charging: ChargePlanner.Plan? = null)
+
+    /**
+     * Valhalla's options for the driver's route settings (O181: ferries, motorways, borders, tolls) and, for the
+     * economical route, a top speed of 120: the time is reckoned with it, so the economical route stays on the
+     * motorway instead of crawling over country roads (O180 "sparsam soll nicht bewirken dass er über land kriechen will").
+     */
+    private fun options(eco: Boolean, alternates: Int, o: RouteOptions,
+                        points: List<Position> = closures, areas: List<List<Position>> = closureAreas): String {
+        val auto = org.json.JSONObject()
+        if (o.avoidFerries) auto.put("use_ferry", 0.0)
+        if (o.avoidMotorways) auto.put("use_highways", 0.0)
+        if (o.avoidTolls) auto.put("use_tolls", 0.0)
+        if (o.avoidBorders) auto.put("country_crossing_penalty", 3600)
+        if (eco) auto.put("top_speed", 120)
+        // no date_time: with it Valhalla gives no alternative routes (17.11.2026, the preview had only one) - the live
+        // speeds of O218 are for the map server to bring in without it (handover)
+        return org.json.JSONObject().put("language", "de-DE").apply {
+            if (alternates > 0) put("alternates", alternates)
+            if (points.isNotEmpty()) put("exclude_locations", org.json.JSONArray(points.map { org.json.JSONObject().put("lat", it.latitude).put("lon", it.longitude) }))
+            if (areas.isNotEmpty()) put("exclude_polygons", org.json.JSONArray(areas.map { ring -> org.json.JSONArray(ring.map { org.json.JSONArray().put(it.longitude).put(it.latitude) }) }))
+            if (auto.length() > 0) put("costing_options", org.json.JSONObject().put("auto", auto))
+        }.toString()
+    }
+
+    /** One core per set of options (Ferrostar takes them when it is made); the guidance stays on [core]. */
+    private val planners = HashMap<String, FerrostarCore>()
+    private fun planner(json: String) = planners.also { if (it.size > 12 && json !in it) it.clear() }.getOrPut(json) {
+        FerrostarCore(WellKnownRouteProvider.Valhalla("$valhalla/route", "auto", json), OkHttpClientProvider(http), positions, config, null)
+    }
+
+    /** The routes to choose from: fast (and Valhalla's alternatives), economical; same routes only once. */
+    /**
+     * The routes to choose from, planned around the closed roads on them: [closuresAlong] gives the points on closed
+     * roads a line runs over (TomTom through the gate); found any, the choices are planned again without them.
+     */
+    suspend fun planChoices(from: Position, to: Position, via: List<Position>, o: RouteOptions,
+                            closuresAlong: (suspend (List<Position>) -> List<List<Position>>)? = null): List<Choice> {
+        closures = emptyList(); closureAreas = emptyList(); closureLines = emptyList()
+        var choices = planChoicesOnce(from, to, via, o)
+        if (closuresAlong == null) return choices
+        fun key(l: List<Position>) = l.first().let { p -> "%.5f,%.5f".format(java.util.Locale.ROOT, p.latitude, p.longitude) }
+        val lines = LinkedHashMap<String, List<Position>>()
+        // O216/O219: never through a closure. A route planned round one closure may run into another (17.11.: round the
+        // Behrenstraße into the closed Tunnel Tiergarten) - so the closures are asked again along the new routes, until
+        // no new one turns up; points on the closed stretches first, narrow areas along the whole roads if still needed
+        var lastStill = -1.0
+        for (round in 1..MAX_ROUNDS) {
+            // the routes asked side by side
+            val found = runCatching { coroutineScope { choices.map { c -> async { closuresAlong(line(c.route)) } }.flatMap { it.await() } } }
+                .onFailure { android.util.Log.w("MateNavi", "closures: $it") }.getOrNull().orEmpty()
+            val fresh = found.filter { lines.putIfAbsent(key(it), it) == null }
+            val still = choices.maxOf { NaviTraffic.onClosures(line(it.route), lines.values.toList()) }
+            android.util.Log.i("MateNavi", "closures round $round: ${fresh.size} new, ${lines.size} in all; still on them: %.0f m".format(still))
+            // done when free, or when a round brings nothing new and no better (a start or end in a closed block)
+            if (fresh.isEmpty() && (still == 0.0 || still >= lastStill && lastStill >= 0)) break
+            lastStill = still
+            closures = NaviTraffic.excludePoints(lines.values.toList())
+            // the areas only for the stretches a route still runs on (Valhalla's 100 corners)
+            if (fresh.isEmpty() || round >= 2) closureAreas = NaviTraffic.excludeAreas(lines.values.filter { l ->
+                choices.any { NaviTraffic.onClosures(line(it.route), listOf(l)) > 0 } })
+            choices = runCatching { planChoicesOnce(from, to, via, o) }.onFailure {
+                android.util.Log.w("MateNavi", "around closures: $it")
+                net.prototux.aare.DiagLog.add("closures round $round: the routes round ${closures.size} point(s) and ${closureAreas.size} area(s) refused (${it.message ?: it}) - the routes before kept")
+            }.getOrNull() ?: choices
+        }
+        closureLines = lines.values.toList()
+        val all = closureLines
+        val free = choices.filter { NaviTraffic.onClosures(line(it.route), all) == 0.0 }
+        android.util.Log.i("MateNavi", "closures: ${all.size} stretches; routes free of them: ${free.size} of ${choices.size}")
+        if (all.isNotEmpty()) net.prototux.aare.DiagLog.add("closures: ${all.size} stretch(es) along the routes, ${closures.size} point(s), ${closureAreas.size} area(s) kept out; routes free of them: ${free.size} of ${choices.size}")
+        choices.firstOrNull()?.route?.steps?.take(5)?.let { st -> android.util.Log.i("MateNavi", "first steps: " + st.joinToString { "%s %.0f m".format(it.roadName ?: "-", it.distance) }) }
+        // a free one instead only when it is not much longer (17.11.2026: a 422 km detour was taken for 40 m on a closure
+        // at the start of a 300 km trip - a start on a closed stretch cannot be helped)
+        val fastest = choices.minOf { it.route.steps.sumOf { s -> s.duration } }
+        val shortest = choices.minOf { it.route.distance }
+        val fair = free.filter { it.route.steps.sumOf { s -> s.duration } <= fastest * 1.1 + 300 && it.route.distance <= shortest * 1.15 }
+        return if (fair.isNotEmpty() && fair.size < choices.size) fair else choices
+    }
+
+    private fun line(r: Route) = r.geometry.map { Position(longitude = it.lng, latitude = it.lat) }
+    private val MAX_ROUNDS = 4
+
+    private suspend fun planChoicesOnce(from: Position, to: Position, via: List<Position>, o: RouteOptions): List<Choice> = coroutineScope {
+        val here = UserLocation(GeographicCoordinate(from.latitude, from.longitude), 5.0, null, Instant.now(), null)
+        val points = (via + listOf(to)).map { Waypoint(GeographicCoordinate(it.latitude, it.longitude), WaypointKind.BREAK, null) }
+        val fast = async(Dispatchers.IO) { planner(options(false, 2, o)).getRoutes(here, points) }
+        val eco = async(Dispatchers.IO) { runCatching { planner(options(true, 0, o)).getRoutes(here, points).firstOrNull() }.getOrNull() }
+        val f = fast.await()
+        val out = mutableListOf(Choice(Kind.FAST, f.first()))
+        eco.await()?.let { e -> if (!same(e, f.first())) out += Choice(Kind.ECO, e) }
+        f.drop(1).firstOrNull { a -> out.none { same(it.route, a) } }?.let { out += Choice(Kind.ALT, it) }
+        out
+    }
+
+    /**
+     * F2: the routes from where the car is to the same waypoints (stops and destination), Valhalla's alternatives with
+     * them, kept off the trip's closures - for the faster route while guiding.
+     */
+    suspend fun routesFrom(from: Position, waypoints: List<Position>): List<Route> = withContext(Dispatchers.IO) {
+        val here = UserLocation(GeographicCoordinate(from.latitude, from.longitude), 5.0, null, Instant.now(), null)
+        val points = waypoints.map { Waypoint(GeographicCoordinate(it.latitude, it.longitude), WaypointKind.BREAK, null) }
+        // no exclusions right at the car: Valhalla finds no start on an excluded road and answers 400 (17.11.2026); the
+        // points only, the areas are for the planning - given to this request, the trip's own closures stay as they are
+        val json = options(false, 2, routeOptions, closures.filter { ChargerIndex.distanceM(it, from) > NEAR_CAR_M }, emptyList())
+        runCatching { planner(json).getRoutes(here, points) }.getOrElse { e ->
+            // Valhalla's own words for the log (Ferrostar keeps only the status)
+            runCatching {
+                val q = org.json.JSONObject(json).put("costing", "auto").put("locations", org.json.JSONArray(
+                    (listOf(from) + waypoints).map { org.json.JSONObject().put("lat", it.latitude).put("lon", it.longitude) }))
+                http.newCall(okhttp3.Request.Builder().url("$valhalla/route?json=" + java.net.URLEncoder.encode(q.toString(), "UTF-8")).build())
+                    .execute().use { android.util.Log.w("MateNavi", "routes from here: ${it.code} ${it.body.string().take(300)}") }
+            }
+            throw e
+        }
+    }
+    private val NEAR_CAR_M = 200.0
+    private val BURST = 3
+    private val BURST_HARD = 5
+
+    /**
+     * One route of [kind] over [via] (the charging stops), with the driver's route settings, kept off the trip's closures -
+     * but not near the start, a stop or the destination (Navi I-035, the log of 19.11.2026: every route over the chargers
+     * "refused: Route request failed with status code 400", so the plan's stops were only shown beside a route without
+     * them; a charger at a service area whose access TomTom reports closed lies on an excluded road, and Valhalla finds no
+     * road for it - as for the car's own place, 17.11.2026). Refused all the same: Valhalla's own words into the log, and
+     * asked once more without the closures.
+     */
+    suspend fun planOne(kind: Kind, from: Position, to: Position, via: List<Position>, o: RouteOptions): Route = withContext(Dispatchers.IO) {
+        val here = UserLocation(GeographicCoordinate(from.latitude, from.longitude), 5.0, null, Instant.now(), null)
+        val points = (via + listOf(to)).map { Waypoint(GeographicCoordinate(it.latitude, it.longitude), WaypointKind.BREAK, null) }
+        val places = listOf(from) + via + listOf(to)
+        val (keptPoints, keptAreas) = awayFrom(places, closures, closureAreas, NEAR_STOP_M)
+        if (keptPoints.size < closures.size || keptAreas.size < closureAreas.size)
+            net.prototux.aare.DiagLog.add("route over the stops: ${closures.size - keptPoints.size} closure point(s) and ${closureAreas.size - keptAreas.size} area(s) near a stop left out")
+        val json = options(kind == Kind.ECO, 0, o, keptPoints, keptAreas)
+        try { planner(json).getRoutes(here, points).first() }
+        catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            explain(json, places, "route over the stops")
+            if (keptPoints.isEmpty() && keptAreas.isEmpty()) throw e
+            net.prototux.aare.DiagLog.add("route over the stops: refused with ${keptPoints.size} closure point(s) and ${keptAreas.size} area(s) - asked again without them")
+            planner(options(kind == Kind.ECO, 0, o, emptyList(), emptyList())).getRoutes(here, points).first()
+        }
+    }
+
+    /** Valhalla's own words for a refused request (Ferrostar keeps only the status), into the diagnosis log - no places. */
+    private fun explain(json: String, places: List<Position>, what: String) {
+        runCatching {
+            val q = org.json.JSONObject(json).put("costing", "auto").put("locations", org.json.JSONArray(
+                places.map { org.json.JSONObject().put("lat", it.latitude).put("lon", it.longitude) }))
+            http.newCall(okhttp3.Request.Builder().url("$valhalla/route?json=" + java.net.URLEncoder.encode(q.toString(), "UTF-8")).build())
+                .execute().use { r ->
+                    val body = r.body.string()
+                    // only the error's code and words (Valhalla's error answers carry no places)
+                    val words = runCatching { org.json.JSONObject(body).let { "error ${it.optInt("error_code")}: ${it.optString("error")}" } }.getOrDefault(body.take(160))
+                    net.prototux.aare.DiagLog.add("$what: Valhalla answered ${r.code} - $words")
+                }
+        }.onFailure { net.prototux.aare.DiagLog.add("$what: refused, and asking Valhalla why failed: ${it.message ?: it}") }
+    }
+    /** Closures this close to the start, a stop or the destination are not sent with a route over stops. */
+    private val NEAR_STOP_M = 1500.0
+
+    private fun same(a: Route, b: Route) = Math.abs(a.distance - b.distance) < 50 && Math.abs(a.geometry.size - b.geometry.size) < 5
+
+    /** Starts the guidance on a planned [route]: [simulate] - the simulated car sets off at its start, else the real one. */
+    fun go(route: Route, simulate: Boolean = true) {
+        simulating = simulate || provider == null
+        if (simulating) { provider?.enableSimulationOn(route, LocationBias.None) ?: simulated.setRoute(route, LocationBias.None) }
+        else provider?.disableSimulation()
+        core.startNavigation(route, config)
+        reroutes = 0; offSince = 0
+        _route.value = route
+    }
+
+    /** Plans the route from [from] to [to] and starts the guidance on it; the simulated car sets off at the start. */
+    suspend fun start(from: Position, to: Position): Route {
+        val here = UserLocation(GeographicCoordinate(from.latitude, from.longitude), 5.0, null, Instant.now(), null)
+        // Ferrostar asks the routing service on the calling thread: not on the main thread
+        val routes = withContext(Dispatchers.IO) {
+            core.getRoutes(here, listOf(Waypoint(GeographicCoordinate(to.latitude, to.longitude), WaypointKind.BREAK, null)))
+        }
+        val route = routes.first()
+        simulated.setRoute(route, LocationBias.None)
+        core.startNavigation(route, config)
+        return route
+    }
+
+    fun stop() { core.stopNavigation(); _route.value = null }
+
+    /**
+     * The trip ends as arrived, here and now (18.11.2026: the car has come to a stop near the destination): the steps
+     * left are closed one by one until the trip is complete - the same end as driving onto the route's last metres.
+     */
+    fun arriveNow() {
+        var left = (core.state.value.tripState as? uniffi.ferrostar.TripState.Navigating)?.remainingSteps?.size ?: return
+        while (left-- >= 0 && core.state.value.tripState is uniffi.ferrostar.TripState.Navigating) core.advanceToNextStep()
+    }
+
+    companion object {
+        private const val TAG = "MateNavi"
+        const val DEVIATION_M = 30.0
+    }
+}
+
+/** The driver's route settings (O181), from the phone app's page Navi. */
+internal data class RouteOptions(val avoidFerries: Boolean = false, val avoidMotorways: Boolean = false, val avoidTolls: Boolean = false, val avoidBorders: Boolean = false) {
+    companion object {
+        fun of(s: net.prototux.aare.Settings) = RouteOptions(s.avoidFerries, s.avoidMotorways, s.avoidTolls, s.avoidBorders)
+    }
+}
+
+/**
+ * The closure points and areas ([points], [areas]) that lie farther than [metres] from all of [places] (start, stops,
+ * destination of a route over stops): Valhalla finds no road for a place on an excluded one and refuses the route (I-035).
+ */
+internal fun awayFrom(places: List<Position>, points: List<Position>, areas: List<List<Position>>, metres: Double): Pair<List<Position>, List<List<Position>>> {
+    fun near(p: Position) = places.any { ChargerIndex.distanceM(it, p) < metres }
+    return points.filterNot(::near) to areas.filterNot { ring -> ring.any(::near) }
+}
