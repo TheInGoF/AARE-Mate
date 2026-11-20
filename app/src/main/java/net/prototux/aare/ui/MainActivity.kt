@@ -27,6 +27,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Star
@@ -190,6 +191,8 @@ private enum class Page(val titleRes: Int, val subtitleRes: Int, val icon: Image
     // route settings and charging on the way (O205): what is avoided, the charge levels, the charging networks
     ROUTING(R.string.mate_panel_routing, R.string.mate_panel_routing_sub, Icons.Rounded.EvStation, mate = true),
     DASHBOARD(R.string.mate_page_dashboard, R.string.mate_page_dashboard_sub, Icons.Rounded.Dashboard, mate = true),
+    // trips and charges seen on the tablet (System L-076/L-077, 20.11.2026: "ein Fahrtenbuch und ein Ladebuch wie IDMate")
+    LOGBOOK(R.string.logbook_title, R.string.logbook_sub, Icons.Rounded.Route, mate = true),
     NAVI(R.string.mate_page_navi, R.string.mate_page_navi_sub, androidx.compose.material.icons.Icons.Rounded.Navigation, mate = true),
     MUSIC(R.string.mate_page_music, R.string.mate_page_music_sub, androidx.compose.material.icons.Icons.Rounded.MusicNote, mate = true),
     SOUND(R.string.mate_page_sound, R.string.mate_page_sound_sub, Icons.Rounded.GraphicEq, mate = true),
@@ -365,6 +368,7 @@ private fun Home() {
                         Page.MAP_SERVER -> item { MapServerPage(settings) }
                         Page.REGIONS -> item { RegionsPage() }
                         Page.TRANSFER -> item { TransferPage() }
+                        Page.LOGBOOK -> item { LogbookPage() }
                         Page.DASHBOARD -> {
                             item { CombustionCard(settings) }
                             item { DashboardCard(refresh) }

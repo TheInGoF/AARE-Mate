@@ -1380,4 +1380,21 @@
     <string name="self_adb_paired_not_started">Paired, but Shizuku could not be started just now. The reason is in the diagnostic log ("shizuku by Mate").</string>
     <string name="self_adb_check_start">Shizuku is not running. Mate starts it itself as soon as there is Wi-Fi; tap to try now.</string>
     <string name="self_adb_check_pair">Shizuku is not running. Tap: pair Mate once with wireless debugging, then Mate starts Shizuku itself - also after every restart.</string>
+    <string name="logbook_title">Trip log</string>
+    <string name="logbook_sub">Trips and charges, seen on the tablet</string>
+    <string name="logbook_how">A trip starts as soon as the car leaves P and ends once it has stood in P this long. Distance and route come from the car\'s GPS, battery level and charging from the telemetry stick.</string>
+    <string name="logbook_grace">A trip ends after … in P</string>
+    <string name="logbook_minutes">%d min</string>
+    <string name="logbook_stick">Connect the stick: home page → Dashboard → "Connect the dashboard" → Telemetry stick → "Find stick". Without the stick, battery level, consumption and charges are missing.</string>
+    <string name="logbook_trips">Trips (%d)</string>
+    <string name="logbook_charges">Charges (%d)</string>
+    <string name="logbook_no_trips">No trip yet. They appear after the first trip with the car connected.</string>
+    <string name="logbook_no_charges">No charge yet.</string>
+    <string name="logbook_place_unknown">Place not named yet</string>
+    <string name="logbook_trip_line">%1$s km · %2$d min · %3$s kWh/100 km · battery %4$s → %5$s %%</string>
+    <string name="logbook_charge_line">Battery %1$s → %2$s %% · %3$s kWh · up to %4$s kW</string>
+    <string name="logbook_charge_by_level">Found from the battery level (the car was not connected while charging).</string>
+    <string name="logbook_charge_cut">End not seen: the car was switched off while charging.</string>
+    <string name="logbook_delete">Delete</string>
+    <string name="logbook_delete_title">Delete this entry?</string>
 </resources>

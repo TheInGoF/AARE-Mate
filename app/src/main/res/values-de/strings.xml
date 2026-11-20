@@ -1369,4 +1369,21 @@
     <string name="self_adb_paired_not_started">Gekoppelt, aber Shizuku ließ sich gerade nicht starten. Der Grund steht im Diagnose-Log („shizuku by Mate“).</string>
     <string name="self_adb_check_start">Shizuku läuft nicht. Mate startet es selbst, sobald ein WLAN da ist; tippen, um es jetzt zu versuchen.</string>
     <string name="self_adb_check_pair">Shizuku läuft nicht. Tippen: Mate einmal mit dem kabellosen Debugging koppeln, danach startet Mate Shizuku selbst – auch nach jedem Neustart.</string>
+    <string name="logbook_title">Fahrtenbuch</string>
+    <string name="logbook_sub">Fahrten und Ladungen, auf dem Tablet erkannt</string>
+    <string name="logbook_how">Eine Fahrt beginnt, sobald das Auto aus P geht, und endet, wenn es so lange in P steht. Strecke und Weg kommen vom GPS des Autos, Ladestand und Laden vom Telemetrie-Stick.</string>
+    <string name="logbook_grace">Fahrt endet nach … in P</string>
+    <string name="logbook_minutes">%d min</string>
+    <string name="logbook_stick">Den Stick verbinden: Startseite → Dashboard → „Dashboard verbinden“ → Telemetrie-Stick → „Stick suchen“. Ohne Stick fehlen Ladestand, Verbrauch und Ladungen.</string>
+    <string name="logbook_trips">Fahrten (%d)</string>
+    <string name="logbook_charges">Ladungen (%d)</string>
+    <string name="logbook_no_trips">Noch keine Fahrt. Sie erscheinen nach der ersten Fahrt mit verbundenem Auto.</string>
+    <string name="logbook_no_charges">Noch keine Ladung.</string>
+    <string name="logbook_place_unknown">Ort noch ohne Namen</string>
+    <string name="logbook_trip_line">%1$s km · %2$d min · %3$s kWh/100 km · Akku %4$s → %5$s %%</string>
+    <string name="logbook_charge_line">Akku %1$s → %2$s %% · %3$s kWh · bis %4$s kW</string>
+    <string name="logbook_charge_by_level">Am Ladestand erkannt (das Auto war beim Laden nicht verbunden).</string>
+    <string name="logbook_charge_cut">Ende nicht gesehen: Das Auto wurde während des Ladens ausgeschaltet.</string>
+    <string name="logbook_delete">Löschen</string>
+    <string name="logbook_delete_title">Eintrag löschen?</string>
 </resources>

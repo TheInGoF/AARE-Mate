@@ -371,6 +371,8 @@ class CarRuntime(
         // IDmate's values (the level for the navigation's arrival) fetched the whole connection long, not only while the
         // dashboard is on the screen (19.11.2026)
         net.prototux.aare.dash.DashView.carStart(context)
+        // the trip log and the charge log from the car's gear, GPS and the stick (System L-076/L-077)
+        net.prototux.aare.trips.TripWatch.start(context)
         // Shizuku started by Mate itself when it is not running (System L-063)
         net.prototux.aare.adb.SelfAdb.ensureShizuku(context, "car connected")
         // Messages, directions and now playing all need the listener bound: make sure it is.
@@ -420,6 +422,7 @@ class CarRuntime(
 
     fun stop() {
         running.remove(this)
+        net.prototux.aare.trips.TripWatch.stop(context)
         net.prototux.aare.dash.DashView.carStop(context)
         runCatching { context.unregisterReceiver(packageReceiver) }
         settings.unregisterListener(settingsListener)

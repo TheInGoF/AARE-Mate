@@ -99,6 +99,10 @@ class Settings(context: Context) {
     var chargeNetworksOnly: Boolean
         get() = prefs.getBoolean("charge_networks_only", true)
         set(v) = prefs.edit { putBoolean("charge_networks_only", v) }
+    /** Trip log (System L-076): how long the car stands in P before a trip is over, in minutes (Ingo: 1 or 5 for the baker). */
+    var tripGraceMin: Int
+        get() = prefs.getInt("trip_grace_min", 5)
+        set(v) = prefs.edit { putInt("trip_grace_min", v) }
     /** F2: the traffic on Mate Navi's map (TomTom through the map server), on unless turned off. */
     var trafficShown: Boolean
         get() = prefs.getBoolean("traffic_shown", true)

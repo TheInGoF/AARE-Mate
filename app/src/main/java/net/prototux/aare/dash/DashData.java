@@ -110,6 +110,22 @@ public final class DashData {
     /** Average consumption over the last trips in kWh/100 km (IDmate's read API), or null. */
     public static Double consumption(Context c) { return Hub.get(c).telemetry.summary().consumption; }
 
+    /** A number of IDmate's values (stick or server) at most [maxAgeMs] old, else null (trip log, System L-076). */
+    public static Double number(Context c, String field, long maxAgeMs) {
+        Telemetry.Value v = Hub.get(c).telemetry.get(field);
+        if (v == null || !(v.v instanceof Number)) return null;
+        if (v.tsMs > 0 && System.currentTimeMillis() - v.tsMs > maxAgeMs) return null;
+        return ((Number) v.v).doubleValue();
+    }
+
+    /** A yes/no of IDmate's values (charging, dc) at most [maxAgeMs] old, else null. */
+    public static Boolean flag(Context c, String field, long maxAgeMs) {
+        Telemetry.Value v = Hub.get(c).telemetry.get(field);
+        if (v == null || !(v.v instanceof Boolean)) return null;
+        if (v.tsMs > 0 && System.currentTimeMillis() - v.tsMs > maxAgeMs) return null;
+        return (Boolean) v.v;
+    }
+
     private static Double fresh(Context c, String field) {
         Telemetry.Value v = Hub.get(c).telemetry.get(field);
         if (v == null || !(v.v instanceof Number)) return null;
