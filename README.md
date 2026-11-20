@@ -29,6 +29,10 @@ are drawn from the app's own code.
 |---|---|
 | ![Mate Navi](docs/screenshots/navi-map.png) | ![Dashboard](docs/screenshots/dashboard-range.png) |
 
+| The areas: dashboard, navigation, audio, messages, apps |
+|---|
+| ![Areas](docs/screenshots/areas.png) |
+
 > [!NOTE]
 > The dashboard and everything on it (state of charge, range and its map, charging, trips) need an
 > [IDmate](https://github.com/IDmate-app/IDMate) server with its read API - for now there is no other source.
