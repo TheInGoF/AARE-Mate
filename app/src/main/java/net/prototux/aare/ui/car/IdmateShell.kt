@@ -415,25 +415,38 @@ internal fun IdmateShell(
             }
             // an app let go over the screen: a new split 50:50 with it on that side, or in an open split it takes the place
             // of the app on that side (18.11.2026)
-            fun drop(app: CarAppEntry, right: Boolean) {
+            // the split an app let go would make (System I-062): the open split's widths as shown, a new one 50:50; the side
+            // keeps its width, only a navigation app of another maker takes two thirds at least
+            fun dropAt(app: CarAppEntry, right: Boolean?): DropLayout {
+                val isNavi = naviList.any { it.id == app.id }
+                val current = naviApp(naviList, choice)
+                return dropLayout(splitOn, naviShare, naviRight, right, isNavi,
+                    foreign = (if (isNavi) app else current)?.let { it.kind != CarAppKind.MATE_NAVI } == true,
+                    currentForeign = current?.let { it.kind != CarAppKind.MATE_NAVI } == true)
+            }
+            // an app let go over the screen: a new split 50:50 with it on that side, or in an open split it takes the place
+            // of the app on that side, in that side's width (18.11.2026, I-062)
+            fun drop(app: CarAppEntry, x: Float, width: Float) {
                 val isNavi = naviList.any { it.id == app.id }
                 val isMusic = musicList.any { it.id == app.id }
                 if (!isNavi && !isMusic) return
                 val wasSplit = splitOn
-                val sideNavi = if (isNavi) right else !right
-                naviRightState = sideNavi
-                splitPrefs.edit().putBoolean("navi_right", sideNavi).apply()
+                val right = x > dropAt(app, null).boundary * width
+                val lay = dropAt(app, right)
+                naviRightState = lay.naviRight
+                naviShare = lay.naviShare
+                splitPrefs.edit().putBoolean("navi_right", lay.naviRight).putFloat("navi_share", lay.naviShare).apply()
                 if (isNavi) choice.pickNavi(app.packageName) else { choice.pickMusic(app.packageName); splitMusic = app.id; actions.openApp(app) }
-                if (!wasSplit) { naviShare = 0.5f; splitPrefs.edit().putFloat("navi_share", 0.5f).apply() }
                 val navi = if (isNavi) app else naviApp(naviList, choice)
-                android.util.Log.i("IdmateShell", "App abgelegt: ${app.label} ${if (right) "rechts" else "links"}" + if (wasSplit) " (ersetzt)" else " (neue geteilte Ansicht)")
+                android.util.Log.i("IdmateShell", "App abgelegt: ${app.label} ${if (right) "rechts" else "links"}" + (if (wasSplit) " (ersetzt)" else " (neue geteilte Ansicht)") +
+                    String.format(java.util.Locale.ROOT, ", navi share %.2f", lay.naviShare))
                 navi?.let(open)
                 split = true
             }
             val appDrag = AppDrag(
                 start = { app, at -> dragged = app; dragAt = at - shellOrigin },
                 move = { d -> dragAt += d },
-                end = { val a = dragged; dragged = null; switcher = false; if (a != null) drop(a, dragAt.x > constraints.maxWidth / 2f) },
+                end = { val a = dragged; dragged = null; switcher = false; if (a != null) drop(a, dragAt.x, constraints.maxWidth.toFloat()) },
                 cancel = { dragged = null },
             )
             // the switcher folds in and out animated (switchable, 18.11.2026)
@@ -571,7 +584,7 @@ internal fun IdmateShell(
             NoticeOverlay(state, actions, Modifier.align(Alignment.TopCenter))
             // Calls never lie over the middle of the map: a small card right above the controls.
             CallCorner(state, actions, callOpen, Modifier.align(side).padding(start = ControlsMargin, end = ControlsMargin, bottom = ControlsHeight + ControlsMargin * 2)) { callOpen = false }
-            dragged?.let { app -> DragLayer(app, dragAt, naviList.any { it.id == app.id } || musicList.any { it.id == app.id }, splitOn, anim) }
+            dragged?.let { app -> DragLayer(app, dragAt, naviList.any { it.id == app.id } || musicList.any { it.id == app.id }, splitOn, anim) { r -> dropAt(app, r) } }
         }
         }
     }
@@ -1583,8 +1596,11 @@ private fun NavigationMockup() {
  * navigation nor a music app) says so.
  */
 @Composable
-private fun BoxWithConstraintsScope.DragLayer(app: CarAppEntry, at: Offset, fits: Boolean, splitOn: Boolean, anim: Boolean) {
-    val right = at.x > constraints.maxWidth / 2f
+private fun BoxWithConstraintsScope.DragLayer(app: CarAppEntry, at: Offset, fits: Boolean, splitOn: Boolean, anim: Boolean,
+                                              layout: (Boolean?) -> DropLayout) {
+    // the zones as the split will be (I-062): the side under the finger by the split's line, the widths of the result
+    val right = at.x > layout(null).boundary * constraints.maxWidth
+    val leftShare = layout(right).leftShare
     val lift = remember { androidx.compose.animation.core.Animatable(if (anim) 0.6f else 1f) }
     LaunchedEffect(app.id) { if (anim) lift.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.55f, stiffness = 500f)) }
     Row(Modifier.fillMaxSize().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1592,7 +1608,7 @@ private fun BoxWithConstraintsScope.DragLayer(app: CarAppEntry, at: Offset, fits
             val on = fits && r == right
             val glow by androidx.compose.animation.core.animateFloatAsState(if (on) 1f else 0f,
                 if (anim) androidx.compose.animation.core.tween(160) else androidx.compose.animation.core.snap(), label = "zone")
-            Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(24.dp))
+            Box(Modifier.weight(if (r) 1f - leftShare else leftShare).fillMaxHeight().clip(RoundedCornerShape(24.dp))
                 .background(Teal.copy(alpha = 0.08f + 0.22f * glow))
                 .border((2 + 2 * glow).dp, Teal.copy(alpha = 0.35f + 0.65f * glow), RoundedCornerShape(24.dp)),
                 contentAlignment = Alignment.Center) {
@@ -1617,6 +1633,26 @@ private fun BoxWithConstraintsScope.DragLayer(app: CarAppEntry, at: Offset, fits
 
 /** The least share of the width a navigation app that is not Mate's own gets in a split. */
 private const val FOREIGN_MIN_SHARE = 2f / 3
+
+/** Where an app let go lands (System I-062): the line between the sides now, and the split it makes. */
+internal data class DropLayout(val boundary: Float, val naviRight: Boolean, val naviShare: Float) {
+    val leftShare: Float get() = if (naviRight) 1f - naviShare else naviShare
+}
+
+/**
+ * The split an app let go makes. [right] the side it is let go on (null: only the line between the sides). An open split
+ * keeps its widths - the app takes the width of the side it goes to; a new split is 50:50. A navigation app of another
+ * maker ([foreign]) gets two thirds at least, as the split shows it ([FOREIGN_MIN_SHARE]).
+ */
+internal fun dropLayout(splitOn: Boolean, naviShare: Float, naviRight: Boolean, right: Boolean?, isNavi: Boolean,
+                        foreign: Boolean, currentForeign: Boolean): DropLayout {
+    val shown = naviShare.coerceIn(if (currentForeign) FOREIGN_MIN_SHARE else 0.2f, 0.8f)
+    val curLeft = if (!splitOn) 0.5f else if (naviRight) 1f - shown else shown
+    if (right == null) return DropLayout(curLeft, naviRight, shown)
+    val sideNavi = if (isNavi) right else !right
+    val width = if (sideNavi) 1f - curLeft else curLeft
+    return DropLayout(curLeft, sideNavi, width.coerceIn(if (foreign) FOREIGN_MIN_SHARE else 0.2f, 0.8f))
+}
 
 /**
  * What the fault just marked is, said to Mate (18.11.2026: "ein Textfeld, mit dem ich eingeben kann, was der Fehler ist.
