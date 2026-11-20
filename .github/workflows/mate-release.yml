@@ -12,6 +12,9 @@ on:
       version:
         description: "Version without v, e.g. 2.0.13 (the tag v<version> is made on the current commit)"
         required: true
+      notes:
+        description: "Release notes (German, short sentences or groups like 'Mate Navi: ...'); empty = docs/release-notes/<version>.md"
+        required: false
 
 permissions:
   contents: write
@@ -25,6 +28,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # from a tag push its name, started by hand v<version> (made by the release itself)
       TAG: ${{ inputs.version && format('v{0}', inputs.version) || github.ref_name }}
+      NOTES: ${{ inputs.notes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Already released?
@@ -50,6 +54,11 @@ jobs:
           if [ -z "$MATE_KEY_PASS" ] || [ ! -f "$keyfile" ]; then
             echo "::error::No release key: set the secrets MATE_KEY_PASS and MATE_KEY_ENC (or run the workflow 'Mate key' once)"; exit 1; fi
           VERSION="${TAG#v}"
+          # release notes: what changed, never only the version (L-072) - from the input, else from the file of the version
+          notes="$RUNNER_TEMP/notes.md"
+          if [ -n "${NOTES:-}" ]; then printf '%s\n' "$NOTES" > "$notes"
+          elif [ -s "docs/release-notes/$VERSION.md" ]; then cp "docs/release-notes/$VERSION.md" "$notes"
+          else echo "::error::No release notes: give the input 'notes' or add docs/release-notes/$VERSION.md"; exit 1; fi
           IFS=. read -r MAJOR MINOR PATCH <<< "${VERSION%%-*}"
           CODE=$(( ${MAJOR:-0} * 10000 + ${MINOR:-0} * 100 + ${PATCH:-0} ))
           work="$RUNNER_TEMP/key"; mkdir -p "$work"
@@ -60,4 +69,4 @@ jobs:
           rm -rf "$work"
           mkdir -p out
           cp app/build/outputs/apk/release/app-release.apk "out/mate-$VERSION.apk"
-          gh release create "$TAG" --target "$GITHUB_SHA" --title "Mate $VERSION" --notes "Mate $VERSION" "out/mate-$VERSION.apk"
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "Mate $VERSION" --notes-file "$notes" "out/mate-$VERSION.apk"
