@@ -18,8 +18,18 @@ areas, the navigation, the dashboard, music, messages, calls and the cinema - is
 
 ## Screenshots
 
-The pictures are drawn from the app's own code with test data (no real places or positions). Pictures of
-Mate Navi and the dashboard with their maps follow.
+The pictures show test data only: no real places, positions or vehicle data. Mate Navi runs on a simulated
+position (the test start in Berlin), the dashboard reads made-up values from a test server. The other pictures
+are drawn from the app's own code.
+
+| Mate Navi: own map with traffic | Dashboard with test values |
+|---|---|
+| ![Mate Navi](docs/screenshots/navi-map.png) | ![Dashboard](docs/screenshots/dashboard-test-data.png) |
+
+> [!NOTE]
+> The dashboard and everything on it (state of charge, range and its map, charging, trips) need an
+> [IDmate](https://github.com/IDmate-app/IDMate) server with its read API - for now there is no other source.
+> Without IDmate the dashboard stays empty; the rest of Mate works without it.
 
 | Messages: people, not texts, while driving | Call waiting: hold, end or decline |
 |---|---|
@@ -41,7 +51,7 @@ Mate Navi and the dashboard with their maps follow.
     with what lies ahead, speed limits, lanes and roundabouts, turns on the car's head-up display
     and cluster;
   - the trip goes on by itself after a charging stop; offline region packs for places without net.
-- **Dashboard** (integration with an [IDmate](https://github.com/IDmate-app/IDMate) server): state of
+- **Dashboard** (only with an [IDmate](https://github.com/IDmate-app/IDMate) server, for now): state of
   charge, range on a map - refreshed every minute while charging fast -, charging, temperatures,
   trips and the weather.
 - **Mate Musik:** music from an own Plex server and downloaded music, with search by keyboard or
