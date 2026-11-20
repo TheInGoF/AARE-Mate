@@ -68,7 +68,7 @@ object TripWatch {
             speedKmh = s.speed?.value?.metersPerSecond?.times(3.6)?.toDouble(),
             lat = fix?.latitude, lon = fix?.longitude,
             soc = DashData.number(app, "soc", STICK_MS),
-            odoKm = s.odometer?.value?.km?.toDouble() ?: DashData.number(app, "odometer", STICK_MS),
+            odoKm = s.odometer?.value?.km?.toDouble() ?: DashData.number(app, "odometer", 15 * 60_000L),   // the stick keeps it fresh 15 min
             charging = DashData.flag(app, "charging", STICK_MS),
             dc = DashData.flag(app, "dc", STICK_MS),
             powerKw = DashData.number(app, "power", STICK_MS),
