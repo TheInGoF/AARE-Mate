@@ -19,7 +19,7 @@ areas, the navigation, the dashboard, music, messages, calls and the cinema - is
 ## Screenshots
 
 The pictures show test data only: no real places, positions or vehicle data. Mate Navi runs on a simulated
-position (the test start in Berlin), the dashboard reads a test vehicle from an IDmate test instance - the range
+position (the test start in Berlin, a test trip to Grünheide), the dashboard reads a test vehicle from an IDmate test instance - the range
 and its ring are IDmate's own calculation from made-up trips. The ring is a plain circle only because the test
 instance runs without a route server: in real use IDmate works out the area the car can reach along the roads
 (with Valhalla) and shows that area instead. The other pictures
@@ -28,6 +28,10 @@ are drawn from the app's own code.
 | Mate Navi: own map with traffic | Dashboard: IDmate's map with the range it works out |
 |---|---|
 | ![Mate Navi](docs/screenshots/navi-map.png) | ![Dashboard](docs/screenshots/dashboard-range.png) |
+
+| Mate Navi: route with energy, charge on arrival and chargers along the way | Mate Navi: guiding, with traffic and speed limit |
+|---|---|
+| ![Route](docs/screenshots/navi-route.png) | ![Guidance](docs/screenshots/navi-guidance.png) |
 
 | The areas: dashboard, navigation, audio, messages, apps |
 |---|
