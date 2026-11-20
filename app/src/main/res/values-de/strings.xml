@@ -153,7 +153,7 @@
     <string name="setup_section_app_order">Reihenfolge im Auto</string>
     <string name="setup_section_connection_log">Verbindungsprotokoll</string>
     <string name="setup_about_versions">Mate %1$s · Grundlage AARE %2$s · AARE-Änderungen gesichtet bis %3$s</string>
-    <string name="setup_about_text">Mate %1$s, auf der Grundlage von AARE · GPL-3.0-or-later · Nicht mit Google verbunden. Android Auto ist eine Marke von Google LLC.</string>
+    <string name="setup_about_text">Mate %1$s, ein Fork von AARE · GPL-3.0-or-later · Nicht mit Google verbunden. Android Auto ist eine Marke von Google LLC.</string>
     <string name="setup_choice_style">Stil</string>
     <string name="setup_style_android_auto">Android Auto</string>
     <string name="setup_style_carplay">CarPlay</string>
@@ -887,11 +887,6 @@
     <string name="speed_warn_tone_bell">Glocke</string>
     <string name="speed_warn_volume">Lautstärke</string>
     <string name="speed_warn_hint">Eine Warnung je Überschreitung, wie lange sie auch dauert; eine neue erst, wenn das Auto wieder unter das Limit gefahren ist. Gilt ab dem nächsten Öffnen von Mate Navi.</string>
-    <string name="camera_warn_title">Gefahrenstellen</string>
-    <string name="camera_warn_on">Vor festen Gefahrenstellen warnen</string>
-    <string name="camera_warn_on_sub">Feste Überwachungsstellen aus OpenStreetMap an der Route, einmal je Stelle etwa 15 s vorher, angesagt als „Gefahrenstelle“. Gilt ab dem nächsten Öffnen von Mate Navi.</string>
-    <string name="camera_warn_law">Achtung: In Deutschland ist es dem Fahrer verboten, während der Fahrt Blitzerwarnungen zu nutzen (§ 23 Abs. 1c StVO, 75 € und 1 Punkt). Andere Länder haben eigene Regeln. Die Verantwortung liegt beim Fahrer.</string>
-    <string name="mate_navi_warn_camera">Gefahrenstelle in %1$d Metern</string>
     <string name="mate_navi_pinned">Angepinnt</string>
     <string name="places_pin">Oben anpinnen</string>
     <string name="places_unpin">Nicht mehr anpinnen</string>
@@ -1355,4 +1350,11 @@
     <string name="phone_hold_answer">Halten und annehmen</string>
     <string name="phone_end_answer">Beenden und annehmen</string>
     <string name="routing_visit_remove">Löschen – hier nicht geladen</string>
+    <string name="licences_open">Lizenzen und Quellen</string>
+    <string name="licences_title">Lizenzen und Quellen</string>
+    <string name="licences_intro">Mate ist ein Fork von AARE (github.com/prototux/AARE) und steht wie AARE unter der GPL-3.0-or-later; Quellcode: github.com/TheInGoF/AARE-Mate. Diese Teile behalten ihre eigene Lizenz:</string>
+    <string name="licences_code">Übernommener Code</string>
+    <string name="licences_libraries">Bibliotheken</string>
+    <string name="licences_downloaded">Auf Wunsch geladen</string>
+    <string name="licences_data">Schrift und Daten</string>
 </resources>

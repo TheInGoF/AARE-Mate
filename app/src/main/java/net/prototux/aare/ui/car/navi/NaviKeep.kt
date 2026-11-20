@@ -272,8 +272,9 @@ internal object NaviKeep {
     private var warnWatch: Job? = null
 
     /**
-     * Once a second while guiding, whatever is on the screen: the optional tone over the speed limit (O194) and the speed
-     * cameras ahead (O193) - both were only heard with the map in front. Read from the settings at each new route.
+     * Once a second while guiding, whatever is on the screen: the optional tone over the speed limit (O194) - it was only
+     * heard with the map in front. Read from the settings at each new route. (The speed camera warning was taken out again
+     * on 20.11.2026, before the repository went public.)
      */
     private suspend fun warnings(app: Context, session: NaviSession, speaker: NaviSpeaker) {
         var forRoute: uniffi.ferrostar.Route? = null
@@ -282,8 +283,6 @@ internal object NaviKeep {
         val saidTraffic = HashSet<String>()
         var alert: NaviSpeedAlert? = null
         var tone = NaviSpeedAlert.tone(""); var volume = 1f
-        var cameras: List<NaviCameras.OnRoute> = emptyList()
-        val warned = HashSet<NaviCameras.OnRoute>()
         var standing = 0
         while (true) {
             kotlinx.coroutines.delay(1000)
@@ -291,13 +290,10 @@ internal object NaviKeep {
             val r = session.route.value
             if (!guiding.value || t == null || r == null) { forRoute = null; trafficAhead.value = emptyList(); saidTraffic.clear(); faster.value = null; continue }
             if (r !== forRoute) {
-                forRoute = r; warned.clear(); trafficAt = 0L; trafficFullAt = 0L; faster.value = null; fasterCheckedAt = 0L
+                forRoute = r; trafficAt = 0L; trafficFullAt = 0L; faster.value = null; fasterCheckedAt = 0L
                 val st = net.prototux.aare.Settings(app)
                 alert = if (st.speedWarn) NaviSpeedAlert(st.speedWarnOver, st.speedWarnTimes) else null
                 tone = NaviSpeedAlert.tone(st.speedWarnTone); volume = st.speedWarnVolume / 100f
-                val line = r.geometry.map { Position(longitude = it.lng, latitude = it.lat) }
-                cameras = if (st.cameraWarn) kotlinx.coroutines.withContext(Dispatchers.Default) { NaviCameras.along(app, line) } else emptyList()
-                if (st.cameraWarn) android.util.Log.i("MateNavi", "speed cameras on the route: ${cameras.size}")
             }
             val driven = r.distance - t.progress.distanceRemaining
             val kmh = speedMs(t, session)?.let { it * 3.6 }
@@ -357,12 +353,6 @@ internal object NaviKeep {
                     speaker.warn(text)
                     android.util.Log.i("MateNavi", "incident warning: $text")
                 }
-            }
-            NaviCameras.due(cameras, driven, kmh, warned)?.let { c ->
-                warned += c
-                val m = NaviCameras.metres(c, driven)
-                speaker.warn(app.getString(net.prototux.aare.R.string.mate_navi_warn_camera, m))
-                android.util.Log.i("MateNavi", "speed camera warning: %d m ahead (%d km/h)".format(m, c.camera.kmh))
             }
             alert?.let { a ->
                 val l = limits.value?.along(driven)

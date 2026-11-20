@@ -397,13 +397,6 @@ private fun Home() {
                                     Text(stringResource(R.string.speed_warn_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             } }
-                            // O193: speed cameras - off by default, with the legal note
-                            item { Section(stringResource(R.string.camera_warn_title)) {
-                                var cams by remember { mutableStateOf(settings.cameraWarn) }
-                                Toggle(stringResource(R.string.camera_warn_on), stringResource(R.string.camera_warn_on_sub), cams) { cams = it; settings.cameraWarn = it }
-                                Spacer(Modifier.height(6.dp))
-                                Text(stringResource(R.string.camera_warn_law), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                            } }
                             // O174: Mate Navi's frame rate, an even 30 by default, the video's rate for tests
                             item { Section(stringResource(R.string.mate_navi_title)) {
                                 var fps by remember { mutableStateOf(settings.naviFps) }
@@ -3021,7 +3014,68 @@ private fun About() {
         Spacer(Modifier.height(4.dp))
         Text(stringResource(R.string.setup_about_text, net.prototux.aare.BuildConfig.VERSION_NAME),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // 20.11.2026, before the repository went public: the licences of everything Mate uses, and that it is AARE's fork
+        var licences by remember { mutableStateOf(false) }
+        TextButton(onClick = { licences = true }) { Text(stringResource(R.string.licences_open)) }
+        if (licences) LicencesDialog { licences = false }
     }
+}
+
+/** What Mate takes from others, with its licence (the same as THIRD_PARTY.md in the repository). */
+private val LICENCES: List<Pair<Int, List<Pair<String, String>>>> = listOf(
+    R.string.licences_code to listOf(
+        "AARE (prototux and contributors) - Mate is its fork" to "GPL-3.0-or-later",
+        "aasdk protocol definitions (f1x.studio, OpenCarDev)" to "GPL-3.0-or-later"),
+    R.string.licences_libraries to listOf(
+        "Ferrostar (Stadia Maps)" to "BSD-3-Clause",
+        "MapLibre Native" to "BSD-2-Clause",
+        "MapLibre Compose" to "BSD-3-Clause",
+        "MapLibre spatial-k" to "MIT",
+        "MapLibre Android GeoJSON" to "Apache-2.0",
+        "AndroidX, Jetpack Compose, Car App Library, Media3" to "Apache-2.0",
+        "Kotlin, kotlinx.coroutines" to "Apache-2.0",
+        "Protocol Buffers" to "BSD-3-Clause",
+        "OkHttp" to "Apache-2.0",
+        "ZXing Android Embedded" to "Apache-2.0",
+        "Shizuku API (RikkaApps)" to "MIT",
+        "HiddenApiBypass (LSPosed)" to "Apache-2.0",
+        "sherpa-onnx (k2-fsa), ONNX Runtime" to "Apache-2.0, MIT"),
+    R.string.licences_downloaded to listOf(
+        "Whisper models (OpenAI)" to "MIT",
+        "Piper voice Thorsten (Thorsten Müller)" to "CC0-1.0, MIT",
+        "Kokoro voices (Kokoro-82M)" to "Apache-2.0",
+        "espeak-ng data" to "GPL-3.0-or-later"),
+    R.string.licences_data to listOf(
+        "Noto Sans (map lettering)" to "SIL OFL 1.1",
+        "© OpenStreetMap contributors: map, routes, places, service areas, chargers" to "ODbL 1.0",
+        "Bundesnetzagentur Ladesäulenregister: chargers" to "CC BY 4.0",
+        "Protomaps basemaps: map style" to "BSD-3-Clause",
+        "Open-Meteo: weather along the route" to "CC BY 4.0",
+        "Terrain tiles (SRTM and others): heights" to "public sources",
+        "TomTom: traffic (own key)" to "TomTom terms",
+        "Valhalla: routing on the map server" to "MIT"),
+)
+
+@Composable
+private fun LicencesDialog(onClose: () -> Unit) {
+    AlertDialog(onDismissRequest = onClose,
+        confirmButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.common_close)) } },
+        title = { Text(stringResource(R.string.licences_title)) },
+        text = {
+            androidx.compose.foundation.lazy.LazyColumn {
+                item { Text(stringResource(R.string.licences_intro), style = MaterialTheme.typography.bodyMedium) }
+                LICENCES.forEach { (head, rows) ->
+                    item { Spacer(Modifier.height(12.dp)); Text(stringResource(head), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary) }
+                    rows.forEach { (what, licence) -> item {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                            Text(what, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                            Spacer(Modifier.width(8.dp))
+                            Text(licence, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } }
+                }
+            }
+        })
 }
 
 /** Einstellungen übertragen: save all of Mate's settings to a file and take them in again (MateTransfer). */

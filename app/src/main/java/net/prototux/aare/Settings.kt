@@ -72,10 +72,6 @@ class Settings(context: Context) {
         get() = prefs.getInt("speed_warn_volume", 70)
         set(v) = prefs.edit { putInt("speed_warn_volume", v) }
 
-    /** Mate Navi warns of fixed speed cameras (O193; off by default - in Germany not allowed to the driver, § 23 Abs. 1c StVO). */
-    var cameraWarn: Boolean
-        get() = prefs.getBoolean("camera_warn", false)
-        set(v) = prefs.edit { putBoolean("camera_warn", v) }
 
     /**
      * Charging on a route (O205, 16.11.2026: "mindest ankunft an ladesäule und ziel … und der maximale ladestand wenn man

@@ -1,5 +1,12 @@
 # Mate
 
+> **Mate is a fork of [AARE](https://github.com/prototux/AARE)** by prototux and its contributors, licensed like
+> AARE under the GPL-3.0-or-later. It is a separate, private project: not made, endorsed or supported by the AARE
+> project. Problems with Mate belong here, not to AARE.
+>
+> **Mate ist ein Fork von [AARE](https://github.com/prototux/AARE)** und steht wie AARE unter der GPL-3.0-or-later.
+> Ein eigenes, privates Projekt – nicht vom AARE-Projekt gemacht, unterstützt oder betreut.
+
 Mate is a car interface for an Android tablet that sits in the car and projects onto the head unit
 over Android Auto. It grew out of [AARE](https://github.com/prototux/AARE), an open-source
 reimplementation of the phone side of Android Auto: AARE's protocol stack, car-app host and
@@ -141,8 +148,14 @@ AARE changes are taken over and which are still candidates (`aareBase` and `aare
 
 ## License
 
-GPL-3.0-or-later (see [LICENSE](LICENSE)), like AARE. The protobuf definitions come from aasdk
-(GPL-3.0-or-later, see [aap/src/main/proto/NOTICE.md](aap/src/main/proto/NOTICE.md)).
+GPL-3.0-or-later (see [LICENSE](LICENSE)), like AARE, of which Mate is a fork. The protobuf definitions
+come from aasdk (GPL-3.0-or-later, see [aap/src/main/proto/NOTICE.md](aap/src/main/proto/NOTICE.md)).
+Libraries, fonts, voices and data and their licences: [THIRD_PARTY.md](THIRD_PARTY.md); the app shows the same
+under *Licences and sources* at the bottom of the phone app's start page.
+
+Anyone who passes Mate on - also built into a car or a navigation device - has to pass on its complete source,
+with their own changes, under the GPL-3.0, and on a device for consumers the means to install a changed version
+(GPL-3.0 sections 4 to 6).
 
 Not affiliated with or endorsed by Google, Samsung or the AARE project. Android Auto is a
 trademark of Google LLC.

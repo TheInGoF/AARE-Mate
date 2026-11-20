@@ -103,11 +103,6 @@
     <string name="speed_warn_tone_bell">Bell</string>
     <string name="speed_warn_volume">Volume</string>
     <string name="speed_warn_hint">One warning per overspeed, however long it lasts; a new one only after the car has come back under the limit. Applies the next time Mate Navi opens.</string>
-    <string name="camera_warn_title">Danger spots</string>
-    <string name="camera_warn_on">Warn of fixed danger spots</string>
-    <string name="camera_warn_on_sub">Fixed enforcement points from OpenStreetMap along the route, once each about 15 s ahead, announced as a danger spot. Applies the next time Mate Navi opens.</string>
-    <string name="camera_warn_law">Note: in Germany the driver may not use speed camera warnings while driving (§ 23 (1c) StVO, 75 € and 1 point). Other countries have their own rules. The driver is responsible.</string>
-    <string name="mate_navi_warn_camera">Danger spot in %1$d metres</string>
     <string name="mate_navi_pinned">Pinned</string>
     <string name="places_pin">Pin to the top</string>
     <string name="places_unpin">Unpin</string>
@@ -260,7 +255,7 @@
     <string name="setup_toggle_verbose_log_title">Verbose protocol log</string>
     <string name="setup_toggle_verbose_log_subtitle">Record the full head-unit protocol trace in this log, to attach to a bug report. Logs a lot; leave it off otherwise.</string>
     <string name="setup_about_versions">Mate %1$s · based on AARE %2$s · AARE changes looked through up to %3$s</string>
-    <string name="setup_about_text">Mate %1$s, based on AARE · GPL-3.0-or-later · Not affiliated with Google. Android Auto is a trademark of Google LLC.</string>
+    <string name="setup_about_text">Mate %1$s, a fork of AARE · GPL-3.0-or-later · Not affiliated with Google. Android Auto is a trademark of Google LLC.</string>
     <string name="setup_choice_style">Style</string>
     <string name="setup_style_android_auto">Android Auto</string>
     <string name="setup_style_carplay">CarPlay</string>
@@ -1366,4 +1361,11 @@
     <string name="phone_hold_answer">Hold and answer</string>
     <string name="phone_end_answer">End and answer</string>
     <string name="routing_visit_remove">Remove – not charged here</string>
+    <string name="licences_open">Licences and sources</string>
+    <string name="licences_title">Licences and sources</string>
+    <string name="licences_intro">Mate is a fork of AARE (github.com/prototux/AARE) and, like AARE, licensed under the GPL-3.0-or-later; source: github.com/TheInGoF/AARE-Mate. These parts keep their own licence:</string>
+    <string name="licences_code">Code taken over</string>
+    <string name="licences_libraries">Libraries</string>
+    <string name="licences_downloaded">Downloaded on request</string>
+    <string name="licences_data">Font and data</string>
 </resources>
