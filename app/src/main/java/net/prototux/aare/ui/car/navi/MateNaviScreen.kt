@@ -1022,6 +1022,11 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 panel = NaviStep.Pick(pos)
                 org.maplibre.compose.util.ClickResult.Consume
             }) {
+            // Navi L-047: while guiding the other roads step back - a veil in the land's colour over the base map, under
+            // its labels and the route (only the drawing, nothing reloaded); the route itself a little wider
+            if (guiding) org.maplibre.compose.layers.Anchor.Below(FIRST_LABEL_LAYER) {
+                org.maplibre.compose.layers.BackgroundLayer(id = "fuehrung-schleier", color = const(Mate.mapLand), opacity = const(GUIDE_VEIL))
+            }
             // F5: the other routes of the preview, under the chosen one (only while choosing)
             if (panel is NaviStep.Preview) altJson?.let { json ->
                 val altData = remember(json) { GeoJsonData.JsonString(json) }
@@ -1037,9 +1042,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 val line = rememberGeoJsonSource(lineData)
                 // a dark edge under the line keeps it apart from the streets (UI-07), round ends and joins (UI-03)
                 // a little wider while guiding (17.11.2026: "die Routenlinie bei der Navigation ein bisschen breiter")
-                LineLayer(id = "route-edge", source = line, color = const(Mate.routeEdge), width = const(13.dp),
+                LineLayer(id = "route-edge", source = line, color = const(Mate.routeEdge), width = const(if (guiding) 15.dp else 13.dp),
                     cap = const(LineCap.Round), join = const(LineJoin.Round))
-                LineLayer(id = "route", source = line, color = const(Mate.route), width = const(9.dp),
+                LineLayer(id = "route", source = line, color = const(Mate.route), width = const(if (guiding) 11.dp else 9.dp),
                     cap = const(LineCap.Round), join = const(LineJoin.Round))
                 // in the same block as the line, so they lie on it (added later on their own they went under it)
                 // jams on the route as Google colours them: slow orange, jam red, standing dark red (17.11.2026)
@@ -1632,6 +1637,12 @@ private fun pointAt(line: List<Position>, m: Double): Position {
 }
 
 /** O237: the jam's sign, "+4 min" in white on the map's jam red, as Google's; nothing for an empty [text]. */
+/** The style's first label layer (`navi/karte-v4.json`, checked by NaviStyleTest): the guiding veil goes under it (L-047). */
+internal const val FIRST_LABEL_LAYER = "gewaessername"
+
+/** How strongly the other roads step back while guiding (L-047): the land's colour over the base map. */
+private const val GUIDE_VEIL = 0.35f
+
 private fun jamSign(text: String, night: Boolean): androidx.compose.ui.graphics.ImageBitmap {
     if (text.isEmpty()) return android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
     val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
