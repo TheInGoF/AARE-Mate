@@ -7,95 +7,84 @@
 > **Mate ist ein Fork von [AARE](https://github.com/prototux/AARE)** und steht wie AARE unter der GPL-3.0-or-later.
 > Ein eigenes, privates Projekt – nicht vom AARE-Projekt gemacht, unterstützt oder betreut.
 
-Mate is a car interface for an Android tablet that sits in the car and projects onto the head unit
-over Android Auto. It grew out of [AARE](https://github.com/prototux/AARE), an open-source
-reimplementation of the phone side of Android Auto: AARE's protocol stack, car-app host and
-transport stay, the car screen on top is Mate's own.
-
-What Mate adds to AARE:
-
-- **Dashboard:** the car's live data from an [IDmate](https://github.com/IDmate-app/IDMate) server
-  (state of charge, range, charging, temperatures, trips), a map of the reachable range, the
-  weather and the connection state.
-- **Mate Navi:** a navigation app of its own (MapLibre, Ferrostar, Valhalla) with traffic, closures,
-  speed limits, roundabout guidance, the head-up display, and route planning with
-  charging stops for an electric car.
-- **Speech on the device:** navigation prompts, messages read aloud and Mate's own system voice
-  with Piper or Kokoro voices (sherpa-onnx); speech recognition for voice commands and dictated
-  notes, all without a cloud service.
-- **Music and audio:** Plex and local music, a car equaliser with measured presets per kind of
-  app, one loudness target for all sources, ducking for prompts and calls.
-- **Phone:** calls through the car (Bluetooth hands-free), messages, the car's Wi-Fi and internet.
-- **Cinema:** phone and tablet apps on the car screen, only while the car is safely parked
-  (gear in P, speed 0 from the car, no movement).
-- **Diagnostics:** a diagnostic log that can be copied or shared as a file, and "mark a fault"
-  with a dictated description.
+Mate is a car interface for an Android tablet that sits in the car and projects onto the head unit.
+It is built on AARE's open-source Android Auto stack; everything on the car screen - the bar, the
+areas, the navigation, the dashboard, music, messages, calls and the cinema - is Mate's own.
 
 > [!WARNING]
-> Mate is built for one setup: a Samsung Galaxy Tab S6 Lite running a custom LineageOS build, an
-> electric car with an Android Auto head unit, and a self-hosted map server. Other setups are not
-> tested. Don't depend on it while driving until you have tried it in yours.
+> Mate is built for one setup: an Android tablet in an electric car (tested with a Samsung Galaxy Tab S6 Lite) and a
+> self-hosted map server. Other setups are not tested. Don't depend on it while driving
+> until you have tried it in yours.
+
+## Screenshots
+
+The pictures are drawn from the app's own code with test data (no real places or positions); the map itself
+is left out.
+
+| Mate Navi: trip plan with charging stops | Hints on the way |
+|---|---|
+| ![Trip plan](docs/screenshots/navi-trip-plan.png) | ![Charging hints](docs/screenshots/navi-charging-hints.png) |
+| **Route strip: traffic, closures, the next charger** | **Messages: people, not texts, while driving** |
+| ![Route strip](docs/screenshots/navi-route-strip.png) | ![Messages](docs/screenshots/messages.png) |
+| **Call waiting: hold, end or decline** | **Roundabout arrows by exit** |
+| ![Call waiting](docs/screenshots/call-waiting.png) | ![Roundabouts](docs/screenshots/navi-roundabouts.png) |
+
+| Phone app: route planning and charging | Phone app: audio |
+|---|---|
+| <img src="docs/screenshots/phone-route-planning.png" width="300"> | <img src="docs/screenshots/phone-audio.png" width="300"> |
+
+## What Mate does
+
+- **Car screen:** a slim bar on the driver's side with voice, areas and what plays; areas for
+  dashboard, navigation, audio and messages, side by side in a split view (navigation beside music).
+- **Mate Navi**, its own navigation (MapLibre, Ferrostar, Valhalla on the own map server):
+  - route planning with **charging stops** for an electric car, from the car's consumption, slope,
+    wind, temperature and rain; re-planned on the way from what the car really uses;
+    stops can be taken out in the trip plan for a leg on what the battery holds;
+  - traffic and closures along the route (the route never runs through a closure), a route strip
+    with what lies ahead, speed limits, lanes and roundabouts, turns on the car's head-up display
+    and cluster;
+  - the trip goes on by itself after a charging stop; offline region packs for places without net.
+- **Dashboard** (integration with an [IDmate](https://github.com/IDmate-app/IDMate) server): state of
+  charge, range on a map - refreshed every minute while charging fast -, charging, temperatures,
+  trips and the weather.
+- **Mate Musik:** music from an own Plex server and downloaded music, with search by keyboard or
+  voice; a car equaliser with measured presets, one loudness for all sources, fades for prompts
+  and calls.
+- **Messages and calls:** conversations by person, answers by voice, calls over the car with call
+  waiting.
+- **Cinema:** phone apps on a display of their own at the car's size, only while the car stands
+  parked for sure (gear in P, speed 0, no movement); needs [Shizuku](https://shizuku.rikka.app/).
+- **Speech on the device:** prompts and Mate's voice with Piper or Kokoro voices, voice commands and
+  dictation with Whisper - no cloud service.
+- **Diagnostics:** a log that can be shared (a copy without positions, places and names for public
+  issues) and "mark a fault" with a dictated note.
 
 ## Requirements
 
-- An Android tablet or phone with **Android 8** (API 26) or newer. Mate is tuned for 4 GB of RAM.
-- A head unit that accepts the phone certificate (see [Compatibility](#compatibility)).
-- For Mate Navi: the map server in [`kartenserver/`](kartenserver/) (tiles, routing, search,
-  traffic, offline region packs). The app reaches it with a device token after pairing.
-- For the dashboard: an IDmate server for the car's data (optional; the rest works without it).
-- Optional: [Shizuku](https://shizuku.rikka.app/) for car audio and some system settings.
+- An Android tablet with **Android 12** or newer is recommended (Mate starts from Android 8; Shizuku,
+  the cinema and the separate audio channels need 11 or 12).
+- A car with an Android Auto head unit. How the connection to a head unit works and which ones
+  take it: see [AARE](https://github.com/prototux/AARE).
+- For Mate Navi: the map server in [`kartenserver/`](kartenserver/) (tiles, routing, search, traffic,
+  region packs), reached by the tablet with a device token after pairing.
+- Optional: an IDmate server for the dashboard; a Plex server for Mate Musik.
+- Optional: [Shizuku](https://shizuku.rikka.app/) for the cinema and separate audio channels to the
+  car. No root and no changes to the tablet's system are needed.
 
 ## Installing
 
-Download `mate-<version>.apk` from this repository's releases and install it, or
-`adb install -r mate-<version>.apk`. Releases are signed with Mate's own key; builds you make
-yourself are signed with your debug key, so switching between the two needs an uninstall first.
-
-Mate's application id is `app.idmate.mate`; it installs next to AARE. Versions before the change
-used AARE's id (`net.prototux.aare`): export the settings there (*Transfer settings*), import them in
-the new app, then uninstall the old one.
-
-The large Kokoro voices are not shipped and not downloaded by Mate: bring your own and import them
-under *Voices*. Piper voices and the speech recognition models are downloaded on request.
-
-## Using it
-
-1. Open Mate on the tablet and go through setup: permissions, notification access, car audio,
-   voices, and pairing with the map server.
-2. Plug the tablet into the car's Android Auto USB port. For wireless, pair it with the car over
-   Bluetooth first; after the first USB session Mate can switch to wireless when the cable is
-   pulled.
-3. On the car screen the bar sits on the driver's side, with the controls at the bottom left.
-   Areas: dashboard, Mate Navi, music, messages, phone, other car apps, settings.
-
-Things worth knowing:
-
-- **Charging stops:** Mate Navi plans the chain of charging stops per route (dynamic programming
-  over the chargers along the corridor), with consumption per stretch from slope, wind,
-  temperature and rain, and a buffer that grows with the distance. On the way it re-plans when the
-  car uses more or less than planned. Stops can be removed from the trip plan.
-- **Weather and rain** only appear on the dashboard, never on Mate Navi's map; the navigation map
-  has priority for performance.
-- **Car apps:** apps built with the AndroidX Car App Library and media apps run as in AARE. Google
-  Maps and Waze directions on the tablet are shown in the bar and sent to the head-up display.
-- **Logs:** Mate writes a diagnostic log (memory, audio, connection, routing,
-  charging plan). *Save issue log* stores a copy without positions, places, names, networks,
-  addresses and tokens: attach that one to a public issue.
-
-## Compatibility
-
-Mate inherits AARE's protocol stack, so AARE's notes apply:
-
-- **Phone certificate:** head units built on Google's receiver library only accept a phone
-  certificate issued by Google's "Google Automotive Link" CA. Mate does not ship one; a
-  certificate and key you are entitled to use can be imported under *Phone certificates*
-  in the settings. Open-source head units accept the generated certificate.
-  [docs/certificates.md](docs/certificates.md) explains the details.
-- **Car apps that only trust Google:** newer Car App Library apps need the host's signing
-  certificate in their allow-list (`HostValidator`), see AARE's README.
-- **Coexisting with Google's Android Auto:** both answer the same USB accessory; choose Mate and
-  "always", or disable Android Auto.
-- **VPN:** the VPN's address ranges must not overlap the head unit's Wi-Fi network.
+1. Download `mate-<version>.apk` from this repository's releases and install it on the tablet
+   (or `adb install -r mate-<version>.apk`). Releases are signed with Mate's own key; your own
+   builds with your debug key, so switching between the two needs an uninstall first.
+2. Open Mate and go through *Finish setting up*: permissions, notification access, car audio,
+   voices, the map server (pairing) and, if wanted, the IDmate server.
+3. Optional, for the cinema: install Shizuku, start it with wireless debugging (once after each
+   restart of the tablet) and allow Mate in Mate's audio settings.
+4. Voices: Piper voices and the speech recognition models are downloaded on request; Kokoro voices
+   are imported under *Voices*.
+5. Plug the tablet into the car's USB port. For wireless use, pair it with the car over Bluetooth;
+   after the first session over the cable Mate switches to wireless when the cable is pulled.
 
 ## Building
 
@@ -115,8 +104,8 @@ echo "sdk.dir=$HOME/Android/Sdk" > local.properties   # or set ANDROID_HOME
 with HTTP 429, run the build again.
 
 CI (`ci.yml`) and the release (`mate-release.yml`) run only when started by hand. The release
-workflow takes a `version`, tags it, signs the APK with the encrypted key in `signing/` and
-publishes `mate-<version>.apk`.
+workflow takes a `version`, tags it, signs the APK with Mate's key from the repository secrets and
+publishes `mate-<version>.apk` with release notes.
 
 ## Layout
 
@@ -133,8 +122,8 @@ publishes `mate-<version>.apk`.
 | `app/.../ui/MainActivity.kt` | the tablet app: setup and settings |
 | `kartenserver/` | the map server stack (Docker): gate with device tokens, tiles, Valhalla, Photon, traffic, region packs |
 | `headunit/` | AARE's desktop head unit for tests without a car (`./headunit.sh`) |
-| `xposed/`, `tools/magisk/` | optional modules for rooted devices (from AARE) |
-| `docs/` | certificates, map projection, decisions, research notes, [upstream.md](docs/upstream.md) |
+| `xposed/`, `tools/magisk/` | modules for rooted devices from AARE, not used by Mate (Mate works without root) |
+| `docs/` | notes from AARE and Mate, [upstream.md](docs/upstream.md), screenshots |
 
 Every visible and spoken text lives in resources (`values/` English, `values-de/` German), so a
 new language only needs a new `values-xx` folder and, if wanted, a voice.

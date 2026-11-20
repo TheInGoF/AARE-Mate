@@ -3042,16 +3042,16 @@ private val LICENCES: List<Pair<Int, List<Pair<String, String>>>> = listOf(
         "sherpa-onnx (k2-fsa), ONNX Runtime" to "Apache-2.0, MIT"),
     R.string.licences_downloaded to listOf(
         "Whisper models (OpenAI)" to "MIT",
-        "Piper voice Thorsten (Thorsten Müller)" to "CC0-1.0, MIT",
+        "Piper voice Thorsten (Thorsten Müller)" to "CC0-1.0",
         "Kokoro voices (Kokoro-82M)" to "Apache-2.0",
-        "espeak-ng data" to "GPL-3.0-or-later"),
+        "espeak-ng data" to "GPL-3.0"),
     R.string.licences_data to listOf(
         "Noto Sans (map lettering)" to "SIL OFL 1.1",
         "© OpenStreetMap contributors: map, routes, places, service areas, chargers" to "ODbL 1.0",
-        "Bundesnetzagentur Ladesäulenregister: chargers" to "CC BY 4.0",
-        "Protomaps basemaps: map style" to "BSD-3-Clause",
+        "Bundesnetzagentur.de, Ladesäulenregister: chargers" to "CC BY 4.0",
+        "Protomaps basemaps: map style" to "CC0-1.0, BSD-3-Clause",
         "Open-Meteo: weather along the route" to "CC BY 4.0",
-        "Terrain tiles (SRTM and others): heights" to "public sources",
+        "Heights: USGS 3DEP, SRTM, GMTED2010; NOAA ETOPO1; Copernicus EU-DEM (EU)" to "public sources",
         "TomTom: traffic (own key)" to "TomTom terms",
         "Valhalla: routing on the map server" to "MIT"),
 )

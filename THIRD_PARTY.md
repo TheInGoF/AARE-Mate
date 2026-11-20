@@ -19,7 +19,7 @@ behalten ihre eigene Lizenz.
 | Library | Licence |
 |---|---|
 | Ferrostar (navigation core, MapLibre UI, formatters), Stadia Maps | BSD-3-Clause |
-| MapLibre Native for Android | BSD-2-Clause |
+| MapLibre Native for Android, © MapLibre contributors, MapTiler.com, Mapbox | BSD-2-Clause |
 | MapLibre Compose | BSD-3-Clause |
 | MapLibre spatial-k (GeoJSON, units) | MIT |
 | MapLibre Android GeoJSON | Apache-2.0 |
@@ -39,11 +39,11 @@ Not part of the repository or the app package; fetched on the device when the us
 
 | What | Licence |
 |---|---|
-| Whisper speech recognition models (OpenAI, converted for sherpa-onnx) | MIT |
-| Piper voice "Thorsten" (de_DE, medium), dataset by Thorsten Müller | CC0-1.0 (voice data), model MIT |
+| Whisper speech recognition models (OpenAI, converted for sherpa-onnx by k2-fsa) | MIT, © 2022 OpenAI |
+| Piper voice "Thorsten" (de_DE, medium), dataset by Thorsten Müller | CC0-1.0 (dataset and voice card); the piper-voices repository is marked MIT |
 | Kokoro voices (Kokoro-82M) | Apache-2.0 |
-| espeak-ng data (pronunciation rules) | GPL-3.0-or-later |
-| Phone certificate from github.com/iscle/android-auto-certificates (only on "Download certificate") | third party, no licence given; the user is responsible for using it |
+| espeak-ng data (pronunciation rules) | GPL-3.0 |
+| Phone certificate from github.com/iscle/android-auto-certificates (only on "Download certificate") | no licence given by that repository; the user is responsible for using it |
 
 ## Fonts / Schriften
 
@@ -56,18 +56,18 @@ Not part of the repository or the app package; fetched on the device when the us
 | What | Licence |
 |---|---|
 | Towns, service areas and fast chargers (`app/src/main/assets/navi/*.tsv`), derived from OpenStreetMap | © OpenStreetMap contributors, Open Database License 1.0 (ODbL); the tables are derived databases under the ODbL as well |
-| Fast chargers, additionally from the Bundesnetzagentur's Ladesäulenregister | CC BY 4.0, data merged and shortened |
+| Fast chargers, additionally from the Bundesnetzagentur's Ladesäulenregister | CC BY 4.0, attribution: Bundesnetzagentur.de; data merged and shortened |
 | Map tiles, routing data and place search of the own map server (`kartenserver/`), from Geofabrik extracts of OpenStreetMap | © OpenStreetMap contributors, ODbL 1.0 |
-| Map style (`app/src/main/assets/navi/karte-v4.json`), made from Protomaps basemaps | BSD-3-Clause (style), data ODbL |
-| Weather along the route, Open-Meteo (open-meteo.com) | CC BY 4.0 |
-| Elevation (map server, terrain tiles "skadi" on AWS Open Data) | various public sources (SRTM and others), see https://github.com/tilezen/joerd/blob/master/docs/attribution.md |
+| Map style (`app/src/main/assets/navi/karte-v4.json`), made from Protomaps basemaps | map design CC0-1.0, Protomaps code BSD-3-Clause; data ODbL |
+| Weather along the route, Open-Meteo (open-meteo.com) | data CC BY 4.0; the free API is for non-commercial use only |
+| Elevation (map server, terrain tiles "skadi" on AWS Open Data) | public sources, each with its credit: 3DEP, SRTM and GMTED2010 data courtesy of the U.S. Geological Survey; ETOPO1 U.S. National Oceanic and Atmospheric Administration; produced using Copernicus data and information funded by the European Union - EU-DEM layers; full list https://github.com/tilezen/joerd/blob/master/docs/attribution.md |
 | Traffic, TomTom (only with the user's own API key) | TomTom terms of use; no TomTom data is stored in the repository |
 
 ## Map server software / Kartenserver
 
 | What | Licence |
 |---|---|
-| Valhalla (routing) | MIT |
+| Valhalla (routing), © Valhalla contributors, Mapillary AB, Mapzen | MIT |
 | Other services in `kartenserver/` | as stated in their own files and images |
 
 Android Auto is a trademark of Google LLC. Mate is not affiliated with or endorsed by Google, Volkswagen,
