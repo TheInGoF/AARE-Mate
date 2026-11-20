@@ -8,6 +8,8 @@ class AareApp : Application() {
         instance = this
         DiagLog.init(this)
         net.prototux.aare.audio.AudioTrials.load(this)
+        // which Mate runs, once per start (System L-075: bugs reported against an older version stay recognisable)
+        if (android.os.Build.VERSION.SDK_INT < 28 || getProcessName() == packageName) DiagLog.add("Mate started: ${versionLine()}")
         lastExit()
         // what Mate gives back when the tablet's memory is tight (Memory)
         Memory.givers += { if (net.prototux.aare.dash.DashData.dropParkedStage()) "the dashboard's page kept behind another area" else null }
@@ -62,5 +64,9 @@ class AareApp : Application() {
     companion object {
         lateinit var instance: AareApp
             private set
+
+        /** Mate's version for the log: name, code, debug build, Android (System L-075). */
+        fun versionLine(): String = "version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}" +
+            (if (BuildConfig.DEBUG) ", debug build" else "") + "), Android ${android.os.Build.VERSION.RELEASE}"
     }
 }

@@ -366,6 +366,8 @@ class CarRuntime(
 
     fun start() {
         running += this
+        // the version again with each car connection, so it stands near every trip in the log (System L-075)
+        net.prototux.aare.DiagLog.add("car connected: Mate ${net.prototux.aare.AareApp.versionLine()}")
         // IDmate's values (the level for the navigation's arrival) fetched the whole connection long, not only while the
         // dashboard is on the screen (19.11.2026)
         net.prototux.aare.dash.DashView.carStart(context)
