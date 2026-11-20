@@ -1357,4 +1357,16 @@
     <string name="licences_libraries">Bibliotheken</string>
     <string name="licences_downloaded">Auf Wunsch geladen</string>
     <string name="licences_data">Schrift und Daten</string>
+    <string name="self_adb_channel">Shizuku durch Mate</string>
+    <string name="self_adb_title">Mate startet Shizuku</string>
+    <string name="self_adb_code">Kopplungscode</string>
+    <string name="self_adb_pair_open">Einmal koppeln: In den Entwickleroptionen „Kabelloses Debugging“ einschalten und „Gerät über Kopplungscode koppeln“ öffnen. Den Code dann hier eingeben, das Fenster bleibt dabei offen.</string>
+    <string name="self_adb_pair_found">Kopplung gefunden. Den sechsstelligen Code hier eingeben.</string>
+    <string name="self_adb_pair_no_service">Noch keine Kopplung gefunden. Bitte „Gerät über Kopplungscode koppeln“ öffnen und den Code erneut eingeben.</string>
+    <string name="self_adb_pairing">Koppeln …</string>
+    <string name="self_adb_pair_failed">Koppeln hat nicht geklappt. Code prüfen und erneut eingeben.</string>
+    <string name="self_adb_ready">Gekoppelt. Mate startet Shizuku ab jetzt selbst, wenn es nicht läuft (beim Verbinden mit dem Auto, nach einem Neustart, beim Öffnen der App). Dafür braucht das Tablet ein WLAN.</string>
+    <string name="self_adb_paired_not_started">Gekoppelt, aber Shizuku ließ sich gerade nicht starten. Der Grund steht im Diagnose-Log („shizuku by Mate“).</string>
+    <string name="self_adb_check_start">Shizuku läuft nicht. Mate startet es selbst, sobald ein WLAN da ist; tippen, um es jetzt zu versuchen.</string>
+    <string name="self_adb_check_pair">Shizuku läuft nicht. Tippen: Mate einmal mit dem kabellosen Debugging koppeln, danach startet Mate Shizuku selbst – auch nach jedem Neustart.</string>
 </resources>

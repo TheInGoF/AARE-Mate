@@ -369,6 +369,8 @@ class CarRuntime(
         // IDmate's values (the level for the navigation's arrival) fetched the whole connection long, not only while the
         // dashboard is on the screen (19.11.2026)
         net.prototux.aare.dash.DashView.carStart(context)
+        // Shizuku started by Mate itself when it is not running (System L-063)
+        net.prototux.aare.adb.SelfAdb.ensureShizuku(context, "car connected")
         // Messages, directions and now playing all need the listener bound: make sure it is.
         CarNotificationListener.rebind(context)
         applyScreenSettings()

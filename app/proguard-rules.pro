@@ -26,3 +26,12 @@
 # OwnBluetooth asks the system for this device's Bluetooth address through Shizuku's own way to run a command; it is
 # reached by name, so it must stay
 -keepclassmembers class rikka.shizuku.Shizuku { *** newProcess(...); }
+
+# System L-063: Mate's own wireless-debugging connection - the adb library, its SPAKE2 pairing (native, found by name
+# through JNI), Conscrypt (looked up by name for TLS 1.3) and Bouncy Castle (providers and algorithms looked up by name) kept as they are
+-keep class io.github.muntashirakon.** { *; }
+-keep class org.bouncycastle.** { *; }
+-keep class org.conscrypt.** { *; }
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn io.github.muntashirakon.**

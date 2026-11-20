@@ -234,7 +234,7 @@ private fun Home() {
     var page by rememberSaveable { mutableStateOf<Page?>(null) }
     // the settings of Mate and the system behind one panel (O169); a page opened from there goes back to that list
     var inSettings by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) { ProjectionService.startIdleIfEnabled(ctx); ProjectionService.probeUsb(ctx); ProjectionService.probeWireless(ctx); UpdateChecker.refresh(ctx) }
+    LaunchedEffect(Unit) { net.prototux.aare.adb.SelfAdb.ensureShizuku(ctx, "phone app opened"); ProjectionService.startIdleIfEnabled(ctx); ProjectionService.probeUsb(ctx); ProjectionService.probeWireless(ctx); UpdateChecker.refresh(ctx) }
     // Re-check permissions and capture methods whenever the user comes back to the app.
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(lifecycle) {
@@ -2377,6 +2377,8 @@ private fun AudioSettings(settings: Settings, state: ProjectionService.State, re
                     root -> stringResource(R.string.audio_root_ready)
                     Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> stringResource(R.string.audio_shizuku_needs_android12)
                     shizukuAsk -> stringResource(R.string.audio_shizuku_tap_allow)
+                    CaptureMethods.shizukuInstalled(ctx) && net.prototux.aare.adb.SelfAdb.paired(ctx) -> stringResource(R.string.self_adb_check_start)
+                    CaptureMethods.shizukuInstalled(ctx) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> stringResource(R.string.self_adb_check_pair)
                     CaptureMethods.shizukuInstalled(ctx) -> stringResource(R.string.audio_shizuku_not_running)
                     else -> stringResource(R.string.audio_shizuku_or_root_hint)
                 },
@@ -2390,6 +2392,13 @@ private fun AudioSettings(settings: Settings, state: ProjectionService.State, re
                             if (granted) { settings.rootAudio = true; recheck() }
                             // installed but not started (after every restart): open Shizuku to start it - the download
                             // page only when it is missing (17.11.2026: "öffnet immer den Browser, obwohl installiert")
+                            // System L-063: Mate starts Shizuku itself - paired once over wireless debugging
+                            else if (CaptureMethods.shizukuInstalled(ctx) && net.prototux.aare.adb.SelfAdb.paired(ctx))
+                                net.prototux.aare.adb.SelfAdb.startByHand(ctx)
+                            else if (CaptureMethods.shizukuInstalled(ctx) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                net.prototux.aare.adb.SelfAdb.startPairing(ctx)
+                                ctx.startSafely(Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                            }
                             else if (CaptureMethods.shizukuInstalled(ctx))
                                 ctx.packageManager.getLaunchIntentForPackage(CaptureMethods.SHIZUKU_PACKAGE)?.let { ctx.startSafely(it) }
                             else ctx.startSafely(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/")))
@@ -3038,6 +3047,10 @@ private val LICENCES: List<Pair<Int, List<Pair<String, String>>>> = listOf(
         "OkHttp" to "Apache-2.0",
         "ZXing Android Embedded" to "Apache-2.0",
         "Shizuku API (RikkaApps)" to "MIT",
+        "libadb-android (Muntashir Al-Islam)" to "GPL-3.0-or-later",
+        "spake2-java (Muntashir Al-Islam)" to "LGPL-3.0",
+        "Conscrypt" to "Apache-2.0",
+        "Bouncy Castle" to "MIT",
         "HiddenApiBypass (LSPosed)" to "Apache-2.0",
         "sherpa-onnx (k2-fsa), ONNX Runtime" to "Apache-2.0, MIT"),
     R.string.licences_downloaded to listOf(

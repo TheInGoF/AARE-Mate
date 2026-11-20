@@ -16,6 +16,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // libadb-android (Mate starts Shizuku itself over wireless debugging, System L-063) - only from there
+        maven("https://jitpack.io") { content { includeGroupByRegex("com\\.github\\.MuntashirAkon.*") } }
     }
 }
 rootProject.name = "AARE"

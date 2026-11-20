@@ -29,6 +29,10 @@ behalten ihre eigene Lizenz.
 | OkHttp | Apache-2.0 |
 | ZXing Android Embedded | Apache-2.0 |
 | Shizuku API and provider, RikkaApps | MIT |
+| libadb-android, Muntashir Al-Islam (Mate starts Shizuku over wireless debugging) | GPL-3.0-or-later or Apache-2.0 (used under GPL-3.0-or-later) |
+| spake2-java (pairing for wireless debugging), Muntashir Al-Islam | LGPL-3.0 |
+| Conscrypt, Google | Apache-2.0 |
+| Bouncy Castle (bcprov) | Bouncy Castle Licence (MIT) |
 | HiddenApiBypass, LSPosed | Apache-2.0 |
 | sherpa-onnx (speech recognition and voices on the device), k2-fsa; includes ONNX Runtime | Apache-2.0 (ONNX Runtime: MIT) |
 | libxposed API (only the optional Xposed module, not part of the app) | Apache-2.0 |

@@ -104,6 +104,8 @@ android {
         unitTests.isIncludeAndroidResources = true
         // the preview runs only when asked for (-Ppreview), never with the ordinary tests or in CI
         unitTests.all { t ->
+            // conscrypt-android (System L-063) has no native part for the build machine: Robolectric keeps its own TLS
+            t.systemProperty("robolectric.conscryptMode", "OFF")
             if (project.hasProperty("preview")) t.systemProperty("preview", "1") else t.exclude("**/preview/**")
         }
     }
@@ -203,6 +205,10 @@ dependencies {
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
     implementation(libs.hiddenapibypass)
+    // System L-063: Mate pairs once with the tablet's wireless debugging and starts Shizuku itself (adb protocol, TLS pairing)
+    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
+    implementation("org.conscrypt:conscrypt-android:2.5.3")
+    implementation("org.bouncycastle:bcprov-jdk15to18:1.81")
     testImplementation(libs.junit)
     // the car screen's preview drawn in the unit tests (18.11.2026: pictures of the controls at the car's size, without a car)
     testImplementation("org.robolectric:robolectric:4.18")

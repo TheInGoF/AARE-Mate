@@ -43,6 +43,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- given by Mate itself over its own adb connection (System L-063): switch wireless debugging on to start Shizuku -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
     <!-- Do Not Disturb while driving (car/DrivingMode), once the user allows it. -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -296,6 +299,11 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- The pairing code for Mate's own wireless-debugging connection (System L-063), from its notification. -->
+        <receiver
+            android:name=".adb.SelfAdbCodeReceiver"
+            android:exported="false" />
 
         <!-- "Trust" on the "New head unit" notification. -->
         <receiver

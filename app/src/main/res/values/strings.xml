@@ -1368,4 +1368,16 @@
     <string name="licences_libraries">Libraries</string>
     <string name="licences_downloaded">Downloaded on request</string>
     <string name="licences_data">Font and data</string>
+    <string name="self_adb_channel">Shizuku by Mate</string>
+    <string name="self_adb_title">Mate starts Shizuku</string>
+    <string name="self_adb_code">Pairing code</string>
+    <string name="self_adb_pair_open">Pair once: in the developer options turn on "Wireless debugging" and open "Pair device with pairing code". Then type the code here, keeping that window open.</string>
+    <string name="self_adb_pair_found">Pairing found. Type the six-digit code here.</string>
+    <string name="self_adb_pair_no_service">No pairing found yet. Please open "Pair device with pairing code" and type the code again.</string>
+    <string name="self_adb_pairing">Pairing …</string>
+    <string name="self_adb_pair_failed">Pairing did not work. Check the code and type it again.</string>
+    <string name="self_adb_ready">Paired. From now on Mate starts Shizuku itself when it is not running (when the car connects, after a restart, when the app opens). The tablet needs a Wi-Fi network for it.</string>
+    <string name="self_adb_paired_not_started">Paired, but Shizuku could not be started just now. The reason is in the diagnostic log ("shizuku by Mate").</string>
+    <string name="self_adb_check_start">Shizuku is not running. Mate starts it itself as soon as there is Wi-Fi; tap to try now.</string>
+    <string name="self_adb_check_pair">Shizuku is not running. Tap: pair Mate once with wireless debugging, then Mate starts Shizuku itself - also after every restart.</string>
 </resources>
