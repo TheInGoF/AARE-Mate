@@ -162,8 +162,21 @@ final class CarStage {
               M.base = IDmateMap.baseLayer(window.__mateTiles, { maxZoom: 19 }).addTo(map);
               if (M.base.bringToBack) M.base.bringToBack();
               old.forEach(function (l) { map.removeLayer(l); });
+              M.night(!!window.__mateNight);
             } catch (e) {}
           }
+          // System L-074 (20.11.2026: "auf der Dashboard-Seite sollte die Map ja auch einen Nachtmodus bekommen"): at night
+          // the base map in dark colours like Mate Navi's - only the base map's own layer is turned dark (inverted, hues
+          // kept), the range, rain, wind and the car's marker keep their colours. Follows the car's lights (Mate passes
+          // window.__mateNight and calls M.night on a change).
+          M.night = function (on) {
+            window.__mateNight = !!on;
+            try {
+              var c = M.base && M.base.getContainer && M.base.getContainer();
+              if (c) c.style.filter = on ? 'invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9)' : '';
+              if (map && map.getContainer) map.getContainer().style.background = on ? '#11151a' : '';
+            } catch (e) {}
+          };
           // System I-007 (17.11.2026: after reloading, the range was there but no map below it): the vector map's
           // scripts may come later than 1.5 s - tried every second for 20 s until it takes
           (function tryBase(n) { ownBase(); if (!M.base && n < 20) setTimeout(function () { tryBase(n + 1); }, 1000); })(0);
@@ -417,6 +430,23 @@ final class CarStage {
           }, 500);
         })();
         """;
+
+    /** Night on the car's screen (System L-074): the dashboard's map dark, like Mate Navi's. */
+    private static volatile boolean sNight;
+
+    /** Night or day before the page exists: the page takes it when it loads. */
+    static void nightLater(boolean on) { sNight = on; }
+
+    private static String nightJs() { return "window.__mateNight=" + sNight + ";"; }
+
+    /** The car's lights changed to night or day: the map's colours follow at once. Main thread. */
+    void night(boolean on) {
+        if (sNight == on) return;
+        sNight = on;
+        String code = nightJs() + "if (window.__mate && __mate.night) __mate.night(" + on + ");";
+        if (mWeb != null) mWeb.evaluateJavascript(code, null);
+        if (mNextWeb != null) mNextWeb.evaluateJavascript(code, null);
+    }
 
     private void js(String code) {
         if (mWeb != null) mWeb.evaluateJavascript(code, null);
@@ -822,11 +852,11 @@ final class CarStage {
                 /* die Bedienung der Karte uebernimmt die App */
                 if (v == mNextWeb) {
                     /* the refresh: no glide in, the view the driver had */
-                    v.evaluateJavascript("window.__mateNoAuto=true;window.__mateThen='" + then + "';window.__mateTiles=" + MateTiles.PATH_JS + ";" + MAP_SCRIPT, null);
+                    v.evaluateJavascript(nightJs() + "window.__mateNoAuto=true;window.__mateThen='" + then + "';window.__mateTiles=" + MateTiles.PATH_JS + ";" + MAP_SCRIPT, null);
                     swapWhenReady(v, 0);
                     return;
                 }
-                v.evaluateJavascript((sAutoDone ? "window.__mateNoAuto=true;" : "") + "window.__mateTiles=" + MateTiles.PATH_JS + ";" + MAP_SCRIPT, null);
+                v.evaluateJavascript(nightJs() + (sAutoDone ? "window.__mateNoAuto=true;" : "") + "window.__mateTiles=" + MateTiles.PATH_JS + ";" + MAP_SCRIPT, null);
                 /* Erst zeigen, wenn die Seite gezeichnet ist und die ersten Kacheln da sind: weich einblenden statt
                    dem Aufbau zusehen lassen. */
                 v.postVisualStateCallback(1, new WebView.VisualStateCallback() {

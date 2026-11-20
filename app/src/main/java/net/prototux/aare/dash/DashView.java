@@ -91,6 +91,11 @@ public final class DashView {
         Hub.get(ctx.getApplicationContext()).release();
     }
 
+    /** Night or day on the car's screen (System L-074): the map's colours follow. Main thread. */
+    public static void night(boolean on) {
+        if (sStage != null) sStage.night(on); else CarStage.nightLater(on);
+    }
+
     /** "Neu laden": the page built anew. Main thread. */
     public static void reload() {
         if (sStage == null || !sStage.running()) return;

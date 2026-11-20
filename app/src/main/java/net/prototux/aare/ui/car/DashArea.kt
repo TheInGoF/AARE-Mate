@@ -38,6 +38,9 @@ import net.prototux.aare.host.CarRuntime
 fun DashArea(runtime: CarRuntime, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val dpi = runtime.mateDensityDpi
+    // the map dark at night, like Mate Navi's (System L-074)
+    val night = net.prototux.aare.ui.theme.LocalCarNight.current
+    LaunchedEffect(night) { DashView.night(night) }
     // the car's own speed and odometer for the dashboard's values, at most once a second
     LaunchedEffect(Unit) {
         var last = 0L
