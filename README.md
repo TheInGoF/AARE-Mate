@@ -19,12 +19,13 @@ areas, the navigation, the dashboard, music, messages, calls and the cinema - is
 ## Screenshots
 
 The pictures show test data only: no real places, positions or vehicle data. Mate Navi runs on a simulated
-position (the test start in Berlin), the dashboard reads made-up values from a test server. The other pictures
+position (the test start in Berlin), the dashboard reads a test vehicle from an IDmate test instance - the range
+and its ring are IDmate's own calculation from made-up trips. The other pictures
 are drawn from the app's own code.
 
-| Mate Navi: own map with traffic | Dashboard with test values |
+| Mate Navi: own map with traffic | Dashboard: IDmate's map with the range it works out |
 |---|---|
-| ![Mate Navi](docs/screenshots/navi-map.png) | ![Dashboard](docs/screenshots/dashboard-test-data.png) |
+| ![Mate Navi](docs/screenshots/navi-map.png) | ![Dashboard](docs/screenshots/dashboard-range.png) |
 
 > [!NOTE]
 > The dashboard and everything on it (state of charge, range and its map, charging, trips) need an
