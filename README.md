@@ -33,6 +33,13 @@ are drawn from the app's own code.
 |---|
 | ![Areas](docs/screenshots/areas.png) |
 
+| Music: the library of a music app | Music: now playing |
+|---|---|
+| ![Music library](docs/screenshots/music-albums.png) | ![Now playing](docs/screenshots/music-now-playing.png) |
+
+The music pictures show a small test app made only for them: the albums, artists and titles are made up and the
+covers are drawn by the app itself. Mate shows any music app that supports Android Auto the same way.
+
 > [!NOTE]
 > The dashboard and everything on it (state of charge, range and its map, charging, trips) need an
 > [IDmate](https://github.com/IDmate-app/IDMate) server with its read API - for now there is no other source.
