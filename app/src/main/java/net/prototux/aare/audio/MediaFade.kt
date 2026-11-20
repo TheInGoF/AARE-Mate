@@ -74,9 +74,21 @@ object MediaFade {
     /** Whether the media channel is being held silent for the microphone right now. */
     val micOpen: Boolean get() = micTo < 1.0
 
-    /** Applies the ramp to 16-bit little-endian PCM in place; nothing when at full level. */
-    fun apply(b: ByteArray, off: Int, len: Int, now: Long) {
-        val a = level(now) * micLevel(now); val z = level(now + 20) * micLevel(now + 20)
+    /** The gain the last block ended with: the next one starts there (System I-055). */
+    @Volatile private var lastGain = 1.0
+
+    /**
+     * Applies the ramp to 16-bit little-endian PCM in place; nothing when at full level.
+     *
+     * System I-055 (knarzen around prompts, 20.11.2026, Mate Debug: "crackle heard" with the music coming back): each
+     * 20 ms block ran from the level at [now] to the level 20 ms later - but [now] is when the block is handled, and the
+     * blocks come in bursts (several within the same millisecond), so every block of a burst started again at the same
+     * level: the gain jumped back at each block's edge, a 50 Hz saw while the music went down or up. Now each block runs
+     * from where the last one ended to the level at its end - no step between blocks.
+     */
+    @Synchronized fun apply(b: ByteArray, off: Int, len: Int, now: Long) {
+        val a = lastGain; val z = level(now + 20) * micLevel(now + 20)
+        lastGain = z
         if (a >= 0.999 && z >= 0.999) return
         val n = len / 2
         for (i in 0 until n) {
