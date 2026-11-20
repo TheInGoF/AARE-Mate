@@ -18,20 +18,16 @@ areas, the navigation, the dashboard, music, messages, calls and the cinema - is
 
 ## Screenshots
 
-The pictures are drawn from the app's own code with test data (no real places or positions); the map itself
-is left out.
+The pictures are drawn from the app's own code with test data (no real places or positions). Pictures of
+Mate Navi and the dashboard with their maps follow.
 
-| Mate Navi: trip plan with charging stops | Hints on the way |
+| Messages: people, not texts, while driving | Call waiting: hold, end or decline |
 |---|---|
-| ![Trip plan](docs/screenshots/navi-trip-plan.png) | ![Charging hints](docs/screenshots/navi-charging-hints.png) |
-| **Route strip: traffic, closures, the next charger** | **Messages: people, not texts, while driving** |
-| ![Route strip](docs/screenshots/navi-route-strip.png) | ![Messages](docs/screenshots/messages.png) |
-| **Call waiting: hold, end or decline** | **Roundabout arrows by exit** |
-| ![Call waiting](docs/screenshots/call-waiting.png) | ![Roundabouts](docs/screenshots/navi-roundabouts.png) |
+| ![Messages](docs/screenshots/messages.png) | ![Call waiting](docs/screenshots/call-waiting.png) |
 
-| Phone app: route planning and charging | Phone app: audio |
+| Roundabout arrows by exit | Phone app: audio |
 |---|---|
-| <img src="docs/screenshots/phone-route-planning.png" width="300"> | <img src="docs/screenshots/phone-audio.png" width="300"> |
+| ![Roundabouts](docs/screenshots/navi-roundabouts.png) | <img src="docs/screenshots/phone-audio.png" width="300"> |
 
 ## What Mate does
 

@@ -56,7 +56,6 @@ Not part of the repository or the app package; fetched on the device when the us
 | What | Licence |
 |---|---|
 | Towns, service areas and fast chargers (`app/src/main/assets/navi/*.tsv`), derived from OpenStreetMap | © OpenStreetMap contributors, Open Database License 1.0 (ODbL); the tables are derived databases under the ODbL as well |
-| Fast chargers, additionally from the Bundesnetzagentur's Ladesäulenregister | CC BY 4.0, attribution: Bundesnetzagentur.de; data merged and shortened |
 | Map tiles, routing data and place search of the own map server (`kartenserver/`), from Geofabrik extracts of OpenStreetMap | © OpenStreetMap contributors, ODbL 1.0 |
 | Map style (`app/src/main/assets/navi/karte-v4.json`), made from Protomaps basemaps | map design CC0-1.0, Protomaps code BSD-3-Clause; data ODbL |
 | Weather along the route, Open-Meteo (open-meteo.com) | data CC BY 4.0; the free API is for non-commercial use only |

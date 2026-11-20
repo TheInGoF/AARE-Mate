@@ -1,50 +1,43 @@
-name: Bug report
-description: Something in AARE doesn't work as it should.
-labels: ["bug"]
+name: Fehler / Bug
+description: Etwas in Mate funktioniert nicht wie erwartet. / Something in Mate doesn't work as it should.
+labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        For "does my car work?" use the **Car / head unit report** instead, and for
-        "will app X work?" or general questions use **Discussions**.
+        Mate ist ein Fork von AARE. Fehler in Mate bitte hier melden, nicht bei AARE.
+        Mate is a fork of AARE. Please report Mate's problems here, not to AARE.
   - type: textarea
     id: what
     attributes:
-      label: What happened
-      description: What you did, what you expected, and what happened instead.
-    validations:
-      required: true
-  - type: input
-    id: phone
-    attributes:
-      label: Phone and Android version
-      placeholder: Pixel 10, Android 16 (GrapheneOS)
-    validations:
-      required: true
-  - type: input
-    id: aare-version
-    attributes:
-      label: AARE version
-      placeholder: v1.1.1
+      label: Was ist passiert? / What happened?
+      description: Was hast du getan, was hast du erwartet, was kam stattdessen? / What did you do, expect and get?
     validations:
       required: true
   - type: dropdown
-    id: connection
+    id: area
     attributes:
-      label: Where it happens
-      options:
-        - In the phone app (not connected to a car)
-        - In the car preview on the phone
-        - Connected to the desktop head unit
-        - Connected to a real car or head unit
-        - Other / not sure
+      label: Bereich / Area
+      options: [Mate Navi, Dashboard, Mate Musik, Nachrichten / Messages, Anrufe / Calls, Kino / Cinema, Sprache / Speech, Verbindung / Connection, Telefon-App / Phone app, Anderes / Other]
     validations:
       required: true
+  - type: input
+    id: version
+    attributes:
+      label: Mate-Version / Mate version
+      description: Unten auf der Startseite der Telefon-App. / At the bottom of the phone app's start page.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Tablet und Android-Version / Tablet and Android version
   - type: textarea
     id: log
     attributes:
-      label: Logs
+      label: Protokoll / Log
       description: |
-        The connection log (Advanced → Connection log), and if you can, `adb logcat | grep -iE 'aare|AareAap'`
-        around the problem. Redact anything private first.
+        In der Telefon-App „Issue-Log speichern“ – diese Kopie ist ohne Positionen, Orte, Namen und Tokens.
+        Bitte nie das vollständige Protokoll öffentlich anhängen.
+        In the phone app "Save issue log" - that copy has no positions, places, names or tokens. Never attach the full log publicly.
       render: text

@@ -3048,7 +3048,6 @@ private val LICENCES: List<Pair<Int, List<Pair<String, String>>>> = listOf(
     R.string.licences_data to listOf(
         "Noto Sans (map lettering)" to "SIL OFL 1.1",
         "© OpenStreetMap contributors: map, routes, places, service areas, chargers" to "ODbL 1.0",
-        "Bundesnetzagentur.de, Ladesäulenregister: chargers" to "CC BY 4.0",
         "Protomaps basemaps: map style" to "CC0-1.0, BSD-3-Clause",
         "Open-Meteo: weather along the route" to "CC BY 4.0",
         "Heights: USGS 3DEP, SRTM, GMTED2010; NOAA ETOPO1; Copernicus EU-DEM (EU)" to "public sources",

@@ -13,7 +13,7 @@ internal class Charger(val at: Position, val kw: Int, val points: Int, val opera
 
 /**
  * The fast chargers (50 kW and up) of Germany and Denmark shipped with the app (assets/navi/schnelllader.tsv, made by
- * projekt/werkzeuge/schnelllader.py from OpenStreetMap and the Bundesnetzagentur's register), in a grid of 0.1° cells
+ * projekt/werkzeuge/schnelllader.py from OpenStreetMap), in a grid of 0.1° cells
  * for looking up what lies near a route. Read once, on first use.
  */
 internal class ChargerIndex private constructor(private val cells: Map<Long, List<Charger>>) {

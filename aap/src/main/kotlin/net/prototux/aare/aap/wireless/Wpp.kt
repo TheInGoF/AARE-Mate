@@ -8,7 +8,7 @@ import java.io.OutputStream
 /*
  * The Wi-Fi Projection Protocol ("WPP"): the small exchange over Bluetooth RFCOMM through which a
  * wireless head unit tells the phone which network to join and where its AAP server listens.
- * See docs/research/reference-projects.md sections 4 and 6.
+ * The wireless setup as AARE does it.
  */
 
 /** RFCOMM service class the head unit publishes over SDP; the phone connects to it as client. */
