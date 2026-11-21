@@ -793,6 +793,46 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     // only while Mate guides: after "Navigation beenden" Ferrostar keeps its last state, the panels must not
     val trip = if (guiding) nav.tripState as? TripState.Navigating else null
     val here = trip?.snappedUserLocation
+    // N-019 step 1 (E-029): warm the battery before a fast charger - the battery's readings teach the heating rate, and
+    // once the next stop is a fast charger nearer than the warming takes, a hint says to start it now (once per charger)
+    var preheat by remember { mutableStateOf<Pair<Charger, NaviPreheat.Advice>?>(null) }
+    var preheatLeft by remember { mutableStateOf<Charger?>(null) }
+    val tripForWarm by androidx.compose.runtime.rememberUpdatedState(trip)
+    LaunchedEffect(Unit) {
+        val watch = NaviPreheat.Watch()
+        var lastAt = 0L
+        while (true) {
+            val bt = net.prototux.aare.dash.DashData.batteryCelsius(context)
+            val out = net.prototux.aare.dash.DashData.outsideCelsius(context)
+            val at = net.prototux.aare.dash.DashData.batteryAtMs(context)
+            if (bt != null && at > lastAt) {
+                lastAt = at
+                watch.reading(bt, at)?.let { rate -> if (out != null) {
+                    val r = NaviPreheat.Rates.of(context).learn(out, rate)
+                    NaviPreheat.Rates.save(context, r)
+                    net.prototux.aare.DiagLog.add("battery warm: %.2f K/min seen at %.0f °C outside - %s".format(java.util.Locale.ROOT, rate, out, r), area = "CHARGE")
+                } }
+            }
+            val t = tripForWarm; val g = session.route.value; val roll = NaviKeep.rolling
+            preheat = if (t == null || g == null || roll == null || NaviKeep.rollingRoute !== g || testDrive) null else {
+                val driven = g.distance - t.progress.distanceRemaining
+                NaviKeep.stillToCharge(t).firstOrNull { it !== NaviKeep.atCharger.value }?.let { next ->
+                    val toM = roll.alongM(next.charger)
+                    if (toM <= driven) null
+                    else NaviPreheat.advice(bt, out, next.charger.kw, roll.secondsBetween(driven, toM) / 60.0, NaviPreheat.Rates.of(context))?.let { next.charger to it }
+                }
+            }
+            kotlinx.coroutines.delay(30_000)
+        }
+    }
+    // said once per charger, as it appears
+    LaunchedEffect(preheat?.first) {
+        val (c, a) = preheat ?: return@LaunchedEffect
+        if (c === preheatLeft) return@LaunchedEffect
+        net.prototux.aare.DiagLog.add("battery warm: start now - %.0f °C, %.0f min to %.0f °C, about %.1f kWh, %d kW charger".format(java.util.Locale.ROOT,
+            a.fromC, a.minutes, NaviPreheat.TARGET_C, a.kwh, c.kw), area = "CHARGE")
+        speaker.warn(context.getString(net.prototux.aare.R.string.mate_navi_preheat_say))
+    }
     // "Fortsetzen": an own stop reached is dropped from what is kept, so going on does not lead back to it (put back
     // 17.11.2026 - it went missing when the car's displays moved to NaviKeep)
     LaunchedEffect(trip?.remainingWaypoints?.size) {
@@ -1578,6 +1618,10 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 onReplan = { chargeCheckLeft = c.verdict; target?.let { purpose = Purpose.NEW; choose(it) } },
                 onDismiss = { chargeCheckLeft = c.verdict })
         }
+        // N-019 step 1: warm the battery now, top right, below the other hints (it waits while one of them shows)
+        val chargeHintShown = chargeCheck?.let { it.verdict != NaviChargeWatch.Verdict.OK && it.verdict != chargeCheckLeft } == true
+        if (atStop == null && nextIncident == null && fasterNow == null && !offRoute && !chargeHintShown && panel == NaviStep.None && trip != null)
+            preheat?.takeIf { it.first !== preheatLeft }?.let { (c, a) -> NaviPreheatHint(a, hintMod) { preheatLeft = c } }
         // what is left: distance, time, arrival (wish of 16.11.2026), bottom right
         // above the strip naming what plays when the bar shows one (O191: the music as everywhere, its title runs along
         // the bottom edge)

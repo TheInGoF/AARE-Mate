@@ -64,6 +64,17 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
         return track.wh[i - 1] + (track.wh[i] - track.wh[i - 1]) * k
     }
 
+    /** Seconds the plan's model takes from [fromM] to [toM] along the present track (minutes to a charger). */
+    fun secondsBetween(fromM: Double, toM: Double): Double = secAt(toM) - secAt(fromM)
+
+    private fun secAt(m: Double): Double {
+        val i = indexAt(m)
+        if (i <= 0) return track.seconds[0]
+        val a = track.metres[i - 1]; val b = track.metres[i]
+        val k = if (b > a) ((m - a) / (b - a)).coerceIn(0.0, 1.0) else 1.0
+        return track.seconds[i - 1] + (track.seconds[i] - track.seconds[i - 1]) * k
+    }
+
     private fun indexAt(m: Double): Int {
         var lo = 0; var hi = track.size - 1
         while (lo < hi) { val mid = (lo + hi) ushr 1; if (track.metres[mid] < m) lo = mid + 1 else hi = mid }

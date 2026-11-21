@@ -485,6 +485,19 @@ class CarScreenPreview {
         }
     }
 
+    /** Navi N-019 step 1: the hint to warm the battery before a fast charger, top right. */
+    @Test fun preheatHint() { if (System.getProperty("preview") == null) return
+        net.prototux.aare.ui.car.Mate.init(androidx.test.core.app.ApplicationProvider.getApplicationContext())
+        shoot("batterie-vorheizen") {
+            CompositionLocalProvider(LocalDensity provides car(1f)) {
+                Box(Modifier.fillMaxSize()) {
+                    net.prototux.aare.ui.car.navi.NaviPreheatHint(net.prototux.aare.ui.car.navi.NaviPreheat.Advice(25.0, 2.1, 5.0),
+                        Modifier.align(Alignment.TopEnd).padding(top = 120.dp, end = 16.dp).size(620.dp, 76.dp)) {}
+                }
+            }
+        }
+    }
+
     /** Navi N-019 step 1: the tile above the speed with how sure it is ("11 % ± 2"), at a charger and at the destination. */
     @Test fun arrivalSpread() { if (System.getProperty("preview") == null) return
         net.prototux.aare.ui.car.Mate.init(androidx.test.core.app.ApplicationProvider.getApplicationContext())

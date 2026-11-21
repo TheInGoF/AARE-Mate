@@ -44,6 +44,20 @@ public final class DashData {
         return ((Number) v.v).doubleValue();
     }
 
+    /** The battery's temperature from IDmate or the stick (Navi N-019: warming before a fast charger), null when older than 30 min. */
+    public static Double batteryCelsius(Context c) {
+        Telemetry.Value v = Hub.get(c).telemetry.get("t_batt");
+        if (v == null || !(v.v instanceof Number)) return null;
+        if (v.tsMs > 0 && System.currentTimeMillis() - v.tsMs > 30 * 60_000L) return null;
+        return ((Number) v.v).doubleValue();
+    }
+
+    /** When the battery's temperature was read (epoch ms), 0 when never. */
+    public static long batteryAtMs(Context c) {
+        Telemetry.Value v = Hub.get(c).telemetry.get("t_batt");
+        return v == null ? 0L : v.tsMs;
+    }
+
     /** IDmate's own consumption model of the car as the server serves it, for the rest of Mate. */
     public static final class Energy {
         /** km/h actually driven (rising) and kWh/100 km at each, heating included, at [tExt]. */

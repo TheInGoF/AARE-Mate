@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.EvStation
+import androidx.compose.material.icons.rounded.Thermostat
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import net.prototux.aare.ui.car.Mate
@@ -84,6 +85,28 @@ internal fun NaviChargeHint(result: NaviChargeWatch.Result, modifier: androidx.c
             style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = Mate.onAccent,
             modifier = androidx.compose.ui.Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).background(Mate.accent)
                 .clickable(onClick = onReplan).heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 14.dp))
+        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Close, null, tint = Mate.textDim,
+            modifier = androidx.compose.ui.Modifier.clip(androidx.compose.foundation.shape.CircleShape).clickable(onClick = onDismiss).padding(16.dp).size(26.dp))
+    }
+}
+
+/** N-019 step 1: "Batterie jetzt vorheizen" before a fast charger - how long and about what it costs; a cross to leave it. */
+@androidx.compose.runtime.Composable
+internal fun NaviPreheatHint(advice: NaviPreheat.Advice, modifier: androidx.compose.ui.Modifier, onDismiss: () -> Unit) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+    androidx.compose.foundation.layout.Row(modifier.floatEdge(shape).clip(shape).background(Mate.cardSolid)
+        .padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Thermostat, null,
+            tint = Mate.accent, modifier = androidx.compose.ui.Modifier.size(28.dp))
+        androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(12.dp))
+        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.weight(1f, fill = false)) {
+            androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_preheat_title),
+                style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = Mate.text)
+            androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_preheat_detail,
+                advice.fromC.roundToInt(), advice.minutes.roundToInt(), String.format(java.util.Locale.getDefault(), "%.1f", advice.kwh)),
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = Mate.textDim)
+        }
+        androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(12.dp))
         androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Close, null, tint = Mate.textDim,
             modifier = androidx.compose.ui.Modifier.clip(androidx.compose.foundation.shape.CircleShape).clickable(onClick = onDismiss).padding(16.dp).size(26.dp))
     }
