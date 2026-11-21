@@ -62,7 +62,10 @@ internal object Storage {
             val v = runCatching { sm.getStorageVolume(f) }.getOrNull() ?: return@forEach
             if (v.state != Environment.MEDIA_MOUNTED || v.isPrimary) return@forEach
             val uuid = v.uuid ?: return@forEach
-            out += Volume(uuid, v.getDescription(app), f, v.isRemovable, freeOf(f), totalOf(f), fsType(uuid) == "vfat")
+            // a card formatted by Android is called only "External" by it: named as a memory card, its own name in brackets
+            val desc = v.getDescription(app)
+            val label = if (v.isRemovable && !desc.contains("SD", ignoreCase = true)) app.getString(R.string.storage_card, desc) else desc
+            out += Volume(uuid, label, f, v.isRemovable, freeOf(f), totalOf(f), fsType(uuid) == "vfat")
         }
         return out
     }
