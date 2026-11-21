@@ -103,7 +103,9 @@ object AndroidAutoApps {
         }
         HostRejections.refused(context).forEach { pkg ->
             val name = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
-            lines += "apps: $name ($pkg) is listed, but refused Mate as its host (takes Google's Android Auto only)"
+            // a known limit of that app, not a fault of Mate: worded without "refused", which made it an ERROR in the log's
+            // list of problems twice at every connection (21.11.2026)
+            lines += "apps: $name ($pkg) is listed, but takes Google's Android Auto only as its host, not Mate"
         }
         return lines.sorted()
     }

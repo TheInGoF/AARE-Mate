@@ -244,7 +244,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         if (home) chargeLog("charging: destination is home with a wallbox, at least ${settings.chargeMinAtHome} % there")
         // no buffer on the least level (Navi O-013, 19.11.2026: "Der Puffer fällt ganz weg. Das Modell soll ja selbstrechnend
         // sein"): the least level of the phone app holds as it is; the model's error is what the drive measures (ChargeRolling)
-        chargeLog("charging: ${c.kind} no buffer on the least level; the model's error of past stretches, for the record: " + ChargeBuffer.of(context).describe())
+        // a note, not a fault: the word "error" in it made it an ERROR in the log's list of problems, at every route (21.11.2026)
+        chargeLog("charging: ${c.kind} no buffer on the least level; the model's error of past stretches, for the record: " + ChargeBuffer.of(context).describe(),
+            net.prototux.aare.DiagLog.Level.INFO)
         // O225: a stop of the driver's at a charger is a charging stop - charged there, never left out
         // [fixed]: charging stops kept from the plan before (on the part of the route a move left as it was) - kept like these
         val ownChargers = via.mapNotNull { p -> index.near(p, OWN_CHARGER_M, 0).minByOrNull { ChargerIndex.distanceM(it.at, p) } } + fixed
@@ -1617,7 +1619,7 @@ private const val MEASURED_MIN_PERCENT = 3.0
 private const val WEATHER_WAIT_MS = 8_000L
 private const val RAIN_WAIT_MS = 5_000L
 
-private fun chargeLog(msg: String) { Log.i("MateNavi", msg); net.prototux.aare.DiagLog.add(msg) }
+private fun chargeLog(msg: String, level: net.prototux.aare.DiagLog.Level? = null) { Log.i("MateNavi", msg); net.prototux.aare.DiagLog.add(msg, level) }
 /** A glide back to the car that has not finished by then counts as done. */
 private const val RETURN_MAX_MS = 3000L
 /** Navi I-001: the guidance ended this close to the destination counts as arrived for "Letzte Ziele". */
