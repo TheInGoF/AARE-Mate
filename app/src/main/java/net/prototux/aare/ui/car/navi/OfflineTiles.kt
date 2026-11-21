@@ -7,7 +7,6 @@ import java.io.InputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.util.concurrent.Executors
 
 /**
  * The map without the net from all region packages at once (21.11.2026: "ich möchte eigentlich wieder einzelne regionen
@@ -22,7 +21,11 @@ internal object OfflineTiles {
     @Volatile private var server: ServerSocket? = null
     @Volatile private var sawTile = false
     @Volatile private var sawEmpty = false
-    private val pool = Executors.newFixedThreadPool(4) { r -> Thread(r, "offline-tiles").apply { isDaemon = true } }
+    // a thread for each connection MapLibre keeps open (21.11.2026: four threads, each held by an idle keep-alive
+    // connection for up to 20 s - the next requests waited until MapLibre gave up: "Socket closed", blank tiles)
+    private val pool = java.util.concurrent.ThreadPoolExecutor(0, MAX_CONNECTIONS, 30, java.util.concurrent.TimeUnit.SECONDS,
+        java.util.concurrent.SynchronousQueue()) { r -> Thread(r, "offline-tiles").apply { isDaemon = true } }
+    private const val MAX_CONNECTIONS = 32
 
     /** The tile URL for the style's vector source. */
     fun url(context: Context): String = "http://127.0.0.1:${port(context)}/t/{z}/{x}/{y}.mvt"
@@ -35,7 +38,8 @@ internal object OfflineTiles {
         Thread({
             while (!s.isClosed) {
                 val c = runCatching { s.accept() }.getOrNull() ?: continue
-                pool.execute { runCatching { serve(app, c) } }
+                // more connections than threads: this one is closed at once, the client asks anew (no queue to wait in)
+                runCatching { pool.execute { runCatching { serve(app, c) } } }.onFailure { runCatching { c.close() } }
             }
         }, "offline-tiles-accept").apply { isDaemon = true }.start()
         Log.i(TAG, "offline tiles on port ${s.localPort}")

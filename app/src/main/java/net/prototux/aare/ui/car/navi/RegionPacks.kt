@@ -265,15 +265,23 @@ internal object RegionPacks {
     private var mapsKey = ""
     private var mapsKept: List<LocalMap> = emptyList()
 
+    // the folder is looked at again at most every [MAPS_CHECK_MS] (21.11.2026: it was listed for every tile, with the
+    // time of each package on the memory card, one tile after the other - the map waited)
+    private var mapsCheckedAt = 0L
+
     @Synchronized private fun cachedMaps(context: Context): List<LocalMap> {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (mapsKey.isNotEmpty() && now - mapsCheckedAt < MAPS_CHECK_MS) return mapsKept
+        mapsCheckedAt = now
         val key = root(context).listFiles().orEmpty()
             .joinToString("|") { d -> d.path + ":" + File(d, "karte.pmtiles").lastModified() }
         if (key != mapsKey) {
             mapsKept = maps(context); mapsKey = key
-            synchronized(readers) { readers.clear() }
+            synchronized(readers) { readers.values.forEach { it.close() }; readers.clear() }
         }
         return mapsKept
     }
+    private const val MAPS_CHECK_MS = 10_000L
 
     /**
      * The package to draw from at [lon]/[lat] without the net (one at a time): the whole package when it is there (E-018);

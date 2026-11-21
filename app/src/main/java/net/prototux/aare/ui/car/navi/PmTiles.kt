@@ -17,6 +17,12 @@ internal class PmTiles(private val file: File) {
     private class Header(val rootOffset: Long, val rootLength: Int, val leafOffset: Long, val dataOffset: Long,
                          val internalCompression: Int, val tileCompression: Int, val minZoom: Int, val maxZoom: Int)
 
+    /**
+     * The file kept open (21.11.2026: opened anew for each read, on the memory card each tile cost several openings and
+     * the map's tiles came too late - blank squares in the dashboard's near view); positional reads, safe from any thread.
+     */
+    private val channel: java.nio.channels.FileChannel by lazy { RandomAccessFile(file, "r").channel }
+
     private val header: Header
     private val root: List<Entry>
     private val leaves = object : LinkedHashMap<Long, List<Entry>>(16, 0.75f, true) {
@@ -63,9 +69,19 @@ internal class PmTiles(private val file: File) {
         return List(n) { Entry(ids[it], offsets[it], lengths[it], runs[it]) }
     }
 
-    private fun read(at: Long, length: Int): ByteArray = RandomAccessFile(file, "r").use { f ->
-        ByteArray(length).also { f.seek(at); f.readFully(it) }
+    private fun read(at: Long, length: Int): ByteArray {
+        val buf = java.nio.ByteBuffer.allocate(length)
+        var pos = at
+        while (buf.hasRemaining()) {
+            val n = channel.read(buf, pos)
+            if (n < 0) throw java.io.EOFException("${file.name} at $pos")
+            pos += n
+        }
+        return buf.array()
     }
+
+    /** The file let go (the package changed or went). */
+    fun close() { runCatching { channel.close() } }
 
     private class Varints(val b: ByteArray) {
         var i = 0
