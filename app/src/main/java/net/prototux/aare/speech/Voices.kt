@@ -11,7 +11,15 @@ import java.io.File
  */
 object Voices {
     class Voice(val id: String, val name: String, val female: Boolean, val kind: Kind, val repo: String?, val model: String,
-                val voices: String = "voices.bin", val tokens: String = "tokens.txt", val sizeMb: Int, val lang: String = "de")
+                val voices: String = "voices.bin", val tokens: String = "tokens.txt", val sizeMb: Int, val lang: String = "de",
+                /**
+                 * Piper only: how much the voice varies (lower = steadier articulation), how much the sounds' lengths vary,
+                 * the tempo (above 1 slower). 21.11.2026 ("Verfeinere die Sprachausgabe für deutsch"), measured with eight
+                 * of Mate's sentences under car noise, written back by Whisper (tools: panel-tools/stimmtest): 0.4 / 0.6
+                 * instead of Piper's 0.667 / 0.8 understood clearly better (Thorsten 31 -> 23 %, Eva 29 -> 23 %, Karlsson
+                 * 31 -> 25 % words wrong); Eva besides a little slower (20 %).
+                 */
+                val noise: Float = 0.4f, val noiseW: Float = 0.6f, val length: Float = 1.0f)
     enum class Kind { PIPER, KOKORO }
 
     val ALL = listOf(
@@ -24,7 +32,7 @@ object Voices {
         // more German Piper voices, public and downloadable in the app (17.11.2026: "Kann man die Modelle nicht in der App
         // verlinken? Zumindest die Piper Stimme. Irgendwas, was besser ist als die Original-Stimmen") - fast like Thorsten
         Voice("piper-thorsten-high", "Thorsten hoch (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-thorsten-high", "de_DE-thorsten-high.onnx", sizeMb = 115),
-        Voice("piper-eva", "Eva (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-eva_k-x_low", "de_DE-eva_k-x_low.onnx", sizeMb = 21),
+        Voice("piper-eva", "Eva (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-eva_k-x_low", "de_DE-eva_k-x_low.onnx", sizeMb = 21, length = 1.1f),
         Voice("piper-kerstin", "Kerstin (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-kerstin-low", "de_DE-kerstin-low.onnx", sizeMb = 64),
         Voice("piper-ramona", "Ramona (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-ramona-low", "de_DE-ramona-low.onnx", sizeMb = 64),
         Voice("piper-karlsson", "Karlsson (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-karlsson-low", "de_DE-karlsson-low.onnx", sizeMb = 64),

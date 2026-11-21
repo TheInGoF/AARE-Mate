@@ -41,7 +41,8 @@ object LocalTts {
         val espeak = Voices.espeak(context).path
         val t0 = SystemClock.elapsedRealtime()
         val model = if (v.kind == Voices.Kind.PIPER) OfflineTtsModelConfig(
-            vits = OfflineTtsVitsModelConfig(model = File(d, v.model).path, tokens = File(d, v.tokens).path, dataDir = espeak),
+            vits = OfflineTtsVitsModelConfig(model = File(d, v.model).path, tokens = File(d, v.tokens).path, dataDir = espeak,
+                noiseScale = v.noise, noiseScaleW = v.noiseW, lengthScale = v.length),
             numThreads = 2, provider = "cpu")
         else OfflineTtsModelConfig(
             kokoro = com.k2fsa.sherpa.onnx.OfflineTtsKokoroModelConfig(model = File(d, v.model).path, voices = File(d, v.voices).path,
@@ -95,7 +96,7 @@ object LocalTts {
                     // answers, samples - gave the voice's numbers to the player as they came: above full scale they were
                     // cut off, and each piece began and ended hard. Now as Mate Navi's announcements: each piece computed
                     // whole, at the music's target level, below full scale, faded in and out.
-                    for (piece in pieces(Pronounce.fix(text))) {
+                    for (piece in pieces(Pronounce.fix(text, v.lang))) {
                         if (sampleOf != 0 && sampleOf != sampleGen) break
                         val raw = t.generate(piece, 0, 1.0f).samples
                         val chunk = net.prototux.aare.audio.Resample.tidy(net.prototux.aare.audio.Loudness.own(raw, rate), rate)
@@ -171,7 +172,7 @@ object LocalTts {
                 val v = chosen(app)?.takeIf { Voices.available(app, it) } ?: return@runCatching null
                 val t = load(app, v)
                 val t0 = SystemClock.elapsedRealtime()
-                val parts = pieces(Pronounce.fix(text)).map { t.generate(it, 0, 1.0f).samples }
+                val parts = pieces(Pronounce.fix(text, v.lang)).map { t.generate(it, 0, 1.0f).samples }
                 val all = FloatArray(parts.sumOf { it.size }); var at = 0
                 parts.forEach { it.copyInto(all, at); at += it.size }
                 Log.i(TAG, "rendered \"${text.take(40)}\" (${v.id}): ${all.size * 1000L / t.sampleRate()} ms of speech in ${SystemClock.elapsedRealtime() - t0} ms")
@@ -198,7 +199,7 @@ object LocalTts {
                 // each sentence at the music's target level, below full scale and with soft edges, as Mate's own speech
                 val feed = Stop { c -> go = go && chunk(net.prototux.aare.audio.Resample.tidy(net.prototux.aare.audio.Loudness.own(c, rate), rate)); go }
                 @Suppress("UNCHECKED_CAST")
-                for (piece in pieces(Pronounce.fix(text))) { if (!go) break; generateInto(t, piece, feed) }
+                for (piece in pieces(Pronounce.fix(text, v.lang))) { if (!go) break; generateInto(t, piece, feed) }
                 rate
             }.onFailure { Log.w(TAG, "speaking for another app failed", it) }.getOrNull()
         }.get()
