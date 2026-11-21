@@ -141,6 +141,15 @@ Gebaut wird eine Region nach der anderen, geprüft alle 6 h und sofort nach jede
 (`pakete/gesamt`) bleibt im Katalog, bis alle gewählten Regionen einzeln gebaut sind, dann wird es gelöscht. Eine Auswahl aus
 früheren Versionen (eine Liste mit gemeinsamem Intervall) wird beim Start übernommen.
 
+## Überwachung (Port 8095)
+
+- `/live`: die letzten Anfragen über das Tor aus dem JSON-Zugriffsprotokoll von Caddy (`ZUGRIFF_LOG`, Standard
+  `/logs/zugriff.log`) mit Dauer, dazu Anzahl, Fehler, Ø/p95/max je Dienst. Query-Strings, Kachelkoordinaten und Client-IPs
+  nur mit `LIVE_DETAILS=1`.
+- `/system`: CPU, I/O-Wait, Last, RAM, Datei-Cache, Plattendurchsatz, Temperatur, Akku/Netzteil, Belegung von SSD und NAS sowie
+  Anfragen/min und Ø-Antwortzeit; alle 10 s gemessen, 24 h im Speicher (nach einem Neustart des Dienstes beginnt der Verlauf
+  neu). Gelesen aus `/proc` und `/sys` des Hosts; Netzwerkzähler fehlen, weil der Container nur sein eigenes Netz sieht.
+
 ## Verkehr (TomTom)
 
 Das Tor setzt `key=$TOMTOM_KEY` selbst, entfernt `Authorization` und Cookies vor der Weitergabe und erlaubt nur `/traffic/*`.

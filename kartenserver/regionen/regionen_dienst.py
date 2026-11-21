@@ -27,6 +27,10 @@ Valhalla (`additional_data.elevation`); Kacheln, die keine gewählte Region mehr
 Live-Seite /live: liest das JSON-Zugriffsprotokoll von Caddy (Tor, ZUGRIFF_LOG) und zeigt die letzten Anfragen mit Dauer
 sowie Anzahl, Fehler, Ø/p95/max je Dienst. Ohne LIVE_DETAILS=1 werden Query-Strings, Kachelkoordinaten und Client-IPs
 nicht angezeigt.
+
+Server-Seite /system: CPU, I/O-Wait, Last, RAM, Datei-Cache, Plattendurchsatz, Temperatur, Akku/Netzteil, Belegung von SSD
+und NAS sowie Anfragen/min und Ø-Antwortzeit aus dem Caddy-Protokoll; alle 10 s gemessen, 24 h im Speicher (nach einem
+Neustart des Dienstes beginnt der Verlauf neu).
 """
 import base64
 import datetime
@@ -310,13 +314,23 @@ def planet_zeit():
         return None
 
 
-_BUILDS = {"zeit": 0, "neu": None}
+_BUILDS = {"zeit": 0, "neu": None, "sperre": threading.Lock()}
 
 
-def neuester_bau():
-    """Neuester Tagesbau von Protomaps als (url, zeit, name), höchstens alle 6 h nachgefragt; None ohne Verbindung."""
-    if time.time() - _BUILDS["zeit"] < 6 * 3600:
+def neuester_bau(nur_zwischenspeicher=False):
+    """Neuester Tagesbau von Protomaps als (url, zeit, name), höchstens alle 6 h nachgefragt; None ohne Verbindung.
+    Die Weboberfläche fragt nur den Zwischenspeicher (kein Warten auf das Netz bei jeder Abfrage)."""
+    if nur_zwischenspeicher or time.time() - _BUILDS["zeit"] < 6 * 3600:
         return _BUILDS["neu"]
+    if not _BUILDS["sperre"].acquire(blocking=False):  # holt schon jemand die Liste
+        return _BUILDS["neu"]
+    try:
+        return _bauliste_holen()
+    finally:
+        _BUILDS["sperre"].release()
+
+
+def _bauliste_holen():
     neu = None
     try:
         with urllib.request.urlopen(BUILDS_URL, timeout=30) as a:
@@ -714,7 +728,7 @@ tr.klick{cursor:pointer} tr.klick:hover td{background:#f3f6fa}
 .hinweis{margin-top:8px;padding:6px 10px;border-radius:6px;background:#fff4d6;color:#6b4800}
 </style>
 <header><div class="reihe"><h1>Live – Anfragen über das Tor</h1>
-<a href="./">← Kartenpakete</a>
+<a href="./">← Kartenpakete</a> <a href="system">Server →</a>
 <label class="info">Zeitraum <select id="fenster">
 <option value="300">5 Minuten</option><option value="900">15 Minuten</option><option value="3600" selected>1 Stunde</option>
 <option value="21600">6 Stunden</option><option value="86400">24 Stunden</option></select></label>
@@ -761,6 +775,360 @@ $('#dienste').addEventListener('click',e=>{const tr=e.target.closest('tr[data-d]
 $('#filter').onchange=zeichne; $('#fenster').onchange=laden; $('#gesund').onchange=laden;
 $('#pause').onclick=()=>{live=!live; $('#pause').classList.toggle('an',live); $('#pause').textContent=live?'live':'pausiert'; if(live) laden();};
 laden(); setInterval(()=>{ if(live) laden(); },3000);
+</script></html>"""
+
+
+# ---------- Server: Leistung und Auslastung ----------
+# Liest /proc und /sys des Hosts (im Container ohne lxcfs sind das die Werte des ganzen Rechners), alle 10 s eine Messung,
+# 24 h im Speicher. Netzwerkzähler fehlen absichtlich: /proc/net/dev zeigt im Container nur dessen eigenes Netz.
+
+SYS_TAKT = 10
+SYSTEM = {"sperre": threading.Lock(), "verlauf": deque(maxlen=24 * 3600 // SYS_TAKT), "vorher": None,
+          "nas": None, "nas_zeit": 0}
+PLATTE = re.compile(r"(sd[a-z]+|nvme\d+n\d+|vd[a-z]+|mmcblk\d+)")
+
+
+def _lies_text(datei, standard=None):
+    try:
+        with open(datei, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return standard
+
+
+def _cpu_zeiten():
+    w = [int(x) for x in _lies_text("/proc/stat", "cpu 0").splitlines()[0].split()[1:9]]
+    w += [0] * (8 - len(w))
+    return sum(w), w[3] + w[4], w[4]               # gesamt, untätig (idle+iowait), iowait
+
+
+def _speicher():
+    m = {}
+    for z in _lies_text("/proc/meminfo", "").splitlines():
+        k, _, v = z.partition(":")
+        if v.split():
+            m[k] = int(v.split()[0]) * 1024
+    return m
+
+
+def _platten_sektoren():
+    lesen = schreiben = 0
+    for z in _lies_text("/proc/diskstats", "").splitlines():
+        t = z.split()
+        if len(t) > 9 and PLATTE.fullmatch(t[2]):
+            lesen += int(t[5])
+            schreiben += int(t[9])
+    return lesen * 512, schreiben * 512
+
+
+def _temperatur():
+    """Höchste CPU-Temperatur in °C (coretemp/k10temp, sonst x86_pkg_temp, sonst die höchste Thermalzone)."""
+    werte = []
+    basis = "/sys/class/hwmon"
+    for h in (os.listdir(basis) if os.path.isdir(basis) else []):
+        if _lies_text(f"{basis}/{h}/name") in ("coretemp", "k10temp", "zenpower", "cpu_thermal"):
+            for d in os.listdir(f"{basis}/{h}"):
+                if re.fullmatch(r"temp\d+_input", d):
+                    v = _lies_text(f"{basis}/{h}/{d}")
+                    if v and v.lstrip("-").isdigit():
+                        werte.append(int(v) / 1000)
+    if not werte:
+        basis = "/sys/class/thermal"
+        zonen = [z for z in (os.listdir(basis) if os.path.isdir(basis) else []) if z.startswith("thermal_zone")]
+        paket = [z for z in zonen if _lies_text(f"{basis}/{z}/type") == "x86_pkg_temp"]
+        for z in paket or zonen:
+            v = _lies_text(f"{basis}/{z}/temp")
+            if v and v.lstrip("-").isdigit():
+                werte.append(int(v) / 1000)
+    return round(max(werte), 1) if werte else None
+
+
+def _strom():
+    """Akkus (Ladestand, Zustand) und ob das Netzteil steckt – beim Laptop-Server zeigt das Stromausfälle."""
+    basis = "/sys/class/power_supply"
+    akkus, netz = [], None
+    for n in sorted(os.listdir(basis)) if os.path.isdir(basis) else []:
+        art = _lies_text(f"{basis}/{n}/type")
+        if art == "Battery":
+            kap = _lies_text(f"{basis}/{n}/capacity")
+            akkus.append({"name": n, "prozent": int(kap) if kap and kap.isdigit() else None,
+                          "zustand": _lies_text(f"{basis}/{n}/status", "")})
+        elif art == "Mains":
+            netz = _lies_text(f"{basis}/{n}/online") == "1" or bool(netz)
+    return {"akkus": akkus, "netz": netz}
+
+
+def system_messen():
+    jetzt = time.time()
+    cpu = _cpu_zeiten()
+    platte = _platten_sektoren()
+    m = _speicher()
+    last = _lies_text("/proc/loadavg", "0 0 0").split()
+    vorher = SYSTEM["vorher"]
+    SYSTEM["vorher"] = (jetzt, cpu, platte)
+    if not vorher:
+        return
+    dt = max(jetzt - vorher[0], 0.001)
+    d_ges, d_idle, d_io = (a - b for a, b in zip(cpu, vorher[1]))
+    gesamt = m.get("MemTotal", 0) or 1
+    cache = m.get("Cached", 0) + m.get("Buffers", 0) + m.get("SReclaimable", 0)
+    akku = next((a["prozent"] for a in _strom()["akkus"] if a["prozent"] is not None), None)
+    probe = {"ts": round(jetzt),
+             "cpu": round(100 * (d_ges - d_idle) / d_ges, 1) if d_ges > 0 else 0.0,
+             "io": round(100 * d_io / d_ges, 1) if d_ges > 0 else 0.0,
+             "last": float(last[0]),
+             "ram": round(100 * (gesamt - m.get("MemAvailable", gesamt)) / gesamt, 1),
+             "cache": round(cache / 1e9, 2),
+             "swap": round((m.get("SwapTotal", 0) - m.get("SwapFree", 0)) / 1e6),
+             "lesen": round((platte[0] - vorher[2][0]) / dt / 1e6, 2),
+             "schreiben": round((platte[1] - vorher[2][1]) / dt / 1e6, 2),
+             "temp": _temperatur(), "akku": akku}
+    with SYSTEM["sperre"]:
+        SYSTEM["verlauf"].append(probe)
+
+
+def nas_messen():
+    """Belegung der NAS-Freigabe (NFS). Eigener Faden: hängt die NFS-Verbindung, bleibt nur dieser Wert stehen."""
+    while True:
+        try:
+            u = shutil.disk_usage(os.path.dirname(PLANET) or "/")
+            SYSTEM.update(nas={"gesamt": u.total, "frei": u.free}, nas_zeit=int(time.time()))
+        except OSError:
+            pass
+        time.sleep(60)
+
+
+def system_sammler():
+    while True:
+        try:
+            system_messen()
+        except Exception as fehler:  # noqa: BLE001 – eine fehlende Quelle darf das Sammeln nicht beenden
+            log("Messung fehlgeschlagen:", fehler)
+        time.sleep(SYS_TAKT)
+
+
+def _verdichten(proben, felder, punkte=240):
+    """Höchstens `punkte` Werte: Mittel je Abschnitt (Spitzen in cpu/io/lesen/schreiben bleiben als Maximum erhalten)."""
+    if len(proben) <= punkte:
+        return proben
+    schritt = -(-len(proben) // punkte)
+    aus = []
+    for i in range(0, len(proben), schritt):
+        teil = proben[i:i + schritt]
+        p = {"ts": teil[-1]["ts"]}
+        for f in felder:
+            werte = [t[f] for t in teil if t.get(f) is not None]
+            if not werte:
+                p[f] = None
+            elif f in ("cpu", "io", "lesen", "schreiben"):
+                p[f] = max(werte)
+            else:
+                p[f] = round(sum(werte) / len(werte), 2)
+        aus.append(p)
+    return aus
+
+
+def anfragen_verlauf(fenster_s):
+    """Anfragen pro Minute und Ø-Dauer je Zeitabschnitt (ohne /gesund), aus dem Caddy-Protokoll."""
+    zugriffe_nachlesen()
+    breite = max(60, fenster_s // 120)
+    jetzt = time.time()
+    start = jetzt - fenster_s
+    eimer = {}
+    with LIVE["sperre"]:
+        for e in LIVE["eintraege"]:
+            if e["ts"] >= start and e["dienst"] != "gesund":
+                k = int((e["ts"] - start) // breite)
+                n, s = eimer.get(k, (0, 0.0))
+                eimer[k] = (n + 1, s + e["ms"])
+    aus = []
+    for k in range(int(fenster_s // breite)):         # nur abgeschlossene Abschnitte, der laufende fehlt noch
+        n, s = eimer.get(k, (0, 0.0))
+        aus.append({"ts": round(start + (k + 1) * breite), "proMin": round(n * 60 / breite, 1),
+                    "ms": round(s / n) if n else None})
+    return aus
+
+
+def system_daten(fenster_s):
+    grenze_ts = time.time() - fenster_s
+    with SYSTEM["sperre"]:
+        proben = [p for p in SYSTEM["verlauf"] if p["ts"] >= grenze_ts]
+    felder = ["cpu", "io", "last", "ram", "cache", "swap", "lesen", "schreiben", "temp", "akku"]
+    m = _speicher()
+    ssd = shutil.disk_usage(PAKETE)
+    lauf = float((_lies_text("/proc/uptime", "0") or "0").split()[0])
+    return {"aktuell": proben[-1] if proben else None, "verlauf": _verdichten(proben, felder),
+            "anfragen": anfragen_verlauf(fenster_s), "takt": SYS_TAKT, "fenster": fenster_s,
+            "kerne": os.cpu_count(), "ram_gesamt": m.get("MemTotal", 0), "swap_gesamt": m.get("SwapTotal", 0),
+            "laufzeit": int(lauf), "ssd": {"gesamt": ssd.total, "frei": ssd.free},
+            "nas": SYSTEM["nas"], "nas_zeit": SYSTEM["nas_zeit"], "strom": _strom()}
+
+
+SYSTEM_SEITE = r"""<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Server – Leistung und Auslastung</title>
+<style>
+:root{--rand:#dde1e5;--leise:#52514e;--text:#0b0b0b;--flaeche:#fcfcfb;--reihe:#2a78d6;--gitter:#eceae6}
+*{box-sizing:border-box}
+body{font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;color:var(--text);background:#f4f6f8}
+header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--rand);padding:10px 16px;z-index:2;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+h1{font-size:17px;margin:0 6px 0 0} a{color:#1f6feb;text-decoration:none}
+select{font:inherit;padding:4px 6px;border:1px solid var(--rand);border-radius:7px;background:#fff}
+.info{color:var(--leise);font-size:13px}
+main{max-width:1200px;margin:0 auto;padding:14px 16px 40px}
+.kacheln{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.kachel{background:#fff;border:1px solid var(--rand);border-radius:10px;padding:9px 13px}
+.kachel .t{font-size:12px;color:var(--leise)}
+.kachel .w{font-size:22px;font-weight:600;margin-top:1px;font-variant-numeric:tabular-nums}
+.kachel .u{font-size:12px;color:var(--leise);margin-top:2px}
+.st{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:9px;margin-left:4px;vertical-align:middle}
+.st.ok{background:#e3f4e8;color:#1a6b2e}.st.warn{background:#fff1cc;color:#7a5200}.st.err{background:#fde7e9;color:#a8261f}
+.raster{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+.diagramm{background:#fff;border:1px solid var(--rand);border-radius:10px;padding:10px 12px 6px;position:relative}
+.diagramm h2{font-size:13px;font-weight:600;margin:0;display:flex;gap:8px;align-items:baseline}
+.diagramm h2 .jetzt{margin-left:auto;font-weight:600;font-variant-numeric:tabular-nums}
+.diagramm .erkl{font-size:12px;color:var(--leise);margin:1px 0 4px}
+.diagramm svg{display:block;width:100%;height:auto;overflow:visible;touch-action:none}
+.achse{font-size:10px;fill:var(--leise);font-variant-numeric:tabular-nums}
+.tipp{position:absolute;pointer-events:none;background:#fff;border:1px solid var(--rand);border-radius:6px;padding:4px 8px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.08);white-space:nowrap;display:none;z-index:1}
+.tipp b{font-size:13px;font-variant-numeric:tabular-nums}
+.leer{color:var(--leise);font-size:13px;padding:30px 0;text-align:center}
+.hinweis{margin:0 0 12px;padding:8px 12px;border-radius:8px;background:#fff4d6;color:#6b4800}
+details{margin-top:16px} summary{cursor:pointer;color:var(--leise)}
+table{border-collapse:collapse;background:#fff;margin-top:8px;font-size:12px}
+th,td{padding:3px 8px;border-bottom:1px solid #eef0f2;text-align:right;font-variant-numeric:tabular-nums} th{color:var(--leise);font-weight:600}
+</style>
+<header><h1>Server – Leistung und Auslastung</h1>
+<a href="./">← Kartenpakete</a> <a href="live">Live-Anfragen</a>
+<label class="info">Zeitraum <select id="fenster"><option value="900">15 Minuten</option><option value="3600" selected>1 Stunde</option>
+<option value="21600">6 Stunden</option><option value="86400">24 Stunden</option></select></label>
+<span class="info" id="stand"></span></header>
+<main>
+<div id="hinweise"></div>
+<div class="kacheln" id="kacheln"></div>
+<div class="raster" id="raster"></div>
+<details><summary>Messwerte als Tabelle</summary><div id="tabelle"></div></details>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const zahl=(v,n=0)=>v==null?'–':Number(v).toLocaleString('de-DE',{maximumFractionDigits:n,minimumFractionDigits:n});
+const gb=b=>b==null?'–':(b/1e9).toLocaleString('de-DE',{maximumFractionDigits:b>=1e11?0:1})+' GB';
+const uhr=t=>new Date(t*1000).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+const uhrS=t=>new Date(t*1000).toLocaleTimeString('de-DE');
+function dauer(s){const t=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return t?`${t} T ${h} h`:h?`${h} h ${m} min`:`${m} min`;}
+function marke(stufe,text){return `<span class="st ${stufe}">${text}</span>`;}
+// Schwellen: [Warnung, kritisch] – Zustand immer mit Text, nie nur Farbe
+function stufe(v,w,k){return v==null?null:v>=k?['err','kritisch']:v>=w?['warn','hoch']:['ok','normal'];}
+
+const DIAGRAMME=[
+ {f:'cpu',t:'CPU-Auslastung',e:'Anteil der Rechenzeit, die belegt ist (Spitze je Abschnitt)',u:'%',max:100,n:0},
+ {f:'io',t:'Warten auf die Platte (I/O-Wait)',e:'hoch = die SSD/NAS bremst, nicht die CPU',u:'%',max:null,n:1},
+ {f:'last',t:'Systemlast (1 min)',e:'Richtwert: bis zur Zahl der Kerne ist alles gut',u:'',max:null,n:2},
+ {f:'ram',t:'Arbeitsspeicher belegt',e:'ohne Datei-Cache – der ist frei verfügbar',u:'%',max:100,n:0},
+ {f:'cache',t:'Datei-Cache',e:'u. a. Valhalla-Kacheln im RAM – mehr ist schneller',u:'GB',max:null,n:1},
+ {f:'lesen',t:'Platte lesen',e:'Valhalla, Photon und Kacheln, die nicht im Cache liegen',u:'MB/s',max:null,n:1},
+ {f:'schreiben',t:'Platte schreiben',e:'z. B. beim Bauen von Paketen',u:'MB/s',max:null,n:1},
+ {f:'temp',t:'CPU-Temperatur',e:'dauerhaft über 85 °C drosselt der Prozessor',u:'°C',max:null,n:0},
+ {f:'proMin',t:'Anfragen pro Minute',e:'alle Dienste über das Tor, ohne /gesund',u:'/min',max:null,n:1,quelle:'anfragen'},
+ {f:'ms',t:'Ø Antwortzeit',e:'Mittel aller Anfragen im Abschnitt',u:'ms',max:null,n:0,quelle:'anfragen'},
+];
+let D=null;
+
+function kacheln(){
+  const a=D.aktuell||{}, k=D.kerne||1, s=D.strom||{}, ak=(s.akkus||[])[0];
+  const ramBel=a.ram==null?null:a.ram/100*D.ram_gesamt;
+  const ssdBel=1-D.ssd.frei/D.ssd.gesamt, nasBel=D.nas?1-D.nas.frei/D.nas.gesamt:null;
+  const c=stufe(a.cpu,70,90), l=stufe(a.last,k,k*2), r=stufe(a.ram,80,92), t=stufe(a.temp,80,90);
+  const sd=stufe(ssdBel*100,85,95), nd=nasBel==null?null:stufe(nasBel*100,85,95);
+  const m=x=>x?marke(x[0],x[1]):'';
+  let strom='–', stromU='';
+  if(s.netz===false){strom='Akku'+(ak&&ak.prozent!=null?` ${ak.prozent} %`:''); stromU=marke('err','kein Netzstrom');}
+  else if(ak){strom=`${ak.prozent??'–'} %`; stromU=`Netzteil · ${ak.zustand||''}`;}
+  else if(s.netz) {strom='Netzteil';}
+  $('#kacheln').innerHTML=[
+   ['CPU',`${zahl(a.cpu)} %`,`${k} Threads ${m(c)}`],
+   ['Systemlast',zahl(a.last,2),`von ${k} ${m(l)}`],
+   ['Arbeitsspeicher',`${zahl(a.ram)} %`,`${gb(ramBel)} von ${gb(D.ram_gesamt)} ${m(r)}`],
+   ['Datei-Cache',`${zahl(a.cache,1)} GB`,`Swap ${zahl(a.swap)} MB${D.swap_gesamt?' von '+gb(D.swap_gesamt):''}`],
+   ['SSD',`${gb(D.ssd.frei)} frei`,`von ${gb(D.ssd.gesamt)} ${m(sd)}`],
+   ['NAS (Kacheln)',D.nas?`${gb(D.nas.frei)} frei`:'–',D.nas?`von ${gb(D.nas.gesamt)} ${m(nd)}`:'nicht erreichbar'],
+   ['CPU-Temperatur',a.temp==null?'–':`${zahl(a.temp)} °C`,a.temp==null?'kein Sensor':m(t)],
+   ['Strom',strom,stromU],
+   ['Laufzeit',dauer(D.laufzeit),'seit dem letzten Neustart'],
+  ].map(([t,w,u])=>`<div class="kachel"><div class="t">${t}</div><div class="w">${w}</div><div class="u">${u}</div></div>`).join('');
+  let h='';
+  if(D.nas&&Date.now()/1000-D.nas_zeit>300) h+=`<div class="hinweis">Die NAS-Freigabe antwortet seit ${dauer(Date.now()/1000-D.nas_zeit)} nicht – Kacheln könnten ausfallen.</div>`;
+  if(s.netz===false) h+=`<div class="hinweis">Der Server läuft auf Akku – Netzteil oder Stromversorgung prüfen.</div>`;
+  $('#hinweise').innerHTML=h;
+}
+
+function schoen(v){ // runde Obergrenze für die y-Achse
+  if(!(v>0)) return 1; const p=Math.pow(10,Math.floor(Math.log10(v))), n=v/p;
+  return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*p;
+}
+
+function diagramm(d,box){
+  const daten=(d.quelle==='anfragen'?D.anfragen:D.verlauf).map(p=>[p.ts,p[d.f]]);
+  const letzt=[...daten].reverse().find(p=>p[1]!=null);
+  const h2=document.createElement('h2'); h2.textContent=d.t;
+  const jetzt=document.createElement('span'); jetzt.className='jetzt'; jetzt.textContent=letzt?`${zahl(letzt[1],d.n)} ${d.u}`:'–'; h2.append(jetzt);
+  const e=document.createElement('div'); e.className='erkl'; e.textContent=d.e;
+  box.append(h2,e);
+  const werte=daten.filter(p=>p[1]!=null);
+  if(werte.length<2){const l=document.createElement('div'); l.className='leer'; l.textContent=d.quelle==='anfragen'?'keine Anfragen im Zeitraum':'sammelt noch Messwerte …'; box.append(l); return;}
+  const W=Math.max(280,box.clientWidth-24),H=140,L=38,R=6,O=8,U=20;
+  const x0=Date.now()/1000-D.fenster, x1=Date.now()/1000;
+  const ymax=d.max||schoen(Math.max(...werte.map(p=>p[1]))*1.1);
+  const X=t=>L+(t-x0)/(x1-x0)*(W-L-R), Y=v=>O+(1-v/ymax)*(H-O-U);
+  // Linie mit Lücken, wenn Messungen fehlen (Abstand > 3 Abschnitte)
+  const takt=d.quelle==='anfragen'?Math.max(60,D.fenster/120):Math.max(D.takt,(daten.length>1?(daten[daten.length-1][0]-daten[0][0])/(daten.length-1):D.takt));
+  let pfad='', vorher=null;
+  for(const [t,v] of daten){ if(v==null){vorher=null;continue;} pfad+=(vorher&&t-vorher<=takt*3?'L':'M')+X(t).toFixed(1)+' '+Y(v).toFixed(1); vorher=t; }
+  let g='';
+  for(const s of [0,.5,1]){const y=Y(ymax*s); g+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="var(--gitter)" stroke-width="1"/><text class="achse" x="${L-5}" y="${y+3}" text-anchor="end">${zahl(ymax*s,ymax*s<10&&s?1:0)}</text>`;}
+  for(const s of [0,.5,1]){const t=x0+(x1-x0)*s; g+=`<text class="achse" x="${X(t)}" y="${H-5}" text-anchor="${s==0?'start':s==1?'end':'middle'}">${uhr(t)}</text>`;}
+  box.insertAdjacentHTML('beforeend',`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${d.t}">${g}<path d="${pfad}" fill="none" stroke="var(--reihe)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/><line class="haar" y1="${O}" y2="${H-U}" stroke="var(--leise)" stroke-width="1" vector-effect="non-scaling-stroke" visibility="hidden"/><circle class="punkt" r="4" fill="var(--reihe)" stroke="#fff" stroke-width="2" visibility="hidden"/><rect x="${L}" y="0" width="${W-L-R}" height="${H}" fill="transparent"/></svg>`);
+  const svg=box.querySelector('svg'), haar=svg.querySelector('.haar'), punkt=svg.querySelector('.punkt');
+  const tipp=document.createElement('div'); tipp.className='tipp'; box.append(tipp);
+  const zeige=ev=>{
+    const r=svg.getBoundingClientRect(), sx=(ev.clientX-r.left)/r.width*W;
+    if(sx<L){aus();return;}
+    const t=x0+(sx-L)/(W-L-R)*(x1-x0);
+    let best=werte[0]; for(const p of werte) if(Math.abs(p[0]-t)<Math.abs(best[0]-t)) best=p;
+    const px=X(best[0]), py=Y(best[1]);
+    haar.setAttribute('x1',px); haar.setAttribute('x2',px); haar.setAttribute('visibility','visible');
+    punkt.setAttribute('cx',px); punkt.setAttribute('cy',py); punkt.setAttribute('visibility','visible');
+    tipp.textContent=''; const b=document.createElement('b'); b.textContent=`${zahl(best[1],d.n)} ${d.u}`;
+    tipp.append(b,document.createTextNode(' · '+uhrS(best[0])));
+    tipp.style.display='block';
+    const bx=box.getBoundingClientRect(), lx=r.left-bx.left+px/W*r.width;
+    tipp.style.left=Math.min(Math.max(lx-tipp.offsetWidth/2,4),bx.width-tipp.offsetWidth-4)+'px';
+    tipp.style.top=(r.top-bx.top+py/H*r.height-34)+'px';
+  };
+  const aus=()=>{haar.setAttribute('visibility','hidden');punkt.setAttribute('visibility','hidden');tipp.style.display='none';};
+  svg.addEventListener('pointermove',zeige); svg.addEventListener('pointerleave',aus);
+}
+
+function tabelle(){
+  const k=['cpu','io','last','ram','cache','lesen','schreiben','temp'];
+  const kopf=['Zeit','CPU %','I/O %','Last','RAM %','Cache GB','Lesen MB/s','Schreiben MB/s','°C'];
+  const zeilen=[...D.verlauf].reverse().slice(0,120);
+  $('#tabelle').innerHTML=`<table><tr>${kopf.map(h=>`<th>${h}</th>`).join('')}</tr>`+zeilen.map(p=>`<tr><td>${uhrS(p.ts)}</td>${k.map(f=>`<td>${zahl(p[f],f==='last'||f==='cache'||f==='lesen'||f==='schreiben'?2:0)}</td>`).join('')}</tr>`).join('')+'</table>';
+}
+
+function zeichne(){
+  if(!D) return;
+  kacheln();
+  const r=$('#raster'); r.textContent=''; const boxen=DIAGRAMME.map(()=>{const b=document.createElement('div'); b.className='diagramm'; r.append(b); return b;});
+  DIAGRAMME.forEach((d,i)=>diagramm(d,boxen[i]));   // erst alle einfügen, dann messen: Breiten stehen fest
+  tabelle();
+  $('#stand').textContent='Stand '+new Date().toLocaleTimeString('de-DE');
+}
+async function laden(){
+  const r=await fetch(`api/system?fenster=${$('#fenster').value}`);
+  if(r.ok){D=await r.json(); zeichne();}
+}
+$('#fenster').onchange=laden;
+laden(); setInterval(()=>{ if(!document.querySelector('.tipp[style*="block"]')) laden(); },10000);
 </script></html>"""
 
 
@@ -812,7 +1180,7 @@ input[type=search]{font:inherit;padding:7px 10px;border:1px solid #c5cbd1;border
 .kinder{margin-left:22px}
 mark{background:#fff1a8;padding:0}
 </style>
-<header><h1>Regionspakete für Mate</h1><span class="info" id="kopfinfo"></span><a href="live">Live-Anfragen →</a></header>
+<header><h1>Regionspakete für Mate</h1><span class="info" id="kopfinfo"></span><a href="live">Live-Anfragen →</a><a href="system">Server →</a></header>
 <main>
 <div class="kacheln" id="kacheln"></div>
 <div id="hinweise"></div>
@@ -845,7 +1213,7 @@ function kacheln(){
   const bauU=Z.laufend.aktiv?esc(Z.laufend.zeile||''):(Z.warteschlange.length?`${Z.warteschlange.length} warten`:(Z.geprueft?`geprüft ${uhr(Z.geprueft)}, nächste Prüfung ${uhr(Z.geprueft+21600)}`:''));
   $('#kacheln').innerHTML=
    `<div class="kachel"><div class="t">Regionen</div><div class="w">${fertig.length} von ${ids.length}</div><div class="u">gebaut</div></div>`+
-   `<div class="kachel"><div class="t">Speicher</div><div class="w">${gb(summe)}</div><div class="u">${gb(Z.frei)} frei auf der NAS</div></div>`+
+   `<div class="kachel"><div class="t">Speicher</div><div class="w">${gb(summe)}</div><div class="u">${gb(Z.frei)} frei auf dem Server</div></div>`+
    `<div class="kachel"><div class="t">Datenstand</div><div class="w">${tag(q.neueste)}</div><div class="u">${q.modus==='auto'?'neuester Protomaps-Tagesbau':'nur lokaler Planet'} · Planet ${tag(q.lokal)}</div></div>`+
    `<div class="kachel"><div class="t">Bau</div><div class="w" style="font-size:16px">${bau}</div><div class="u">${bauU}</div></div>`+
    `<div class="kachel"><div class="t">Höhen</div><div class="w">${Z.hoehen.vorhanden||0} / ${Z.hoehen.gebraucht||0}</div><div class="u">Kacheln · ${gb(Z.hoehen.bytes||0)}</div></div>`;
@@ -983,7 +1351,7 @@ class Handler(BaseHTTPRequestHandler):
             if rid in auswahl:
                 e["faellig_am"] = faellig_am(r, auswahl[rid]["monate"])
             regionen[rid] = e
-        bau = neuester_bau() if QUELLE == "auto" else None
+        bau = neuester_bau(nur_zwischenspeicher=True) if QUELLE == "auto" else None
         lokal = planet_zeit()
         neueste = max([t for t in (lokal, bau[1] if bau else None) if t] or [0])
         try:
@@ -1012,6 +1380,15 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 fenster = 3600
             return self.senden(200, live_daten(fenster, q.get("gesund", ["0"])[0] == "1"))
+        if teile.path == "/system":
+            return self.senden(200, SYSTEM_SEITE, "text/html")
+        if teile.path == "/api/system":
+            q = urllib.parse.parse_qs(teile.query)
+            try:
+                fenster = min(max(int(q.get("fenster", ["3600"])[0]), 300), 86400)
+            except ValueError:
+                fenster = 3600
+            return self.senden(200, system_daten(fenster))
         if teile.path == "/api/baum":
             idx = geofabrik_index()
             kinder = {}
@@ -1054,6 +1431,8 @@ def main():
     os.makedirs(DATEN, exist_ok=True)
     geofabrik_index()
     threading.Thread(target=arbeiter, daemon=True).start()
+    threading.Thread(target=system_sammler, daemon=True).start()
+    threading.Thread(target=nas_messen, daemon=True).start()
     WECKER.set()
     log("karten-regionen hört auf :8095")
     ThreadingHTTPServer(("0.0.0.0", 8095), Handler).serve_forever()
