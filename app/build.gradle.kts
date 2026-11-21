@@ -49,8 +49,9 @@ android {
                 keyPassword = providers.environmentVariable("AARE_KEY_PASSWORD").orNull
             }
         }
-        // Mate's own key at the build PC (~/aosp/keys, never in the repo): desk builds signed like the releases, so they
-        // go over the Panel-Store's install and back without uninstalling (17.11.2026)
+        // Mate's own key at the build PC (~/aosp/keys, never in the repo). Not the release key (checked 21.11.2026: the store's
+        // Mate is signed with the release workflow's key, certificate 8c9e7070..., this one bc96bc52...): a desk build does
+        // not go over the store's install - use the build type "probe" beside it.
         val home = System.getProperty("user.home")
         val mateKey = file("$home/aosp/keys/mate-release.jks")
         val matePass = file("$home/aosp/keys/mate-release.pass")
