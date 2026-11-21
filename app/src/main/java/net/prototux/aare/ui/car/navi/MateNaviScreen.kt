@@ -1727,9 +1727,10 @@ internal fun mapStyle(context: Context, night: Boolean, offline: RegionPacks.Loc
     // the land's colour for the guiding veil, from the context (Mate's colours may not be set up yet, e.g. in the phone app)
     val land = String.format("#%06X", context.getColor(net.prototux.aare.R.color.mate_map_land) and 0xFFFFFF)
     if (offline == null) return withVeil(if (net.prototux.aare.Settings(context).trafficShown && !TomTomBudget.exhausted(context)) withTraffic(context, styled, night) else styled, land)
-    // without the net: the same style on a package's PMTiles file on the device (server handover, "Regionspakete")
+    // without the net: the same style on the region packages on the device - all of them at once, through Mate's own
+    // tile service (OfflineTiles), so the regions meet without gaps
     val o = org.json.JSONObject(styled)
-    o.getJSONObject("sources").getJSONObject("pm").apply { remove("tiles"); put("url", "pmtiles://file://" + offline.file.absolutePath) }
+    o.getJSONObject("sources").getJSONObject("pm").apply { put("tiles", org.json.JSONArray().put(OfflineTiles.url(context))) }
     return withVeil(o.toString(), land)
 }
 
@@ -1785,6 +1786,8 @@ private fun withTraffic(context: Context, style: String, night: Boolean): String
 
 /** Whether the device has the net now: a real network under it - Tailscale's VPN stays "connected and validated" with Wi-Fi and mobile data gone (16.11.2026). */
 internal fun deviceOnline(context: Context): Boolean {
+    // test builds: "offline" (debug_navi_offline) also picks the packages on the device as the map's source
+    if (net.prototux.aare.BuildConfig.TEST_HOOKS && NaviDebug.offline) return false
     val cm = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return true
     @Suppress("DEPRECATION")
     return cm.allNetworks.any { n -> cm.getNetworkCapabilities(n)?.let {

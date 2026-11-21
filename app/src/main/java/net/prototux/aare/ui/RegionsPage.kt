@@ -32,11 +32,11 @@ import net.prototux.aare.R
 import net.prototux.aare.ui.car.navi.RegionPacks
 
 /**
- * The phone app's page "Offline-Karten" (server handover 16.11.2026; since Navi E-018 / P-057 one package): the map
- * server builds ONE whole package from the regions chosen at its own page (port 8095), the catalogue holds only that
- * ("gesamt", its regions in "enthaelt"). Shown here as one entry - size, map date, the regions in it, its state on the
- * device - to load (going on after a break, the checksum checked), update or delete. Single region packages loaded
- * before it are dropped once it is complete (RegionPacks.dropSingles); while some are still here, they are named.
+ * The phone app's page "Offline-Karten": the map server builds a package per region chosen at its own page (port 8095;
+ * 21.11.2026 single regions again, after a time with one whole package, Navi E-018). Each region is an entry - size,
+ * map date, state on the device - to load (going on after a break, the checksum checked), update or delete on its own;
+ * "update all" for those with a newer map. Mate draws from all of them at once (OfflineTiles). While the server still
+ * offers the old whole package it is shown too; folders on the device the catalogue no longer has can be deleted.
  */
 @Composable
 internal fun RegionsPage() {
@@ -52,30 +52,54 @@ internal fun RegionsPage() {
         StorageCard(busy = loads.progress.isNotEmpty() || loads.waiting.isNotEmpty()) { version++ }
         val c = cat
         if (version + loads.finished.intValue < 0) return@Column     // read so that a change of the files on the device draws the state anew
-        val singles = RegionPacks.singlesHere(ctx)
         when {
             failed -> Text(stringResource(if (net.prototux.aare.ui.car.navi.NaviServer.rejected.value) R.string.mapserver_rejected else R.string.regions_unreachable),
                 color = MaterialTheme.colorScheme.error)
             c == null -> Text(stringResource(R.string.mapserver_checking))
             else -> {
-                val r = RegionPacks.whole(c)
-                if (r == null || r.files.isEmpty()) Text(stringResource(R.string.regions_none_yet), style = MaterialTheme.typography.bodyMedium)
-                else WholePackage(r, c.mapDate) { version++ }
-            }
-        }
-        // left from before the whole package: they go once it is loaded, or here by hand
-        if (singles.isNotEmpty()) Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(stringResource(R.string.regions_singles, singles.size, singles.joinToString(", ")),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = { RegionPacks.dropSingles(ctx); version++ }) { Text(stringResource(R.string.regions_delete_singles)) }
+                val singles = RegionPacks.singles(c)
+                val whole = RegionPacks.whole(c)?.takeIf { it.files.isNotEmpty() }
+                if (singles.isEmpty() && whole == null) Text(stringResource(R.string.regions_none_yet), style = MaterialTheme.typography.bodyMedium)
+                if (singles.isNotEmpty()) {
+                    val states = singles.associateWith { RegionPacks.state(ctx, it) }
+                    val here = singles.filter { states[it] != RegionPacks.State.NONE }
+                    val updates = singles.filter { states[it] == RegionPacks.State.UPDATE }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.regions_on_device, here.size, singles.size, Formatter.formatShortFileSize(ctx, here.sumOf { it.bytes })),
+                            Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                        if (updates.isNotEmpty()) FilledTonalButton(onClick = { updates.forEach { loads.start(ctx, it) } }) {
+                            Text(stringResource(R.string.regions_update_all, Formatter.formatShortFileSize(ctx, updates.sumOf { it.bytes })))
+                        }
+                    }
+                    // grouped by where they lie ("Europe › Germany"), by name within
+                    val collator = java.text.Collator.getInstance(java.util.Locale.getDefault())
+                    singles.groupBy { it.path.joinToString(" › ") }.toSortedMap(collator).forEach { (path, rs) ->
+                        if (path.isNotEmpty()) Text(path, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        rs.sortedWith(compareBy(collator) { it.name }).forEach { r -> PackageCard(r, r.mapDate.ifBlank { c.mapDate }) { version++ } }
+                    }
+                    Text(stringResource(R.string.regions_choose_at_server), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                whole?.let { WholePackage(it, c.mapDate) { version++ } }
+                // on the device but no longer offered (the old whole package once the server builds regions, regions dropped there)
+                val orphans = RegionPacks.orphans(ctx, c).filter { it !in loads.progress && it !in loads.waiting }
+                if (orphans.isNotEmpty()) Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val size = orphans.sumOf { RegionPacks.dir(ctx, it).walkTopDown().filter { f -> f.isFile }.sumOf { f -> f.length() } }
+                        Text(stringResource(R.string.regions_orphans, orphans.joinToString(", ") { if (it == RegionPacks.GESAMT) ctx.getString(R.string.regions_old_whole) else it },
+                            Formatter.formatShortFileSize(ctx, size)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { orphans.forEach { RegionPacks.deleteDir(ctx, it) }; version++ }) { Text(stringResource(R.string.regions_delete_singles)) }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun WholePackage(r: RegionPacks.Region, mapDate: String, changed: () -> Unit) {
+private fun PackageCard(r: RegionPacks.Region, mapDate: String, changed: () -> Unit) = WholePackage(r, mapDate, compact = true, changed = changed)
+
+@Composable
+private fun WholePackage(r: RegionPacks.Region, mapDate: String, compact: Boolean = false, changed: () -> Unit) {
     val ctx = LocalContext.current
     val loads = RegionPacks.Loads
     val state = RegionPacks.state(ctx, r)
@@ -129,7 +153,7 @@ private fun WholePackage(r: RegionPacks.Region, mapDate: String, changed: () -> 
             if (r.id in loads.waiting) Text(stringResource(R.string.regions_waiting), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             loads.errors[r.id]?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            Text(stringResource(R.string.regions_choose_at_server), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!compact) Text(stringResource(R.string.regions_choose_at_server), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

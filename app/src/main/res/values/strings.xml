@@ -1016,7 +1016,7 @@
     <string name="mate_navi_no_position">No position yet – waiting for GPS from the car or the tablet</string>
     <string name="regions_title">Offline maps</string>
     <string name="regions_sub">Regions for the road without the net</string>
-    <string name="regions_intro">The map server builds one package for driving without the net from the regions chosen at the server. Mate draws from it alone when there is no net, Mate Navi and the dashboard alike.</string>
+    <string name="regions_intro">The map server builds a package for driving without the net from each region chosen at the server. Load, update and delete them one by one; Mate draws from all of them at once when there is no net, Mate Navi and the dashboard alike.</string>
     <string name="regions_unreachable">The map server cannot be reached – the package shows here once it answers.</string>
     <string name="regions_map_date">Map of %1$s</string>
     <string name="regions_state_none">not loaded</string>
@@ -1046,7 +1046,7 @@
     <string name="mapserver_pair_bad_answer">The map server answers unexpectedly – pairing not kept.</string>
     <string name="mapserver_pair_offline">The map server cannot be reached – is the tablet in the tailnet?</string>
     <string name="mate_navi_searching">Searching…</string>
-    <string name="regions_none_yet">The map server is connected but has not built the package yet. Choose the regions on the map server’s page (port 8095).</string>
+    <string name="regions_none_yet">The map server is connected but has not built any package yet. Choose the regions on the map server’s page (port 8095).</string>
     <string name="navi_fps_title">Map frame rate</string>
     <string name="navi_fps_30">Even 30</string>
     <string name="navi_fps_video">As the video (30/60)</string>
@@ -1069,9 +1069,13 @@
     <string name="regions_whole">Whole package (%1$d regions)</string>
     <string name="regions_contains">Holds: %1$s</string>
     <string name="regions_loaded_at">On this device since %1$s</string>
-    <string name="regions_choose_at_server">Which regions are in it is chosen on the map server’s page (port 8095); the package changes there and comes here as an update.</string>
+    <string name="regions_choose_at_server">Which regions there are is chosen on the map server’s page (port 8095); a newer map there comes here as an update.</string>
     <string name="regions_singles">Single packages from before still on this device (%1$d): %2$s. They go once the whole package is loaded.</string>
     <string name="regions_delete_singles">Delete them now</string>
+    <string name="regions_on_device">%1$d of %2$d regions on this device · %3$s</string>
+    <string name="regions_update_all">Update all (%1$s)</string>
+    <string name="regions_orphans">On this device but no longer offered by the server: %1$s (%2$s).</string>
+    <string name="regions_old_whole">the old whole package</string>
     <string name="regions_speed">%1$s MB/s · %2$s of %3$s</string>
     <string name="storage_title">Storage place</string>
     <string name="storage_intro">Offline maps and speech models can lie on the memory card. Choosing another place moves them there; they are checked before the old copies go.</string>

@@ -68,6 +68,8 @@ class CarControlProvider : ContentProvider() {
                 } })
                 putString("result", out.toString())
             }
+            // test builds through adb: the address of the offline tile service (OfflineTiles), started if need be
+            "tiles" -> if (!adb) null else Bundle().apply { putString("result", net.prototux.aare.ui.car.navi.OfflineTiles.url(context)) }
             else -> null
         }
     }

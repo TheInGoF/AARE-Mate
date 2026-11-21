@@ -1005,7 +1005,7 @@
     <string name="mate_navi_no_position">Noch keine Position – warte auf GPS vom Auto oder Tablet</string>
     <string name="regions_title">Offline-Karten</string>
     <string name="regions_sub">Regionen für unterwegs ohne Netz</string>
-    <string name="regions_intro">Der Kartenserver baut aus den dort gewählten Regionen ein Paket für die Fahrt ohne Netz. Ohne Netz zeichnet Mate nur daraus, Mate Navi und das Dashboard.</string>
+    <string name="regions_intro">Der Kartenserver baut aus jeder dort gewählten Region ein Paket für die Fahrt ohne Netz. Lade, aktualisiere und lösche sie einzeln; ohne Netz zeichnet Mate aus allen zugleich, Mate Navi und das Dashboard.</string>
     <string name="regions_unreachable">Der Kartenserver ist nicht erreichbar – das Paket erscheint hier, sobald er antwortet.</string>
     <string name="regions_map_date">Kartenstand %1$s</string>
     <string name="regions_state_none">nicht geladen</string>
@@ -1035,7 +1035,7 @@
     <string name="mapserver_pair_bad_answer">Der Kartenserver antwortet unerwartet – Kopplung nicht gespeichert.</string>
     <string name="mapserver_pair_offline">Der Kartenserver ist nicht erreichbar – ist das Tablet im Tailnet?</string>
     <string name="mate_navi_searching">Suche …</string>
-    <string name="regions_none_yet">Der Kartenserver ist verbunden, hat das Paket aber noch nicht gebaut. Wähle die Regionen auf der Seite des Kartenservers (Port 8095).</string>
+    <string name="regions_none_yet">Der Kartenserver ist verbunden, hat aber noch kein Paket gebaut. Wähle die Regionen auf der Seite des Kartenservers (Port 8095).</string>
     <string name="navi_fps_title">Bildrate der Karte</string>
     <string name="navi_fps_30">Gleichmäßig 30</string>
     <string name="navi_fps_video">Wie das Video (30/60)</string>
@@ -1058,9 +1058,13 @@
     <string name="regions_whole">Gesamtpaket (%1$d Regionen)</string>
     <string name="regions_contains">Enthält: %1$s</string>
     <string name="regions_loaded_at">Auf diesem Gerät seit %1$s</string>
-    <string name="regions_choose_at_server">Welche Regionen drin sind, wählst du auf der Seite des Kartenservers (Port 8095); dort ändert sich das Paket und kommt hier als Update an.</string>
+    <string name="regions_choose_at_server">Welche Regionen es gibt, wählst du auf der Seite des Kartenservers (Port 8095); eine neuere Karte dort kommt hier als Aktualisierung an.</string>
     <string name="regions_singles">Einzelpakete von früher noch auf dem Gerät (%1$d): %2$s. Sie werden gelöscht, sobald das Gesamtpaket geladen ist.</string>
     <string name="regions_delete_singles">Jetzt löschen</string>
+    <string name="regions_on_device">%1$d von %2$d Regionen auf dem Gerät · %3$s</string>
+    <string name="regions_update_all">Alle aktualisieren (%1$s)</string>
+    <string name="regions_orphans">Auf dem Gerät, aber nicht mehr vom Server angeboten: %1$s (%2$s).</string>
+    <string name="regions_old_whole">das alte Gesamtpaket</string>
     <string name="regions_speed">%1$s MB/s · %2$s von %3$s</string>
     <string name="storage_title">Speicherort</string>
     <string name="storage_intro">Offline-Karten und Sprachmodelle können auf der Speicherkarte liegen. Wählst du einen anderen Ort, ziehen sie dorthin um; sie werden geprüft, bevor die alten Kopien gelöscht werden.</string>

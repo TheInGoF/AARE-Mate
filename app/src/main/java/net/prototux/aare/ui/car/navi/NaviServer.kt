@@ -1,6 +1,7 @@
 package net.prototux.aare.ui.car.navi
 
 import android.content.Context
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -33,7 +34,11 @@ internal object NaviServer {
     fun interceptor(context: Context) = Interceptor { chain ->
         val token = settings(context).mapToken
         val r = chain.request()
-        chain.proceed(if (token.isBlank()) r else r.newBuilder().header("Authorization", "Bearer $token").build()).also {
+        // the token only to the map server's gate - not to TomTom's traffic tiles or Mate's own tile service on the device
+        val gate = settings(context).mapServer.toHttpUrlOrNull()?.host
+        val ours = gate != null && r.url.host == gate
+        chain.proceed(if (token.isBlank() || !ours) r else r.newBuilder().header("Authorization", "Bearer $token").build()).also {
+            if (!ours) return@also
             // 401: the gate does not know the token (lost device, new token on the server) - the phone app asks for it again
             if (it.code == 401) rejected.value = true else if (it.isSuccessful) rejected.value = false
         }
@@ -49,7 +54,8 @@ internal object NaviServer {
         .addInterceptor { ch -> val route = ch.request().url.encodedPath.endsWith("/route")
             try { ch.proceed(ch.request()).also { if (route) routeFailAt = if (it.code >= 500) android.os.SystemClock.elapsedRealtime() else 0L } }
             catch (e: java.io.IOException) { if (route) routeFailAt = android.os.SystemClock.elapsedRealtime(); throw e } }
-        .addInterceptor { ch -> if (net.prototux.aare.BuildConfig.TEST_HOOKS && NaviDebug.offline) throw java.io.IOException("test: offline") else ch.proceed(ch.request()) }
+        // (test "offline" cuts the net, not Mate's own tile service on the device)
+        .addInterceptor { ch -> if (net.prototux.aare.BuildConfig.TEST_HOOKS && NaviDebug.offline && ch.request().url.host != "127.0.0.1") throw java.io.IOException("test: offline") else ch.proceed(ch.request()) }
         .addInterceptor(TomTomBudget.gate(context.applicationContext))
         .addInterceptor(interceptor(context.applicationContext))
         .addNetworkInterceptor(TomTomBudget.counter(context.applicationContext))

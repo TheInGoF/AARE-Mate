@@ -34,7 +34,7 @@ internal object RegionPacks {
     /** [parent] is the Geofabrik id of the region above, which need not be in the catalogue; [path] the names of the ancestors, top first ("Europe", "Germany"), for grouping. */
     /** [contains]: for the whole package (E-018) the names of the regions chosen at the server ("enthaelt"). */
     class Region(val id: String, val name: String, val parent: String?, val bbox: List<Double>, val files: List<PackFile>, val path: List<String> = emptyList(),
-                 val contains: List<String> = emptyList()) {
+                 val contains: List<String> = emptyList(), val mapDate: String = "") {
         val bytes get() = files.sumOf { it.bytes }
     }
     class Catalogue(val mapDate: String, val regions: List<Region>)
@@ -83,13 +83,22 @@ internal object RegionPacks {
             Region(id, r.optString("name", id), r.optString("eltern").takeIf { !r.isNull("eltern") && it.isNotBlank() },
                 (0 until (bb?.length() ?: 0)).map { bb!!.getDouble(it) }, files,
                 (0 until (pf?.length() ?: 0)).mapNotNull { pf!!.optString(it).ifBlank { null } },
-                (0 until (en?.length() ?: 0)).mapNotNull { en!!.optString(it).ifBlank { null } })
+                (0 until (en?.length() ?: 0)).mapNotNull { en!!.optString(it).ifBlank { null } }, r.optString("stand"))
         }
         return Catalogue(o.optString("stand_karte"), regions)
     }
 
     /** The whole package of a catalogue (E-018), null while the server has not built one. */
     fun whole(c: Catalogue): Region? = c.regions.firstOrNull { it.id == GESAMT }
+
+    /** The single regions of a catalogue (since 21.11.2026 the server builds each region on its own again). */
+    fun singles(c: Catalogue): List<Region> = c.regions.filter { it.id != GESAMT && it.files.isNotEmpty() }
+
+    /** Package folders on the device that the catalogue no longer has (the old whole package, regions dropped at the server). */
+    fun orphans(context: Context, c: Catalogue): List<String> = root(context).listFiles().orEmpty()
+        .filter { it.isDirectory && c.regions.none { r -> r.id == it.name } }.map { it.name }.sorted()
+
+    fun deleteDir(context: Context, id: String) { if (id.matches(Regex("[a-z0-9_-]+"))) dir(context, id).deleteRecursively() }
 
     /** Folders of single region packages still on the device (from before the whole package). */
     fun singlesHere(context: Context): List<String> = root(context).listFiles().orEmpty()
@@ -228,6 +237,28 @@ internal object RegionPacks {
             readers.getOrPut(m.file.absolutePath + "@" + m.file.lastModified()) { runCatching { PmTiles(m.file) }.getOrNull() ?: return m to null }
         }
         return m to runCatching { reader.tile(z, x, y) }.getOrNull()
+    }
+
+    /**
+     * A tile from all packages at once (OfflineTiles, 21.11.2026 single regions again): the packages that hold the tile's
+     * middle first (the smallest first), then the others whose box touches the tile, the old whole package last; the
+     * first that has the tile gives it. A tile at a border is whole in each neighbour, so any of them is right.
+     */
+    fun anyTile(context: Context, z: Int, x: Int, y: Int): ByteArray? {
+        val all = cachedMaps(context).ifEmpty { return null }
+        val n = 1 shl z
+        fun lonOf(tx: Double) = tx / n * 360.0 - 180.0
+        fun latOf(ty: Double) = Math.toDegrees(Math.atan(Math.sinh(Math.PI * (1 - 2 * ty / n))))
+        val lon = lonOf(x + 0.5); val lat = latOf(y + 0.5)
+        val w = lonOf(x.toDouble()); val e = lonOf(x + 1.0); val north = latOf(y.toDouble()); val s = latOf(y + 1.0)
+        val touching = all.filter { m -> m.bbox.size != 4 || (m.bbox[0] <= e && m.bbox[2] >= w && m.bbox[1] <= north && m.bbox[3] >= s) }
+        val order = touching.sortedWith(compareBy<LocalMap>({ it.id == GESAMT }, { !it.covers(lon, lat) }, { it.area }))
+        for (m in order) reader(m)?.let { r -> runCatching { r.tile(z, x, y) }.getOrNull()?.let { return it } }
+        return null
+    }
+
+    private fun reader(m: LocalMap): PmTiles? = synchronized(readers) {
+        readers.getOrPut(m.file.absolutePath + "@" + m.file.lastModified()) { runCatching { PmTiles(m.file) }.getOrNull() ?: return null }
     }
 
     private val readers = HashMap<String, PmTiles>()
