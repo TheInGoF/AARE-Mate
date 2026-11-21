@@ -52,7 +52,7 @@ Internet weiter.
 | Verkehr | `GET /verkehr/traffic/…` (Flow-/Incident-Kacheln, `incidentDetails`) | TomTom, nur Pfade unter `/traffic/` |
 | Pakete | `GET /pakete/katalog.json`, `/pakete/<region>/…` | Dateien, mit Range (fortsetzbar) |
 | Koppeln | `POST /koppeln {"code": "…"}` (ohne Token) | Kopplungsdienst |
-| Bewertung | `POST /sammeln/bewertung {"lat","lon","kw","netz"?,"sterne"?:1-5,"leistung"?:1-3,"preis"?:1-3,"funktion"?:1-2}`, `GET /sammeln/bewertungen` | Sammelstelle |
+| Bewertung | `POST /sammeln/bewertung {"lat","lon","kw","netz"?,"sterne"?:1-5,"leistung"?:1-3,"preis"?:1-3,"funktion"?:1-2,"kennung"?}`, `GET /sammeln/bewertungen` | Sammelstelle |
 | Schild-Korrektur | `POST /sammeln/schild {"lat","lon","alt","neu","richtung"?,"weg"?}`, `GET /sammeln/schilder` | Sammelstelle |
 
 Die Sammelstelle speichert kein Token und keine Adresse, nur den Tag und den Ort auf 4 Nachkommastellen (~11 m).

@@ -7,7 +7,7 @@ Gerät: kein Token, keine Adresse, nur den Tag (keine Uhrzeit) und den Ort des L
 4 Nachkommastellen (etwa 11 m - ein Lader ist ein öffentlicher Ort, eine Fahrt lässt sich daraus nicht lesen).
 
 Schnittstelle (hinter dem Tor unter /sammeln/...):
-  POST /bewertung  {"lat","lon","kw","netz"?,"sterne"?:1-5,"leistung"?:1-3,"preis"?:1-3,"funktion"?:1-2}
+  POST /bewertung  {"lat","lon","kw","netz"?,"sterne"?:1-5,"leistung"?:1-3,"preis"?:1-3,"funktion"?:1-2,"kennung"?}
                    (wie Mate fragt: Leistung 1 wie angegeben, 2 gedrosselt, 3 sehr langsam; Preis 1 günstig,
                    2 angemessen, 3 teuer; Funktion 1 ja, 2 nein; mindestens eins davon)
   GET  /bewertungen            je Lader: Anzahl, Mittel der Sterne, Leistung, Preis, Anteil "funktioniert"
@@ -33,7 +33,7 @@ def verbindung():
     c = sqlite3.connect(DB)
     c.execute("""CREATE TABLE IF NOT EXISTS bewertung (
         lat REAL, lon REAL, kw INTEGER, netz TEXT, sterne INTEGER,
-        leistung INTEGER, preis INTEGER, funktion INTEGER, tag TEXT)""")
+        leistung INTEGER, preis INTEGER, funktion INTEGER, tag TEXT, kennung TEXT UNIQUE)""")
     c.execute("""CREATE TABLE IF NOT EXISTS schild (
         lat REAL, lon REAL, alt INTEGER, neu INTEGER, richtung INTEGER, weg INTEGER, tag TEXT,
         stand TEXT DEFAULT 'neu')""")
@@ -70,9 +70,11 @@ def bewertung_speichern(d):
     noten = (note(d, "sterne", 5), note(d, "leistung", 3), note(d, "preis", 3), note(d, "funktion", 2))
     if all(n is None for n in noten):
         raise ValueError("leer")
-    zeile = (lat, lon, kw, netz) + noten + (heute(),)
+    # die Kennung einer Bewertung (zufällig je Ladevorgang, ohne Bezug zum Gerät): eine spätere Änderung ersetzt sie
+    kennung = str(d.get("kennung") or "")[:40] or None
+    zeile = (lat, lon, kw, netz) + noten + (heute(), kennung)
     with _lock, verbindung() as c:
-        c.execute("INSERT INTO bewertung VALUES (?,?,?,?,?,?,?,?,?)", zeile)
+        c.execute("INSERT OR REPLACE INTO bewertung VALUES (?,?,?,?,?,?,?,?,?,?)", zeile)
 
 
 def bewertungen():
