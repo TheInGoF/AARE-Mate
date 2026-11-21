@@ -25,7 +25,7 @@ Geräte-Token.
 | `sammeln/sammel_dienst.py` | Sammelstelle: Ladebewertungen und Schild-Korrekturen von Mate, anonym (SQLite) |
 
 Keine Adressen, Tokens oder Schlüssel in diesem Ordner: sie stehen als Umgebungsvariablen in Portainer
-(`TOMTOM_KEY`, `REGIONEN_PASS`, `BASIS_URL`, übergangsweise `MATE_TOKEN`).
+(`TOMTOM_KEY`, `REGIONEN_PASS`, `SAMMELN_PASS`, `BASIS_URL`, übergangsweise `MATE_TOKEN`).
 
 ## Dienste und Ports
 
@@ -37,9 +37,9 @@ Keine Adressen, Tokens oder Schlüssel in diesem Ordner: sie stehen als Umgebung
 | Kacheln | `karten-tiles` | 8581 | `tiles/` (Protomaps-Planet, ~140 GB) |
 | Kopplung | `karten-schluessel` | – (nur im Netz) | `schluessel/daten/` (nur Prüfsummen) |
 | Offline-Karten, Höhen | `karten-regionen` | 8095 | `regionen/daten/`, `pakete/`, `valhalla/elevation_data/` |
-| Sammelstelle | `karten-sammeln` | – (nur im Netz) | `sammeln/daten/` (`sammeln.db`) |
+| Sammelstelle | `karten-sammeln` | 8096 (Webseite) | `sammeln/daten/` (`sammeln.db`) |
 
-Ports 8002, 2322, 8581, 8095 nur für LAN und Tailscale freigeben (DSM-Firewall, TCP). Der Router leitet keinen davon ins
+Ports 8002, 2322, 8581, 8095, 8096 nur für LAN und Tailscale freigeben (DSM-Firewall, TCP). Der Router leitet keinen davon ins
 Internet weiter.
 
 ## Schnittstellen für die App (über das Tor)
@@ -56,6 +56,8 @@ Internet weiter.
 | Schild-Korrektur | `POST /sammeln/schild {"lat","lon","alt","neu","richtung"?,"weg"?}`, `GET /sammeln/schilder` | Sammelstelle |
 
 Die Sammelstelle speichert kein Token und keine Adresse, nur den Tag und den Ort auf 4 Nachkommastellen (~11 m).
+Ihre Webseite (Port 8096, Benutzer `admin`, Passwort `SAMMELN_PASS`) zeigt zwei Karten: Ladestationen mit den gemittelten
+Bewertungen und die Tempolimit-Meldungen. Sie liest nur; die Kartenkacheln holt der Browser von OpenStreetMap.
 
 Jede Anfrage außer `/koppeln` trägt `Authorization: Bearer <Geräte-Token>`; sonst 401 mit leerem Body.
 

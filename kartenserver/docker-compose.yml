@@ -123,9 +123,13 @@ services:
     container_name: karten-sammeln
     restart: unless-stopped
     command: python -u /app/sammel_dienst.py
+    environment:
+      - ADMIN_PASS=${SAMMELN_PASS}    # Webseite (Port 8096, Benutzer admin): Karten der Bewertungen und Tempolimit-Meldungen
     volumes:
       - /volume1/docker/karten/sammeln/sammel_dienst.py:/app/sammel_dienst.py:ro
       - /volume1/docker/karten/sammeln/daten:/daten
+    ports:
+      - "8096:8001"                   # nur die Webseite (lesen, mit Passwort); Annehmen geht nur über das Tor
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/gesund',timeout=5)"]
       interval: 60s
