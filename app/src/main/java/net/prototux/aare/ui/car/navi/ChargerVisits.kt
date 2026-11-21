@@ -75,6 +75,7 @@ internal object ChargerVisits {
         val m = map(c).toMutableMap(); val k = key(at); val v = m[k] ?: return
         m[k] = Visit(v.at, v.name, v.network, v.kw, v.visits, v.lastMillis, stars.coerceIn(0, 5), v.power, v.price, v.worked, v.fresh)
         save(c, m)
+        RatingShare.changed(c, m.getValue(k))
     }
 
     /** The details of a charge, given later in the phone app (Navi L-004): each 0 (not told) to 3 (worked: 0 to 2). */
@@ -82,6 +83,7 @@ internal object ChargerVisits {
         val m = map(c).toMutableMap(); val k = key(at); val v = m[k] ?: return
         m[k] = Visit(v.at, v.name, v.network, v.kw, v.visits, v.lastMillis, v.rating, power.coerceIn(0, 3), price.coerceIn(0, 3), worked.coerceIn(0, 2), v.fresh)
         save(c, m)
+        RatingShare.changed(c, m.getValue(k))
     }
 
     /** How many charges wait to be looked at (Navi L-005): the badge on the phone app's "Routenplanung". */

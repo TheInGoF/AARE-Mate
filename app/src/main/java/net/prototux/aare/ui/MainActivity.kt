@@ -3192,6 +3192,17 @@ private fun VisitedChargers() = Section(stringResource(R.string.routing_visits_t
     LaunchedEffect(Unit) { net.prototux.aare.ui.car.navi.ChargerVisits.allSeen(ctx) }
     var open by remember { mutableStateOf<org.maplibre.spatialk.geojson.Position?>(null) }
     Text(stringResource(R.string.routing_visits_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    // Navi L-003: the ratings to the map server, anonymous; what waited goes when the page opens
+    val settings = remember { net.prototux.aare.Settings(ctx) }
+    var share by remember { mutableStateOf(settings.shareRatings) }
+    LaunchedEffect(Unit) { net.prototux.aare.ui.car.navi.RatingShare.flush(ctx) }
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
+            Text(stringResource(R.string.routing_visits_share), style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.routing_visits_share_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        androidx.compose.material3.Switch(share, { share = it; settings.shareRatings = it; if (it) net.prototux.aare.ui.car.navi.RatingShare.flush(ctx) })
+    }
     if (visits.isEmpty()) Text(stringResource(R.string.routing_visits_none), style = MaterialTheme.typography.bodyMedium,
         modifier = Modifier.padding(top = 10.dp))
     visits.forEach { v ->

@@ -96,6 +96,10 @@ class Settings(context: Context) {
      * Only the chosen networks (O213, 16.11.2026: "er muss sich auch an den lade anbieter filter halten wenn man sagt nur
      * tesla und ionity"); others only where the destination cannot be reached with them, and said. Off: preferred (O205).
      */
+    /** Navi L-003, E-010: the charger ratings go to the map server's collecting point, anonymous (RatingShare). */
+    var shareRatings: Boolean
+        get() = prefs.getBoolean("share_ratings", true)
+        set(v) = prefs.edit { putBoolean("share_ratings", v) }
     var chargeNetworksOnly: Boolean
         get() = prefs.getBoolean("charge_networks_only", true)
         set(v) = prefs.edit { putBoolean("charge_networks_only", v) }

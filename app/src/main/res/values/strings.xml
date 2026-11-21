@@ -1146,6 +1146,8 @@
     <string name="transfer_failed">Error: %1$s</string>
     <string name="transfer_restart">Restart Mate</string>
     <string name="routing_visits_hint">Every charger you charged at (a planned stop or a charge noticed). Tap one to add power, price and whether all worked, at leisure - if you like. Well rated ones are preferred by the route planning - within your chosen networks only.</string>
+    <string name="routing_visits_share">Share ratings</string>
+    <string name="routing_visits_share_hint">Anonymous to your map server: the charger, its power and network, your stars and details – nothing about you, your car or your trips.</string>
     <string name="routing_visits_none">None yet - after the first charging stop with Mate Navi.</string>
     <string name="routing_visits_line">charged %1$d× · last %2$s</string>
     <string name="routing_visits_new">new</string>

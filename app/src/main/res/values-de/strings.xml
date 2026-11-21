@@ -1135,6 +1135,8 @@
     <string name="transfer_failed">Fehler: %1$s</string>
     <string name="transfer_restart">Mate neu starten</string>
     <string name="routing_visits_hint">Hier landet jeder Lader, an dem du geladen hast (geplanter Ladestopp oder erkannte Ladung). Tippe einen an, um in Ruhe Ladeleistung, Preis und ob alles funktioniert hat nachzutragen – freiwillig. Gut bewertete wählt die Routenplanung bevorzugt, aber nur innerhalb deiner gewählten Ladenetze.</string>
+    <string name="routing_visits_share">Bewertungen teilen</string>
+    <string name="routing_visits_share_hint">Anonym an deinen Kartenserver: der Lader, seine Leistung und sein Netz, deine Sterne und Angaben – nichts über dich, dein Auto oder deine Fahrten.</string>
     <string name="routing_visits_none">Noch keine – nach dem ersten Ladestopp mit Mate Navi.</string>
     <string name="routing_visits_line">%1$d× geladen · zuletzt %2$s</string>
     <string name="routing_visits_new">neu</string>
