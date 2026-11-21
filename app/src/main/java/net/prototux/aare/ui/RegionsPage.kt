@@ -159,7 +159,8 @@ private fun StorageCard(busy: Boolean, changed: () -> Unit) {
             if (missing) Text(stringResource(R.string.storage_card_missing), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             vols.forEach { v ->
                 val pick = { if (v.id != chosen) { target = v; error = null } }
-                val can = moving == null && !busy && !missing
+                // with the chosen card gone another place can still be chosen: there is nothing to move, the choice just changes
+                val can = moving == null && !busy
                 // the whole line picks the place, not only the small round button
                 Row(Modifier.fillMaxWidth().selectable(selected = v.id == chosen, enabled = can, onClick = pick),
                     verticalAlignment = Alignment.CenterVertically) {
