@@ -9,9 +9,9 @@ Geräte-Token.
                                   │                 ├─ /route/*     → karten-valhalla (Route, Matrix, Höhen, Isochrone)
                                   │                 ├─ /suche/*     → karten-photon (Suche, Rückwärtssuche)
                                   │                 ├─ /verkehr/*   → TomTom Traffic (Schlüssel bleibt auf dem Server)
-                                  │                 └─ /pakete/*    → Offline-Gesamtpaket (Dateien)
+                                  │                 └─ /pakete/*    → Offline-Regionspakete (Dateien)
                                   └─ forward_auth ──► karten-schluessel (Geräte-Tokens, /koppeln)
- Browser (Admin) ── LAN/Tailscale ──► karten-regionen :8095 (Regionen wählen → Gesamtpaket, Höhenkacheln)
+ Browser (Admin) ── LAN/Tailscale ──► karten-regionen :8095 (Regionen wählen → Regionspakete, Höhenkacheln)
 ```
 
 ## Dateien
@@ -21,7 +21,7 @@ Geräte-Token.
 | `docker-compose.yml` | der ganze Stack „karten“ (Portainer) |
 | `tor/Caddyfile` | Tor: Token-Prüfung, Weiterleitungen, TomTom ohne Geräte-Token |
 | `schluessel/schluessel.py` | Kopplungsdienst: Einmal-Codes, Geräte-Tokens, Sperren |
-| `regionen/regionen_dienst.py` | Weboberfläche: Regionen wählen, Gesamtpaket bauen, Höhenkacheln laden |
+| `regionen/regionen_dienst.py` | Weboberfläche: Regionen wählen, je Region ein Paket bauen und frisch halten, Höhenkacheln laden |
 
 Keine Adressen, Tokens oder Schlüssel in diesem Ordner: sie stehen als Umgebungsvariablen in Portainer
 (`TOMTOM_KEY`, `REGIONEN_PASS`, `BASIS_URL`, übergangsweise `MATE_TOKEN`).
@@ -120,15 +120,26 @@ NAS nur Port 8090:
 ```
 Im Heim-WLAN über die LAN-Adresse gelten diese Regeln nicht; die App nutzt deshalb nur den `ts.net`-Namen.
 
-## Offline-Karten (Gesamtpaket)
+## Offline-Karten (Regionspakete)
 
-`http://<nas>:8095` (admin / `REGIONEN_PASS`): alle Regionen von Geofabrik als Baum, ankreuzen, oben das Intervall wählen
-(mit jedem neuen Planeten, halbjährlich, jährlich, nie), speichern. Aus der ganzen Auswahl entsteht **ein** Paket: die Grenzen
-aller gewählten Regionen vereinigt, mit `pmtiles extract --region` aus dem Planeten geschnitten – nichts doppelt, keine Löcher an
-Landesgrenzen. Ergebnis `pakete/gesamt/karte.pmtiles` und `grenze.geojson`, dazu `pakete/katalog.json` (Format 1) mit genau einem
-Eintrag `gesamt` (`name`, `bbox`, `enthaelt` = Namen der Regionen, `dateien[]` mit `art`, `pfad`, `bytes`, `sha256`).
-Neu gebaut wird bei geänderter Auswahl, fehlendem Paket oder neuem Planeten (nach Intervall). Einzelpakete aus früheren Versionen
-räumt der Dienst beim Start weg. Mate lädt nur das Gesamtpaket und löscht danach seine alten Einzelpakete.
+`http://<nas>:8095` (admin / `REGIONEN_PASS`). Oben die gewählten Regionen mit Größe, Datenstand, Rhythmus und Zustand
+(„Neu bauen“, „Entfernen“), darunter alle Regionen von Geofabrik als Baum (Kontinent → Land → Bundesland) mit Suche zum
+Hinzufügen. Eine gewählte Region enthält ihre Unterregionen: ist „Germany“ gewählt, sind die Bundesländer nicht zusätzlich
+wählbar; wird eine Oberregion gewählt, gehen gewählte Unterregionen in ihr auf (ihre Pakete bleiben, bis die Oberregion gebaut
+ist). Änderungen wirken sofort.
+
+Jede Region wird ein eigenes Paket, mit `pmtiles extract --region` geschnitten: `pakete/<region>/karte.pmtiles` und
+`grenze.geojson`, dazu `pakete/katalog.json` (Format 1) mit einem Eintrag je fertiger Region (`id`, `name`, `eltern`, `pfad` =
+Namen der Oberregionen, `bbox`, `stand` = Datenstand, `dateien[]` mit `art`, `pfad`, `bytes`, `sha256`). Kacheln an Grenzen stehen
+ganz in beiden Nachbarpaketen; Mate (ab 2.3.0) lädt und aktualisiert Regionen einzeln und zeichnet aus allen zugleich.
+
+Rhythmus je Region: monatlich, alle 2–6 Monate, jährlich oder nie. Ist er abgelaufen und gibt es neuere Daten, wird die Region
+neu geschnitten. Datenquelle (`QUELLE`, Standard `auto`): der neueste Tagesbau von Protomaps (`build.protomaps.com`, es werden
+nur die Bereiche der Region geladen), wenn er neuer ist als der lokale Planet, sonst `tiles/planet.pmtiles`; `QUELLE=lokal`
+schneidet nur aus dem lokalen Planeten. So bleibt eine Region monatlich frisch, auch wenn der Planet nur alle 60 Tage kommt.
+Gebaut wird eine Region nach der anderen, geprüft alle 6 h und sofort nach jeder Änderung. Das frühere Gesamtpaket
+(`pakete/gesamt`) bleibt im Katalog, bis alle gewählten Regionen einzeln gebaut sind, dann wird es gelöscht. Eine Auswahl aus
+früheren Versionen (eine Liste mit gemeinsamem Intervall) wird beim Start übernommen.
 
 ## Verkehr (TomTom)
 
@@ -173,7 +184,7 @@ Docker startet einen „unhealthy“ Container **nicht** von selbst neu. Wer das
 | Was | Wie oft | Wie |
 |---|---|---|
 | Planet | ~60 Tage | Roundtrip; `karten-tiles` wöchentlich neu starten |
-| Gesamtpaket, Höhen | nach Auswahl | `karten-regionen`, prüft alle 6 h; danach ggf. Valhalla neu starten |
+| Regionspakete, Höhen | Rhythmus je Region | `karten-regionen`, prüft alle 6 h; nach neuen Höhenkacheln Valhalla neu starten |
 | Photon | 1–2 Monate | Build-PC, kopieren |
 | Valhalla | selten | Neubau auf dem Build-PC, Ergebnis kopieren; Digest im Stack anpassen |
 | Geräte | bei Verlust | `sperren`, Gerät in Tailscale entfernen |

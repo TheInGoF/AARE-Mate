@@ -93,13 +93,14 @@ services:
     networks: [karten]
 
   regionen:
-    # Weboberfläche: Regionen auswählen; baut daraus ein Gesamtpaket und lädt die Höhenkacheln (Port 8095, admin/REGIONEN_PASS)
+    # Weboberfläche: Regionen auswählen; baut je Region ein Paket, hält es frisch und lädt die Höhenkacheln (Port 8095, admin/REGIONEN_PASS)
     image: python:3.12-alpine
     container_name: karten-regionen
     restart: unless-stopped
     command: python -u /app/regionen_dienst.py
     environment:
       - ADMIN_PASS=${REGIONEN_PASS}
+      - QUELLE=auto                   # neuester Protomaps-Tagesbau, wenn neuer als der lokale Planet (lokal = nur Planet)
     volumes:
       - /volume1/docker/karten/regionen/regionen_dienst.py:/app/regionen_dienst.py:ro
       - /volume1/docker/karten/regionen/daten:/daten
