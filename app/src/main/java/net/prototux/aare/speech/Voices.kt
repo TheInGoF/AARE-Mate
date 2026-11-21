@@ -59,11 +59,11 @@ object Voices {
     fun byId(id: String?) = ALL.firstOrNull { it.id == id }
 
     fun dir(context: Context, v: Voice): File =
-        if (v.id == "piper") LocalTts.dir(context) else File(context.getExternalFilesDir(null), "sprache/${v.id}")
+        if (v.id == "piper") LocalTts.dir(context) else File(net.prototux.aare.Storage.dir(context, net.prototux.aare.Storage.SPEECH), v.id)
 
     /** The pronunciation rules: the Piper voice's, or loaded on their own. */
     fun espeak(context: Context): File = File(LocalTts.dir(context), "espeak-ng-data").takeIf { it.isDirectory }
-        ?: File(context.getExternalFilesDir(null), "sprache/espeak-ng-data")
+        ?: File(net.prototux.aare.Storage.dir(context, net.prototux.aare.Storage.SPEECH), "espeak-ng-data")
 
     fun available(context: Context, v: Voice): Boolean {
         val d = dir(context, v)

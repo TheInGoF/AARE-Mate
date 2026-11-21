@@ -50,6 +50,24 @@ class CarControlProvider : ContentProvider() {
                 }
                 Bundle().apply { putString("result", result.toString()) }
             }
+            // test builds through adb, no car needed: the storage places (L-080) and, with arg = a place's id ("-" = the
+            // device), a move there
+            "storage" -> if (!adb) null else Bundle().apply {
+                val s = net.prototux.aare.Storage
+                val out = JSONObject()
+                if (arg != null) out.put("moved", runCatching { s.volumes(context).first { it.id == arg.removePrefix("-") }.let { v -> s.move(context, v) { _, _, _ -> } } }
+                    .exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" } ?: "ok")
+                out.put("chosen", s.chosen(context)).put("missing", s.cardMissing(context))
+                    .put("maps", s.dir(context, s.MAPS).path).put("speech", s.dir(context, s.SPEECH).path)
+                out.put("volumes", JSONArray().apply { s.volumes(context).forEach { v ->
+                    put(JSONObject().put("id", v.id).put("label", v.label).put("root", v.root.path).put("free", v.free).put("fat32", v.fat32)
+                        .put("fs", if (v.internal) "" else s.fsType(v.id) ?: "?")
+                        .put("problem", s.problem(context, v)?.let { p -> when (p) {
+                            is net.prototux.aare.Storage.Problem.TooLarge -> "too large ${p.bytes}"
+                            is net.prototux.aare.Storage.Problem.NoRoom -> "no room ${p.need}/${p.free}" } }))
+                } })
+                putString("result", out.toString())
+            }
             else -> null
         }
     }

@@ -18,7 +18,7 @@ object LocalAsr {
     /** Every model Mate knows: the languages' (Language.speech) and the ones of earlier versions, cleaned up. */
     val SIZES: List<String> get() = (net.prototux.aare.Language.ALL_WHISPER + listOf("tiny", "base", "small")).distinct()
 
-    fun dir(context: Context, size: String) = File(context.getExternalFilesDir(null), "sprache/whisper-$size")
+    fun dir(context: Context, size: String) = File(net.prototux.aare.Storage.dir(context, net.prototux.aare.Storage.SPEECH), "whisper-$size")
 
     private fun files(context: Context, size: String) = dir(context, size).let {
         Triple(File(it, "$size-encoder.int8.onnx"), File(it, "$size-decoder.int8.onnx"), File(it, "$size-tokens.txt"))

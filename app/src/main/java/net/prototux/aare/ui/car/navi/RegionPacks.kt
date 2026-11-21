@@ -17,7 +17,7 @@ import kotlin.coroutines.coroutineContext
  * catalogue <base>/pakete/katalog.json, regions as a tree by their parent, each with files - "karte" (PMTiles, Protomaps v4)
  * and "grenze" (GeoJSON of what the package covers); unknown kinds and fields are skipped, an unknown format version means
  * the catalogue is not used. A file loads into <name>.part, goes on with "Range" after a break, is checked by SHA-256 and
- * only then takes its name. Kept in files/regionen/<id>/.
+ * only then takes its name. Kept in regionen/<id>/ of the place Storage names (device storage or memory card, L-080).
  */
 internal object RegionPacks {
     const val FORMAT = 1
@@ -42,7 +42,10 @@ internal object RegionPacks {
     private fun base(context: Context) =
         net.prototux.aare.Settings(context).mapServer.ifBlank { null }?.let { "$it/pakete" } ?: DEV_PACKS
 
-    fun dir(context: Context, id: String) = File(context.filesDir, "regionen/$id")
+    fun dir(context: Context, id: String) = File(root(context), id)
+
+    /** Where the packages lie: the device's storage or the memory card (Storage, System L-080). */
+    fun root(context: Context) = net.prototux.aare.Storage.dir(context, net.prototux.aare.Storage.MAPS)
 
     /** The catalogue, or null when it cannot be read or is of a format this app does not know. */
     suspend fun catalogue(context: Context): Catalogue? = withContext(Dispatchers.IO) {
@@ -89,7 +92,7 @@ internal object RegionPacks {
     fun whole(c: Catalogue): Region? = c.regions.firstOrNull { it.id == GESAMT }
 
     /** Folders of single region packages still on the device (from before the whole package). */
-    fun singlesHere(context: Context): List<String> = File(context.filesDir, "regionen").listFiles().orEmpty()
+    fun singlesHere(context: Context): List<String> = root(context).listFiles().orEmpty()
         .filter { it.isDirectory && it.name != GESAMT }.map { it.name }.sorted()
 
     /** When the files of [r] on the device were loaded (the newest of them), null when none are there. */
@@ -121,6 +124,9 @@ internal object RegionPacks {
         File(d, "bbox.json").writeText(org.json.JSONArray(r.bbox).toString())
         val total = r.bytes
         var before = 0L
+        // a card formatted FAT32 takes no file of 4 GB or more (L-080): said before loading, not after gigabytes
+        r.files.firstOrNull { !net.prototux.aare.Storage.takes(context, net.prototux.aare.Storage.MAPS, it.bytes) }?.let { throw java.io.IOException("FAT32") }
+        if (net.prototux.aare.Storage.cardMissing(context)) throw java.io.IOException("card")
         for (f in r.files) {
             val target = File(d, local(f))
             val mark = File(d, local(f) + ".sha256")
@@ -155,7 +161,7 @@ internal object RegionPacks {
 
     /** The single region packages of before the whole one (E-018): they would lie under it twice. */
     fun dropSingles(context: Context) {
-        File(context.filesDir, "regionen").listFiles().orEmpty().filter { it.isDirectory && it.name != GESAMT }.forEach {
+        root(context).listFiles().orEmpty().filter { it.isDirectory && it.name != GESAMT }.forEach {
             android.util.Log.i("MateNavi", "region package ${it.name} dropped: the whole package replaces it")
             it.deleteRecursively()
         }
@@ -199,7 +205,7 @@ internal object RegionPacks {
     }.getOrNull()
 
     /** The complete map files on the device, for drawing without the net (pmtiles://file://…). */
-    fun maps(context: Context): List<LocalMap> = File(context.filesDir, "regionen").listFiles().orEmpty().mapNotNull { d ->
+    fun maps(context: Context): List<LocalMap> = root(context).listFiles().orEmpty().mapNotNull { d ->
         val f = File(d, "karte.pmtiles").takeIf { it.isFile } ?: return@mapNotNull null
         val bb = runCatching { org.json.JSONArray(File(d, "bbox.json").readText()) }.getOrNull()
         val border = File(d, "grenze.geojson").takeIf { it.isFile }?.let { runCatching { parseBorder(it.readText()) }.getOrNull() }
@@ -229,8 +235,8 @@ internal object RegionPacks {
     private var mapsKept: List<LocalMap> = emptyList()
 
     @Synchronized private fun cachedMaps(context: Context): List<LocalMap> {
-        val key = File(context.filesDir, "regionen").listFiles().orEmpty()
-            .joinToString("|") { d -> d.name + ":" + File(d, "karte.pmtiles").lastModified() }
+        val key = root(context).listFiles().orEmpty()
+            .joinToString("|") { d -> d.path + ":" + File(d, "karte.pmtiles").lastModified() }
         if (key != mapsKey) {
             mapsKept = maps(context); mapsKey = key
             synchronized(readers) { readers.clear() }
@@ -299,7 +305,12 @@ internal object RegionPacks {
                 } }
                     .onFailure { e ->
                         if (e !is kotlinx.coroutines.CancellationException) errors[r.id] = app.getString(
-                            if (e.message == "SHA-256") net.prototux.aare.R.string.regions_bad_sum else net.prototux.aare.R.string.regions_broken)
+                            when (e.message) {
+                                "SHA-256" -> net.prototux.aare.R.string.regions_bad_sum
+                                "FAT32" -> net.prototux.aare.R.string.storage_fat32_load
+                                "card" -> net.prototux.aare.R.string.storage_card_missing
+                                else -> net.prototux.aare.R.string.regions_broken
+                            })
                     }
                 progress.remove(r.id); speed.remove(r.id); bytes.remove(r.id); finished.intValue++
                 synchronized(this@Loads) { current = null; next() }

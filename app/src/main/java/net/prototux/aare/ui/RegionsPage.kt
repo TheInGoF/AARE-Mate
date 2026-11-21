@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -47,6 +48,7 @@ internal fun RegionsPage() {
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.regions_intro), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        StorageCard(busy = loads.progress.isNotEmpty() || loads.waiting.isNotEmpty()) { version++ }
         val c = cat
         if (version + loads.finished.intValue < 0) return@Column     // read so that a change of the files on the device draws the state anew
         val singles = RegionPacks.singlesHere(ctx)
@@ -127,6 +129,78 @@ private fun WholePackage(r: RegionPacks.Region, mapDate: String, changed: () -> 
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             loads.errors[r.id]?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             Text(stringResource(R.string.regions_choose_at_server), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/**
+ * Where maps and speech models lie (System L-080): the device's storage or a memory card, with room and file system;
+ * choosing another place moves the files there (copied, checked, then the old ones dropped). Shown only when there is
+ * a card - or when the chosen one is missing.
+ */
+@Composable
+private fun StorageCard(busy: Boolean, changed: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var tick by remember { mutableIntStateOf(0) }
+    val vols = remember(tick) { net.prototux.aare.Storage.volumes(ctx) }
+    val chosen = remember(tick) { net.prototux.aare.Storage.chosen(ctx) }
+    val missing = remember(tick) { net.prototux.aare.Storage.cardMissing(ctx) }
+    var moving by remember { mutableStateOf<Triple<net.prototux.aare.Storage.Phase, Long, Long>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var target by remember { mutableStateOf<net.prototux.aare.Storage.Volume?>(null) }
+    if (vols.size < 2 && !missing) return
+    val size = { b: Long -> Formatter.formatShortFileSize(ctx, b) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(stringResource(R.string.storage_title), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.storage_intro), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (missing) Text(stringResource(R.string.storage_card_missing), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            vols.forEach { v ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.RadioButton(selected = v.id == chosen, enabled = moving == null && !busy && !missing,
+                        onClick = { if (v.id != chosen) { target = v; error = null } })
+                    Column(Modifier.weight(1f)) {
+                        Text(v.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(R.string.storage_free, size(v.free), size(v.total)) +
+                            (if (v.fat32) " · FAT32" else ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (busy && moving == null) Text(stringResource(R.string.storage_busy), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val t = target
+            if (t != null && moving == null) {
+                val problem = remember(t, tick) { net.prototux.aare.Storage.problem(ctx, t) }
+                val need = remember(t, tick) { net.prototux.aare.Storage.bytes(ctx, net.prototux.aare.Storage.MAPS) + net.prototux.aare.Storage.bytes(ctx, net.prototux.aare.Storage.SPEECH) }
+                when (problem) {
+                    is net.prototux.aare.Storage.Problem.TooLarge -> Text(stringResource(R.string.storage_fat32, size(problem.bytes)),
+                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                    is net.prototux.aare.Storage.Problem.NoRoom -> Text(stringResource(R.string.storage_no_room, size(problem.need), size(problem.free)),
+                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                    null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.storage_move_ask, t.label, size(need)), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        TextButton(onClick = { target = null }) { Text(stringResource(android.R.string.cancel)) }
+                        FilledTonalButton(enabled = !busy, onClick = {
+                            moving = Triple(net.prototux.aare.Storage.Phase.COPY, 0L, need)
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                var shown = 0L
+                                val r = runCatching { net.prototux.aare.Storage.move(ctx, t) { ph, d, a ->
+                                    val now = android.os.SystemClock.elapsedRealtime()
+                                    if (now - shown > 500 || d == a) { shown = now; moving = Triple(ph, d, a) }
+                                } }
+                                error = r.exceptionOrNull()?.let { e -> ctx.getString(R.string.storage_move_failed, e.message ?: e.javaClass.simpleName) }
+                                moving = null; target = null; tick++; changed()
+                            }
+                        }) { Text(stringResource(R.string.storage_move)) }
+                    }
+                }
+            }
+            moving?.let { (ph, d, a) ->
+                LinearProgressIndicator(progress = { if (a > 0) d.toFloat() / a else 0f }, Modifier.fillMaxWidth())
+                Text(stringResource(if (ph == net.prototux.aare.Storage.Phase.COPY) R.string.storage_copying else R.string.storage_checking, size(d), size(a)),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         }
     }
 }

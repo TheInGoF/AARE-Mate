@@ -18,7 +18,7 @@ import java.util.zip.ZipOutputStream
  */
 internal object MateTransfer {
     /** Preferences not taken: the web view's and the map library's own, the day's TomTom count, a trip in progress. */
-    private val SKIP_PREFS = setOf("AwOriginVisitLoggerPrefs", "MapboxSharedPreferences", "WebViewChromiumPrefs", "tomtom_budget", "navi_resume")
+    private val SKIP_PREFS = setOf("AwOriginVisitLoggerPrefs", "MapboxSharedPreferences", "WebViewChromiumPrefs", "tomtom_budget", "navi_resume", "storage")
     /** Files and folders taken from the app's files directory. */
     private val FILES = listOf("places.json", "certs")
     /** Secrets of TokenVault, by name. */
@@ -31,7 +31,7 @@ internal object MateTransfer {
         .map { it to net.prototux.aare.speech.Voices.dir(c, it) }
 
     /** Bytes the offline maps take now. */
-    fun mapsBytes(context: Context): Long = File(context.filesDir, MAPS).walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    fun mapsBytes(context: Context): Long = net.prototux.aare.Storage.dir(context, MAPS).walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
     /** [withMaps]: the offline region packages too (files/regionen, gigabytes - stored, not compressed); [progress] in bytes. */
     /** Bytes the own voices (Kokoro, not downloadable) take now. */
@@ -86,11 +86,14 @@ internal object MateTransfer {
             zip.putNextEntry(ZipEntry("secrets.json")); zip.write(secrets.toString().toByteArray()); zip.closeEntry()
             val files = app.filesDir
             var done = 0L
-            (FILES + if (withMaps) listOf(MAPS) else emptyList()).map { File(files, it) }.filter { it.exists() }.forEach { f ->
+            // the maps may lie on a memory card (Storage, L-080): in the file always as files/regionen/…
+            val maps = net.prototux.aare.Storage.dir(app, MAPS)
+            (FILES.map { File(files, it) } + if (withMaps) listOf(maps) else emptyList()).filter { it.exists() }.forEach { f ->
                 f.walkTopDown().filter { it.isFile }.forEach { file ->
+                    val isMap = f == maps
                     // the map packages are compressed already: stored as they are (level 0), much faster
-                    zip.setLevel(if (file.path.contains("/$MAPS/")) 0 else java.util.zip.Deflater.DEFAULT_COMPRESSION)
-                    zip.putNextEntry(ZipEntry("files/" + file.relativeTo(files).path))
+                    zip.setLevel(if (isMap) 0 else java.util.zip.Deflater.DEFAULT_COMPRESSION)
+                    zip.putNextEntry(ZipEntry("files/" + if (isMap) "$MAPS/" + file.relativeTo(maps).path else file.relativeTo(files).path))
                     file.inputStream().use { inp -> val buf = ByteArray(1 shl 16); while (true) { val n = inp.read(buf); if (n < 0) break; zip.write(buf, 0, n); done += n; progress(done) } }
                     zip.closeEntry(); count++
                 }
@@ -124,13 +127,13 @@ internal object MateTransfer {
                 })
                 // map packages go straight to their file (too large for memory)
                 if (e.name.startsWith("files/$MAPS/") && !e.isDirectory && !e.name.contains("..")) {
-                    File(context.applicationContext.filesDir, e.name.removePrefix("files/")).apply { parentFile?.mkdirs() }.outputStream().use { copy(zip, it) }
+                    File(net.prototux.aare.Storage.dir(app, MAPS), e.name.removePrefix("files/$MAPS/")).apply { parentFile?.mkdirs() }.outputStream().use { copy(zip, it) }
                     count++; continue
                 }
                 if (e.name.startsWith("voices/") && !e.isDirectory && !e.name.contains("..")) {
                     val rest = e.name.removePrefix("voices/"); val id = rest.substringBefore('/')
                     if (id == "espeak-ng-data") {
-                        File(File(app.getExternalFilesDir(null), "sprache/espeak-ng-data"), rest.substringAfter('/')).apply { parentFile?.mkdirs() }.outputStream().use { copy(zip, it) }
+                        File(File(net.prototux.aare.Storage.dir(app, net.prototux.aare.Storage.SPEECH), "espeak-ng-data"), rest.substringAfter('/')).apply { parentFile?.mkdirs() }.outputStream().use { copy(zip, it) }
                         count++; continue
                     }
                     net.prototux.aare.speech.Voices.byId(id)?.let { v ->

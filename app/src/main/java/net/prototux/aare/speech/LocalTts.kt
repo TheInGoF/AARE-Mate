@@ -29,7 +29,7 @@ object LocalTts {
     /** The voice now in memory, for the diagnosis log's memory lines; null when none. */
     val inMemory: String? get() = if (tts != null) loadedId else null
 
-    fun dir(context: Context) = File(context.getExternalFilesDir(null), "sprache/piper-thorsten")
+    fun dir(context: Context) = File(net.prototux.aare.Storage.dir(context, net.prototux.aare.Storage.SPEECH), "piper-thorsten")
 
     /** The voice chosen in the phone app (Voices), the Piper Thorsten for the old setting "piper". */
     fun chosen(context: Context): Voices.Voice? = Voices.byId(net.prototux.aare.Settings(context).ttsEngine)
