@@ -102,9 +102,19 @@ import java.time.format.DateTimeFormatter
 /** The separate IDmate app (github.com/IDmate-app), a dashboard for any Android Auto host: no part of this app, never taken for navigation. */
 internal const val IDMATE_PACKAGE = "de.fredersdorf.idmate.auto"
 
-/** The built-in dashboard: the car app this app hosts itself (net.prototux.aare.dash). It fills the dashboard area. */
-private const val DASH_SERVICE = "/.dash.IdmateCarService"
-internal fun isDash(app: CarAppEntry): Boolean = app.id.endsWith(DASH_SERVICE)
+/**
+ * The built-in dashboard: the car app this app hosts itself (net.prototux.aare.dash). It fills the dashboard area.
+ * Its id is the service's short component name: "net.prototux.aare/.dash.IdmateCarService" while the app id was the
+ * code's package, "app.idmate.mate/net.prototux.aare.dash.IdmateCarService" since 2.1 (own app id) - only the first was
+ * known, so 2.1 found no dashboard and showed AARE's own start view instead, without the car's data and the map
+ * (21.11.2026: "Was ist mit dem Dashboard passiert?").
+ */
+private const val DASH_SERVICE = "net.prototux.aare.dash.IdmateCarService"
+internal fun isDash(app: CarAppEntry): Boolean = isDashId(app.id)
+internal fun isDashId(id: String): Boolean {
+    val component = id.removePrefix("car:")
+    return component.substringAfter('/') == DASH_SERVICE || component == "net.prototux.aare/.dash.IdmateCarService"
+}
 
 /** Google's Android Auto announces car apps of its own (settings, games…): under AARE they lead nowhere. */
 private const val GOOGLE_AUTO_PACKAGE = "com.google.android.projection.gearhead"
