@@ -23,26 +23,32 @@ object Voices {
     enum class Kind { PIPER, KOKORO }
 
     val ALL = listOf(
+        // German, the high voices first (21.11.2026: "die nicht hoch varianten klingen nicht viel unterschiedlich zum geräte
+        // tts. deswegen hoch bevorzugen")
+        // more German Piper voices, public and downloadable in the app (17.11.2026: "Kann man die Modelle nicht in der App
+        // verlinken? Zumindest die Piper Stimme. Irgendwas, was besser ist als die Original-Stimmen") - fast like Thorsten
+        Voice("piper-thorsten-high", "Thorsten hoch (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-thorsten-high", "de_DE-thorsten-high.onnx", sizeMb = 115),
+        // German in high quality besides Thorsten (21.11.2026: "ob es eine weitere Piper hoch Stimme für deutsch gibt.
+        // Aktuell Eva ist sehr sparsam in der Aussprache"): dii (a woman) and miro (a man), OpenVoiceOS, CC BY-NC-SA 4.0
+        Voice("piper-dii-high", "Dii hoch (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-dii-high", "de_DE-dii-high.onnx", sizeMb = 63),
+        Voice("piper-miro-high", "Miro hoch (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-miro-high", "de_DE-miro-high.onnx", sizeMb = 63),
         Voice("piper", "Thorsten (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-thorsten-medium", "de_DE-thorsten-medium.onnx", sizeMb = 77),
         // Victoria and Martin (Kokoro) left out (17.11.2026: "Victoria Kokoro kann raus. Martin auch. Die haben alle Sprachfehler.
         // Sprichscht.")
         // converted at the build PC from their published weights (Apache-2.0), put on the device for now
         Voice("kokoro-thorsten", "Thorsten (Kokoro)", false, Kind.KOKORO, null, "model.int8.onnx", sizeMb = 115),
         Voice("kokoro-kerstin", "Kerstin", true, Kind.KOKORO, null, "model.int8.onnx", sizeMb = 115),
-        // more German Piper voices, public and downloadable in the app (17.11.2026: "Kann man die Modelle nicht in der App
-        // verlinken? Zumindest die Piper Stimme. Irgendwas, was besser ist als die Original-Stimmen") - fast like Thorsten
-        Voice("piper-thorsten-high", "Thorsten hoch (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-thorsten-high", "de_DE-thorsten-high.onnx", sizeMb = 115),
         Voice("piper-eva", "Eva (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-eva_k-x_low", "de_DE-eva_k-x_low.onnx", sizeMb = 21, length = 1.1f),
         Voice("piper-kerstin", "Kerstin (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-kerstin-low", "de_DE-kerstin-low.onnx", sizeMb = 64),
+        Voice("piper-karlsson", "Karlsson (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-karlsson-low", "de_DE-karlsson-low.onnx", sizeMb = 64),
         // Ramona no longer offered (21.11.2026: 40-47 % words wrong in the measurement, the others 20-25 %); kept where on the device
         Voice("piper-ramona", "Ramona (Piper)", true, Kind.PIPER, null, "de_DE-ramona-low.onnx", sizeMb = 64),
-        Voice("piper-karlsson", "Karlsson (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-karlsson-low", "de_DE-karlsson-low.onnx", sizeMb = 64),
-        // German in high quality besides Thorsten (21.11.2026: "ob es eine weitere Piper hoch Stimme für deutsch gibt.
-        // Aktuell Eva ist sehr sparsam in der Aussprache"): dii (a woman) and miro (a man), OpenVoiceOS, CC BY-NC-SA 4.0
-        Voice("piper-dii-high", "Dii hoch (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-dii-high", "de_DE-dii-high.onnx", sizeMb = 63),
-        Voice("piper-miro-high", "Miro hoch (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-miro-high", "de_DE-miro-high.onnx", sizeMb = 63),
         // English (the language library, 21.11.2026: "Zu den Sprachen gehört auch Alternativen whisper und Piper anzubieten"):
-        // American and British, women and men, all medium quality
+        // the high voices first ("hoch bevorzugen"), then medium; American and British, women and men
+        Voice("piper-en-lessac-high", "Lessac high (Piper, US)", true, Kind.PIPER, "csukuangfj/vits-piper-en_US-lessac-high", "en_US-lessac-high.onnx", sizeMb = 114, lang = "en"),
+        Voice("piper-en-ryan-high", "Ryan high (Piper, US)", false, Kind.PIPER, "csukuangfj/vits-piper-en_US-ryan-high", "en_US-ryan-high.onnx", sizeMb = 121, lang = "en"),
+        Voice("piper-en-cori-high", "Cori high (Piper, GB)", true, Kind.PIPER, "csukuangfj/vits-piper-en_GB-cori-high", "en_GB-cori-high.onnx", sizeMb = 114, lang = "en"),
+        Voice("piper-en-ljspeech-high", "LJSpeech high (Piper, US)", true, Kind.PIPER, "csukuangfj/vits-piper-en_US-ljspeech-high", "en_US-ljspeech-high.onnx", sizeMb = 114, lang = "en"),
         Voice("piper-en-lessac", "Lessac (Piper, US)", true, Kind.PIPER, "csukuangfj/vits-piper-en_US-lessac-medium", "en_US-lessac-medium.onnx", sizeMb = 63, lang = "en"),
         Voice("piper-en-ryan", "Ryan (Piper, US)", false, Kind.PIPER, "csukuangfj/vits-piper-en_US-ryan-medium", "en_US-ryan-medium.onnx", sizeMb = 63, lang = "en"),
         Voice("piper-en-hfc-female", "HFC (Piper, US)", true, Kind.PIPER, "csukuangfj/vits-piper-en_US-hfc_female-medium", "en_US-hfc_female-medium.onnx", sizeMb = 63, lang = "en"),

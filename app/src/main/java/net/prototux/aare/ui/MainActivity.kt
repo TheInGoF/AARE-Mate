@@ -3080,6 +3080,7 @@ private val LICENCES: List<Pair<Int, List<Pair<String, String>>>> = listOf(
         "Piper voices Eva, Ramona (M-AILABS)" to "M-AILABS licence (BSD-style)",
         "Piper voices Dii, Miro (OpenVoiceOS), Ryan, HFC (US)" to "CC BY-NC-SA 4.0, private use only",
         "Piper voice Lessac (US, Blizzard 2013)" to "Blizzard 2013 licence, non-commercial",
+        "Piper voices Cori (GB), LJSpeech (US)" to "Public domain",
         "Piper voice Alba (GB)" to "CC BY 4.0",
         "Piper voice Northern English (GB, OpenSLR 83)" to "CC BY-SA 4.0",
         "Kokoro voices (Kokoro-82M)" to "Apache-2.0",

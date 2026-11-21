@@ -48,8 +48,9 @@ Not part of the repository or the app package; fetched on the device when the us
 | Piper voices "Kerstin", "Karlsson" (de_DE) | CC0-1.0 |
 | Piper voices "Eva", "Ramona" (de_DE), M-AILABS speech dataset | M-AILABS licence (BSD-style) |
 | Piper voices "Dii", "Miro" (de_DE, high), OpenVoiceOS | CC BY-NC-SA 4.0 - private, non-commercial use only |
-| Piper voices "Ryan", "HFC female" (en_US, medium) | CC BY-NC-SA 4.0 - private, non-commercial use only |
-| Piper voice "Lessac" (en_US, medium), Blizzard 2013 dataset | Blizzard 2013 licence - non-commercial |
+| Piper voices "Ryan" (en_US, medium and high), "HFC female" (en_US, medium) | CC BY-NC-SA 4.0 - private, non-commercial use only |
+| Piper voice "Lessac" (en_US, medium and high), Blizzard 2013 dataset | Blizzard 2013 licence - non-commercial |
+| Piper voices "Cori" (en_GB, high), "LJSpeech" (en_US, high) | public domain |
 | Piper voice "Alba" (en_GB, medium) | CC BY 4.0 |
 | Piper voice "Northern English male" (en_GB, medium), OpenSLR 83 | CC BY-SA 4.0 |
 | Kokoro voices (Kokoro-82M) | Apache-2.0 |

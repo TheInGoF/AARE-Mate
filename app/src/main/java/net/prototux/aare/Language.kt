@@ -19,9 +19,10 @@ object Language {
 
     private val SPEECH = mapOf(
         // base.en: English only, more exact for English; base: the multilingual model, the same size
-        "en" to Speech(linkedMapOf("base.en" to 160, "base" to 160), "piper-en-lessac"),
-        // 18.11.2026: base as the standard, small too slow on the S6 Lite, tiny taken out
-        "de" to Speech(linkedMapOf("base" to 160), "piper"),
+        "en" to Speech(linkedMapOf("base.en" to 160, "base" to 160), "piper-en-lessac-high"),
+        // 18.11.2026: base as the standard, small too slow on the S6 Lite, tiny taken out; the first voice Thorsten hoch
+        // (21.11.2026: "hoch bevorzugen")
+        "de" to Speech(linkedMapOf("base" to 160), "piper-thorsten-high"),
     )
 
     /** The speech of [code] (the device's language). */

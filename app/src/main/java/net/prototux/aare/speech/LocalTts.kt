@@ -24,6 +24,8 @@ object LocalTts {
     private val queue = Executors.newSingleThreadExecutor()
     @Volatile private var tts: OfflineTts? = null
     @Volatile private var loadedId: String? = null
+    /** Computing time per time of speech, per voice, from its last text (above 1: slower than it speaks). */
+    private val speed = java.util.concurrent.ConcurrentHashMap<String, Float>()
     /** The voice now in memory, for the diagnosis log's memory lines; null when none. */
     val inMemory: String? get() = if (tts != null) loadedId else null
 
@@ -96,15 +98,44 @@ object LocalTts {
                     // answers, samples - gave the voice's numbers to the player as they came: above full scale they were
                     // cut off, and each piece began and ended hard. Now as Mate Navi's announcements: each piece computed
                     // whole, at the music's target level, below full scale, faded in and out.
-                    for (piece in pieces(Pronounce.fix(text, v.lang))) {
-                        if (sampleOf != 0 && sampleOf != sampleGen) break
-                        val raw = t.generate(piece, 0, 1.0f).samples
-                        val chunk = net.prototux.aare.audio.Resample.tidy(net.prototux.aare.audio.Loudness.own(raw, rate), rate)
-                        if (sampleOf != 0 && sampleOf != sampleGen) break
+                    // 21.11.2026 (high voices preferred, "die nicht hoch varianten klingen nicht viel unterschiedlich zum geräte
+                    // tts"): the next piece is computed while this one plays - before, the loop waited for the player and
+                    // every sentence began only after the next one's computing time (Dii hoch: longer than the sentence).
+                    val cancelled = { sampleOf != 0 && sampleOf != sampleGen }
+                    val ready = java.util.concurrent.LinkedBlockingQueue<FloatArray>()
+                    val end = FloatArray(0)
+                    val all = pieces(Pronounce.fix(text, v.lang))
+                    var computeMs = 0L; var computed = 0L
+                    val maker = Thread {
+                        try {
+                            for (piece in all) {
+                                if (cancelled()) break
+                                val c0 = SystemClock.elapsedRealtime()
+                                val raw = t.generate(piece, 0, 1.0f).samples
+                                computeMs += SystemClock.elapsedRealtime() - c0; computed += raw.size
+                                ready.put(net.prototux.aare.audio.Resample.tidy(net.prototux.aare.audio.Loudness.own(raw, rate), rate))
+                            }
+                        } catch (e: Throwable) {
+                            Log.w(TAG, "computing a piece failed", e)
+                        } finally {
+                            ready.put(end)
+                        }
+                    }.apply { name = "MateTts-compute"; start() }
+                    // a voice slower than its speech (measured on its last text) starts once its second piece is there too
+                    val slow = (speed[v.id] ?: 0f) > 0.9f && all.size > 1
+                    var held: FloatArray? = null
+                    while (true) {
+                        val chunk = ready.take()
+                        if (chunk === end) { held?.let { track.write(it, 0, it.size, AudioTrack.WRITE_BLOCKING); written += it.size }; break }
+                        if (cancelled()) continue
                         if (firstMs < 0) firstMs = SystemClock.elapsedRealtime() - t0
+                        if (slow && held == null && written == 0L) { held = chunk; continue }
+                        held?.let { track.write(it, 0, it.size, AudioTrack.WRITE_BLOCKING); written += it.size; held = null }
                         track.write(chunk, 0, chunk.size, AudioTrack.WRITE_BLOCKING); written += chunk.size
                     }
-                    Log.i(TAG, "\"${text.take(40)}\" (${v.id}): ${written * 1000L / rate} ms of speech, first sound after $firstMs ms, all in ${SystemClock.elapsedRealtime() - t0} ms")
+                    maker.join()
+                    if (computed > 0) speed[v.id] = computeMs.toFloat() / (computed * 1000f / rate)
+                    Log.i(TAG, "\"${text.take(40)}\" (${v.id}): ${written * 1000L / rate} ms of speech, first sound after $firstMs ms, all in ${SystemClock.elapsedRealtime() - t0} ms, computing ${"%.2f".format(java.util.Locale.ROOT, speed[v.id] ?: 0f)} x speech")
                     // until it has played out (plus a little for the car's buffer)
                     // (a newer sample ends the wait at once)
                     val until = android.os.SystemClock.elapsedRealtime() + (written - track.playbackHeadPosition).coerceAtLeast(0) * 1000L / rate + 250

@@ -19,10 +19,13 @@ side; with more than one model on the device the user marks the one Mate listens
 
 | Language | Whisper (download) | Voices (Piper unless noted) |
 |---|---|---|
-| English | `base.en` English only, the most exact (160 MB); `base` multilingual (160 MB) | Lessac (US, first), Ryan (US), HFC (US), Alba (GB), Northern English (GB) |
-| German | `base` (160 MB) | Thorsten (first), Thorsten hoch, Dii hoch, Miro hoch, Eva, Kerstin, Karlsson (Ramona only where already on the device); Kokoro Thorsten and Kerstin (on the device only) |
+| English | `base.en` English only, the most exact (160 MB); `base` multilingual (160 MB) | high first: Lessac high (US, first), Ryan high (US), Cori high (GB), LJSpeech high (US); then medium: Lessac, Ryan, HFC (US), Alba, Northern English (GB) |
+| German | `base` (160 MB) | high first: Thorsten hoch (first), Dii hoch, Miro hoch; then Thorsten, Eva, Kerstin, Karlsson (Ramona only where already on the device); Kokoro Thorsten and Kerstin (on the device only) |
 
-Mate as the tablet's speech engine for other apps answers in the chosen voice's language.
+Mate as the tablet's speech engine for other apps answers in the chosen voice's language. The high voices come first
+(the medium and low ones sound hardly better than the tablet's own voice). Mate computes the next sentence while one
+plays (Dii hoch on the S6 Lite: computing 0.2 x the speech's length); a voice slower than its speech would start once
+its second sentence is ready.
 
 ## Rules
 
