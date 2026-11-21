@@ -24,14 +24,23 @@ internal class ChargeBuffer(private val samples: List<Sample>) {
     /** Percent per 100 km. */
     val rate: Double = learned?.let { (mean, spread) -> (mean + spread).coerceIn(LOW_RATE, HIGH_RATE) } ?: START_RATE
 
-    /** The buffer for a stop [km] ahead. */
+    /**
+     * The hit list's verdict (Navi E-030: "Nur Trefferliste, kein Puffer"): how far the model was off per 100 km on the
+     * stretches driven - the root of the mean square, so a model always too low and one scattering both ways count
+     * alike - null with fewer than [MIN_SAMPLES]. It sets the ± of the tile (ChargeRolling.spreadAt), never the plan.
+     */
+    val missPer100: Double? = samples.filter { it.km >= MIN_KM }.takeIf { it.size >= MIN_SAMPLES }?.let { s ->
+        Math.sqrt(s.map { it.missedPercent / it.km * 100.0 }.sumOf { it * it } / s.size)
+    }
+
+    /** The buffer for a stop [km] ahead (the plan has none since E-019; kept for the tests that plan with one). */
     fun percent(km: Double): Double = minOf(MAX, BASE + rate * maxOf(0.0, km) / 100.0)
 
-    /** For the log: what the buffer is and why. */
-    fun describe(): String = "buffer %.1f %%/100 km up to %.0f %% on the least level ".format(java.util.Locale.ROOT, rate, MAX) +
-        (learned?.let { (mean, spread) -> "(learned from %d stretches: the model missed %+.1f %%/100 km on average, spread %.1f)"
-            .format(java.util.Locale.ROOT, samples.count { it.km >= MIN_KM }, mean, spread) }
-            ?: "(start value, ${samples.count { it.km >= MIN_KM }} of $MIN_SAMPLES stretches driven to learn from)")
+    /** For the log: the hit list - what the model missed on the stretches driven (no buffer comes of it, E-030). */
+    fun describe(): String = learned?.let { (mean, spread) ->
+        "hit list of %d stretches: the model missed %+.1f %%/100 km on average, spread %.1f (±%.1f %%/100 km on the tile)"
+            .format(java.util.Locale.ROOT, samples.count { it.km >= MIN_KM }, mean, spread, missPer100 ?: 0.0) }
+        ?: "hit list: ${samples.count { it.km >= MIN_KM }} of $MIN_SAMPLES stretches driven to learn from"
 
     companion object {
         const val BASE = 0.0

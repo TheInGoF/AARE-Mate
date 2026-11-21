@@ -17,7 +17,9 @@ import org.maplibre.spatialk.geojson.Position
 internal class ChargeRolling(private var track: ChargePlanner.Track, private val car: EnergyModel.Car,
                              private val rules: ChargePlanner.Rules, private val near: (Position, Double, Int) -> List<Charger>,
                              startSoc: Double, chain: List<Charger>, private val own: List<Charger> = emptyList(),
-                             /** A stretch driven: percent the car used more than the model said, and its km (for [ChargeBuffer]). */
+                             /** The hit list's miss per 100 km of earlier drives (ChargeBuffer.missPer100), null: none yet. */
+                             private val learnedMissPer100: Double? = null,
+                             /** A stretch driven: percent the car used more than the model said, and its km (for the hit list). */
                              private val stretch: (Double, Double) -> Unit = { _, _ -> }) {
     enum class Kind {
         /** The plan holds. */
@@ -106,8 +108,11 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
         val ahead = maxOf(0.0, used(drivenM, toM) * scale(drivenM, soc))
         val km = kmEarlier + kmBefore + (drivenM - refM) / 1000
         val trust = minOf(1.0, km / TRUST_DOWN_KM)
-        val rel = REL_START + (REL_LEARNED - REL_START) * trust
-        return Math.sqrt(READING * READING + (ahead * rel) * (ahead * rel))
+        // before the drive has taught anything: what earlier drives missed per 100 km (the hit list, E-030), else [REL_START]
+        val kmAhead = maxOf(0.0, toM - drivenM) / 1000
+        val atStart = learnedMissPer100?.let { it * kmAhead / 100.0 } ?: (ahead * REL_START)
+        val err = atStart + (ahead * REL_LEARNED - atStart) * trust
+        return Math.sqrt(READING * READING + err * err)
     }
 
     /** The present track's length in metres. */

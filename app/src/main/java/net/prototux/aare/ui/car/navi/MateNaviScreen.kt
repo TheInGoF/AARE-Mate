@@ -295,9 +295,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val index = ChargerIndex.get(context)
         val own = ownStops.mapNotNull { (p, _) -> index.near(p, OWN_CHARGER_M, 0).minByOrNull { ChargerIndex.distanceM(it.at, p) } }
         NaviKeep.rolling = ChargeRolling(guidedTrack(route, car), car, ChargePlanner.Rules.of(net.prototux.aare.Settings(context)), index::near,
-            car.socPercent, chargeStops.map { it.charger }.filter { it !in own }, own) { missed, km ->
+            car.socPercent, chargeStops.map { it.charger }.filter { it !in own }, own, ChargeBuffer.of(context).missPer100) { missed, km ->
             ChargeBuffer.note(context, missed, km)
-            chargeLog("charging: stretch of %.0f km driven, the car used %+.1f %% more than the model said (for the buffer)".format(java.util.Locale.ROOT, km, missed))
+            chargeLog("charging: stretch of %.0f km driven, the car used %+.1f %% more than the model said (hit list)".format(java.util.Locale.ROOT, km, missed))
         }
         NaviKeep.rollingRoute = route; NaviKeep.rollingDriven = 0.0
     }

@@ -13,14 +13,14 @@ class ChargeBufferTest {
         assertEquals(0.5, b.percent(100.0), 1e-9)
         assertEquals(2.0, b.percent(400.0), 1e-9)
         assertEquals(ChargeBuffer.MAX, b.percent(5000.0), 1e-9)
-        assertTrue(b.describe().contains("start value"))
+        assertTrue(b.describe().contains("0 of 3 stretches"))
     }
 
     @Test fun learnedFromTheStretches() {
         // the model missed 1, 2 and 3 % per 100 km: mean 2, spread 0.82 -> 2.8 %/100 km
         val b = ChargeBuffer(listOf(ChargeBuffer.Sample(1.0, 100.0), ChargeBuffer.Sample(4.0, 200.0), ChargeBuffer.Sample(1.5, 50.0)))
         assertEquals(2.0 + Math.sqrt(2.0 / 3), b.rate, 1e-9)
-        assertTrue(b.describe(), b.describe().contains("learned from 3 stretches"))
+        assertTrue(b.describe(), b.describe().contains("hit list of 3 stretches"))
         // fewer than three long enough: the start value
         assertEquals(ChargeBuffer.START_RATE, ChargeBuffer(listOf(ChargeBuffer.Sample(1.0, 100.0), ChargeBuffer.Sample(5.0, 10.0))).rate, 1e-9)
     }
@@ -41,5 +41,15 @@ class ChargeBufferTest {
             ChargePlanner.Rules(atCharger = 5.0, atDestination = 5.0, buffer = buffer::percent))
         res.links.forEach { assertTrue("${it.arrive}", it.arrive >= 5.0 + buffer.percent(it.cand.alongM / 1000) - 1e-6) }
         assertTrue(res.arrivePercent >= 5.0 + buffer.percent(400.0) - 1e-6)
+    }
+
+    /** E-030: the hit list's miss per 100 km (root mean square), only from three stretches of at least 30 km. */
+    @Test fun hitListMissPer100() {
+        org.junit.Assert.assertNull(ChargeBuffer(listOf(ChargeBuffer.Sample(2.0, 100.0), ChargeBuffer.Sample(2.0, 100.0))).missPer100)
+        org.junit.Assert.assertNull(ChargeBuffer(List(5) { ChargeBuffer.Sample(2.0, 20.0) }).missPer100)
+        assertEquals(2.0, ChargeBuffer(List(3) { ChargeBuffer.Sample(4.0, 200.0) }).missPer100!!, 1e-9)
+        // off both ways counts as much as always too low
+        assertEquals(2.0, ChargeBuffer(listOf(ChargeBuffer.Sample(2.0, 100.0), ChargeBuffer.Sample(-2.0, 100.0), ChargeBuffer.Sample(2.0, 100.0))).missPer100!!, 1e-9)
+        org.junit.Assert.assertTrue(ChargeBuffer(emptyList()).describe().startsWith("hit list"))
     }
 }

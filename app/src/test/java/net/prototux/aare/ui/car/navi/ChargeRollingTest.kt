@@ -144,4 +144,11 @@ class ChargeRollingTest {
         // at the end only the reading is left
         assertEquals(ChargeRolling.READING, roll.spreadAt(200_000.0, 80.0 - 200 * perKm, roll.endM), 0.05)
     }
+
+    /** E-030: with a hit list the ± starts from what earlier drives missed per 100 km, not from the 12 % guess. */
+    @Test fun spreadStartsFromTheHitList() {
+        val track = w.track(200)
+        val roll = ChargeRolling(track, car, ChargePlanner.Rules(), w.near(emptyList()), 80.0, emptyList(), learnedMissPer100 = 1.0)
+        assertEquals(Math.sqrt(0.36 + 2.0 * 2.0), roll.spreadAt(0.0, 80.0, roll.endM), 1e-6)
+    }
 }
