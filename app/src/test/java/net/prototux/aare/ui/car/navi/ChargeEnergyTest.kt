@@ -87,6 +87,20 @@ class ChargeEnergyTest {
         assertEquals(10.0 * ChargeEnergy.GROUND, ChargeEnergy.headwindMs(0.0, 0.0, 10.0), 1e-9)
         assertEquals(-10.0 * ChargeEnergy.GROUND, ChargeEnergy.headwindMs(0.0, 180.0, 10.0), 1e-9)
     }
+    /** N-019 step 1: a jam at -5 °C costs its minutes of heating - creeping takes at least what standing takes. */
+    @Test fun jamCostsHeatingByTheMinute() {
+        val cold = car.copy(outsideCelsius = -5f)
+        val crawl = DoubleArray(pts.size) { 5.0 }
+        val t = ChargeEnergy.track(pts, crawl, cold)
+        val idle = EnergyModel.idleW(-5.0, cold) * t.seconds.last() / 3600.0
+        assertTrue("jam %.0f Wh against standing %.0f Wh".format(t.wh.last(), idle), t.wh.last() >= idle - 1.0)
+        assertTrue(EnergyModel.idleW(-5.0, cold) > 2_500.0)
+        assertTrue(t.parts!!.idle > 0.0)
+        // on the motorway the drive is far above standing: nothing added
+        val fast = ChargeEnergy.track(pts, kmh, cold)
+        assertEquals(0.0, fast.parts!!.idle, 1e-9)
+    }
+
 }
 
 /** Navi L-029 step A: the heights of the route from Valhalla's answer (org.json needs Robolectric). */

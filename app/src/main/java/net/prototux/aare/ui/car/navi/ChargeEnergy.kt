@@ -25,9 +25,11 @@ internal object ChargeEnergy {
     /** What each part added over the whole route, in Wh (for the log line of the plan). */
     class Parts {
         var drive = 0.0; var climb = 0.0; var wind = 0.0; var climate = 0.0; var rain = 0.0
+        /** What slow pieces took beyond driving: their minutes of heating and electronics (N-019 step 1). */
+        var idle = 0.0
         var weatherPieces = 0; var heightPieces = 0
-        override fun toString() = "drive %.1f kWh, climb %+.1f, wind %+.1f, temperature %+.1f, rain %+.1f kWh".format(
-            java.util.Locale.ROOT, drive / 1000, climb / 1000, wind / 1000, climate / 1000, rain / 1000)
+        override fun toString() = "drive %.1f kWh, climb %+.1f, wind %+.1f, temperature %+.1f, rain %+.1f, slow %+.1f kWh".format(
+            java.util.Locale.ROOT, drive / 1000, climb / 1000, wind / 1000, climate / 1000, rain / 1000, idle / 1000)
     }
 
     /** Head wind in m/s for a car going [headingDeg] in a wind from [fromDeg] of [ms] at 10 m (ground level: [GROUND]). */
@@ -55,8 +57,11 @@ internal object ChargeEnergy {
         val climate = celsius?.let { EnergyModel.climateDeltaW(it, car) * sec / 3600.0 } ?: 0.0
         val rain = rainKwh100 * metres / 100.0
         parts?.let { it.drive += drive; it.climb += climb; it.wind += wind; it.climate += climate; it.rain += rain }
-        // never less than the electronics take, whatever the wind behind or the mild air give
-        return maxOf(drive + wind + climate, EnergyModel.powerW(0.0, car) * sec / 3600.0) + climb + rain
+        // never less than standing takes - the electronics and the heating, which run by the time (N-019 step 1): slow
+        // pieces and jams cost their minutes of heating, whatever the wind behind or the mild air give
+        val idle = EnergyModel.idleW(celsius ?: car.outsideCelsius.toDouble(), car) * sec / 3600.0
+        parts?.let { if (idle > drive + wind + climate) it.idle += idle - (drive + wind + climate) }
+        return maxOf(drive + wind + climate, idle) + climb + rain
     }
 
     /**

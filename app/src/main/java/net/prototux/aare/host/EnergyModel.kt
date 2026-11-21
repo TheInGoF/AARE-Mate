@@ -83,6 +83,13 @@ internal object EnergyModel {
         if (car.curve != null) climateW(celsius.toFloat()) - climateW(car.outsideCelsius)
         else maxOf(0.0, climateW(celsius.toFloat()) - MIX_AUX_W) - maxOf(0.0, climateW(car.outsideCelsius) - MIX_AUX_W)
 
+    /**
+     * What the car takes standing or creeping at [celsius] (Navi N-019 step 1, E-029: "Heizung steckt in kWh/100 km, läuft
+     * aber nach Zeit"): the electronics and the heating or cooling, which run by the minute whatever the speed - in a jam
+     * at -5 °C about 3 kW, not the 400 W of the electronics alone.
+     */
+    fun idleW(celsius: Double, car: Car): Double = BASE_W + climateW(celsius.toFloat())
+
     /** Extra power in W for a head wind of [headMs] (negative: from behind) at [kmh], from the ID.7's drag. */
     fun windW(kmh: Double, headMs: Double, car: Car): Double {
         val v = kmh / 3.6
