@@ -20,7 +20,7 @@ side; with more than one model on the device the user marks the one Mate listens
 | Language | Whisper (download) | Voices (Piper unless noted) |
 |---|---|---|
 | English | `base.en` English only, the most exact (160 MB); `base` multilingual (160 MB) | Lessac (US, first), Ryan (US), HFC (US), Alba (GB), Northern English (GB) |
-| German | `base` (160 MB) | Thorsten (first), Thorsten hoch, Dii hoch, Miro hoch, Eva, Kerstin, Ramona, Karlsson; Kokoro Thorsten and Kerstin (on the device only) |
+| German | `base` (160 MB) | Thorsten (first), Thorsten hoch, Dii hoch, Miro hoch, Eva, Kerstin, Karlsson (Ramona only where already on the device); Kokoro Thorsten and Kerstin (on the device only) |
 
 Mate as the tablet's speech engine for other apps answers in the chosen voice's language.
 

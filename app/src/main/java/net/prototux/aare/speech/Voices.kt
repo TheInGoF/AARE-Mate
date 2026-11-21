@@ -34,7 +34,8 @@ object Voices {
         Voice("piper-thorsten-high", "Thorsten hoch (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-thorsten-high", "de_DE-thorsten-high.onnx", sizeMb = 115),
         Voice("piper-eva", "Eva (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-eva_k-x_low", "de_DE-eva_k-x_low.onnx", sizeMb = 21, length = 1.1f),
         Voice("piper-kerstin", "Kerstin (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-kerstin-low", "de_DE-kerstin-low.onnx", sizeMb = 64),
-        Voice("piper-ramona", "Ramona (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-ramona-low", "de_DE-ramona-low.onnx", sizeMb = 64),
+        // Ramona no longer offered (21.11.2026: 40-47 % words wrong in the measurement, the others 20-25 %); kept where on the device
+        Voice("piper-ramona", "Ramona (Piper)", true, Kind.PIPER, null, "de_DE-ramona-low.onnx", sizeMb = 64),
         Voice("piper-karlsson", "Karlsson (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-karlsson-low", "de_DE-karlsson-low.onnx", sizeMb = 64),
         // German in high quality besides Thorsten (21.11.2026: "ob es eine weitere Piper hoch Stimme für deutsch gibt.
         // Aktuell Eva ist sehr sparsam in der Aussprache"): dii (a woman) and miro (a man), OpenVoiceOS, CC BY-NC-SA 4.0
