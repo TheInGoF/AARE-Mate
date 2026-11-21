@@ -148,6 +148,9 @@ object CarTools {
             }
         }
         // test builds: a mate-test charger visit ({"lat":..,"lon":..}) or all mate-test visits removed ({"remove":true})
+        // test builds: car values as if IDmate had sent them - battery and outside temperature, level, charging
+        "debug_telemetry" -> if (!net.prototux.aare.BuildConfig.TEST_HOOKS) JSONObject().put("ok", false) else
+            JSONObject().put("ok", net.prototux.aare.dash.DashData.debugTelemetry(runtime.context, args))
         "debug_charger_visit" -> if (!net.prototux.aare.BuildConfig.TEST_HOOKS) JSONObject().put("ok", false) else {
             val ctx = runtime.context; val V = net.prototux.aare.ui.car.navi.ChargerVisits
             if (args.optBoolean("remove")) V.all(ctx).filter { it.name.startsWith("mate-test") }.forEach { V.remove(ctx, it.at) }

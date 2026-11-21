@@ -117,6 +117,17 @@ public final class DashData {
     public static boolean dropParkedStage() { return CarStage.dropParked(); }
 
     /** Debug builds: an answer of /energy-model as if the server had sent it (tool debug_energy_model). */
+    /** Test builds: values as if IDmate's server had sent them ({"t_batt":5,"t_ext":0,"soc":60,...}). */
+    public static boolean debugTelemetry(Context c, org.json.JSONObject data) {
+        try {
+            org.json.JSONObject t = new org.json.JSONObject().put("v", 1).put("src", "backend")
+                .put("ts", java.time.Instant.now().toString()).put("type", "status").put("data", data);
+            return Hub.get(c).telemetry.accept(t.toString());
+        } catch (org.json.JSONException e) {
+            return false;
+        }
+    }
+
     public static void debugEnergyModel(Context c, String json) { Hub.get(c).telemetry.acceptEnergyModel(json); }
 
     /** The model, when the server served one with a consumption curve within the last hour; null otherwise. */

@@ -128,7 +128,8 @@ class TcpServer(
     companion object {
         const val PORT = 5277
         /** Abstract unix socket name: `adb forward tcp:5277 localabstract:aare_hu`. */
-        const val LOCAL_NAME = "aare_hu"
+        // the test build ("Mate Probe") beside the store app has a name of its own, so a desk head unit can reach either
+        val LOCAL_NAME = if (net.prototux.aare.BuildConfig.APPLICATION_ID.endsWith(".probe")) "aare_hu_probe" else "aare_hu"
         private const val SHELL_UID = 2000
         private const val ROOT_UID = 0
         private const val TAG = "AareTcpServer"
