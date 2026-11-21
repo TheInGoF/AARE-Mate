@@ -209,7 +209,7 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
         if (eco) auto.put("top_speed", 120)
         // no date_time: with it Valhalla gives no alternative routes (17.11.2026, the preview had only one) - the live
         // speeds of O218 are for the map server to bring in without it (handover)
-        return org.json.JSONObject().put("language", "de-DE").apply {
+        return org.json.JSONObject().put("language", net.prototux.aare.Language.tag()).apply {
             if (alternates > 0) put("alternates", alternates)
             if (points.isNotEmpty()) put("exclude_locations", org.json.JSONArray(points.map { org.json.JSONObject().put("lat", it.latitude).put("lon", it.longitude) }))
             if (areas.isNotEmpty()) put("exclude_polygons", org.json.JSONArray(areas.map { ring -> org.json.JSONArray(ring.map { org.json.JSONArray().put(it.longitude).put(it.latitude) }) }))

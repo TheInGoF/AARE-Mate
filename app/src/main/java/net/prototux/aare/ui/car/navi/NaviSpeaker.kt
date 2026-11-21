@@ -7,7 +7,6 @@ import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
-import java.util.Locale
 import java.util.UUID
 
 /**
@@ -84,7 +83,8 @@ internal class NaviSpeaker(context: Context) {
     }
 
     private fun init() {
-        tts.language = Locale.GERMANY
+        // the language Valhalla speaks (Language.tag), the device's
+        tts.language = net.prototux.aare.Language.locale()
         tts.setAudioAttributes(attrs)
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {}
@@ -216,44 +216,15 @@ internal class NaviSpeaker(context: Context) {
         /** [Mode.BRIEF]: the turn is said at its first announcement within this distance. */
         const val BRIEF_M = 1_500.0
 
-        /**
-         * Road names and destinations out of a turn, Valhalla's German as it comes: "Rechts auf Baumstraße abbiegen." ->
-         * "Rechts abbiegen.", "Ausfahrt 62 in Richtung Hamburg, Sangerhausen nehmen." -> "Ausfahrt 62 nehmen." - a name is
-         * what starts with a capital or a digit after "auf", "Richtung" or "in Richtung"; "auf der rechten Seite" stays.
-         */
-        private val NAME = """[\p{Lu}0-9][\p{L}0-9.\-/]*"""
-        private val NAMED = Regex("""\s+(?:in Richtung|Richtung|auf|über)\s+(?:die |den |das )?$NAME(?:(?:,\s*|\s+)$NAME)*""")
-        /** Turn words in Valhalla's German: an instruction without any only says to go on. */
-        private val TURN = Regex("""(?i)abbieg|links|rechts|ausfahrt|abfahr|auffahr|kreisverkehr|kreisel|wenden|halten|einfädeln|fähre|ziel|spur|gabelung""")
-        /** "1 Kilometer geradeaus fahren und der Route folgen", "Weiter auf der A 4": no turn in it. */
-        fun goOnOnly(text: String): Boolean = !TURN.containsMatchIn(text)
-        fun brief(text: String): String = NAMED.replace(text, "").replace(Regex("\\s+([.,!?])"), "$1").trim()
+        /** A mere "go on" without a turn, in Valhalla's [lang] (NaviPhrases). */
+        fun goOnOnly(text: String, lang: String = net.prototux.aare.Language.code): Boolean = NaviPhrases.of(lang).goOnOnly(text)
+        /** The turn without road names and destinations, for [Mode.BRIEF]. */
+        fun brief(text: String, lang: String = net.prototux.aare.Language.code): String = NaviPhrases.of(lang).brief(text)
         /** The sample rate of the car's navigation channel (set when it opens), 0 = unknown. */
         @Volatile var carRate = 0
         private const val PHONE_ENGINE = "com.google.android.tts"
 
-        private val AFTER_DISTANCE = Regex("^(In [0-9.,]+ (?:Metern|Kilometern)),? (\\p{Lu}\\p{L}*)")
-        private val SMALL_WORDS = setOf("Leicht", "Links", "Rechts", "Scharf", "Auf", "In", "An", "Am", "Geradeaus", "Wenden", "Halten", "Dem", "Der", "Die", "Den", "Das", "Bei", "Über", "Nach")
-        private val DIRECTION = Regex("\\b(nach|Dann|dann) (Links|Rechts)\\b")
-        /** "Dann, in 70 Meter, Rechts abbiegen" (17.11.2026): a direction word after a comma is no sentence start */
-        private val AFTER_COMMA = Regex(", (Links|Rechts|Leicht|Scharf|Geradeaus|Wenden)\\b")
-
-        /**
-         * Valhalla's German as one would say it: "In 300 Metern, Leicht nach links …" becomes "In 300 Metern leicht nach
-         * links …", "nach Rechts" becomes "nach rechts", "Dann Links" becomes "Dann links"; also without the comma
-         * ("In 80 Metern Das Ziel befindet sich …", 16.11.2026).
-         */
-        fun polish(text: String): String {
-            var t = text.trim()
-            t = AFTER_DISTANCE.replace(t) { m ->
-                val w = m.groupValues[2]
-                m.groupValues[1] + " " + if (w in SMALL_WORDS) w.lowercase() else w
-            }
-            t = DIRECTION.replace(t) { m -> m.groupValues[1] + " " + m.groupValues[2].lowercase() }
-            t = AFTER_COMMA.replace(t) { m -> ", " + m.groupValues[1].lowercase() }
-            // Valhalla's last words lack the article: "Ziel befindet sich auf der rechten Seite."
-            if (t.startsWith("Ziel ")) t = "Das $t"
-            return t
-        }
+        /** Valhalla's words as one would say them (NaviPhrases). */
+        fun polish(text: String, lang: String = net.prototux.aare.Language.code): String = NaviPhrases.of(lang).polish(text)
     }
 }

@@ -12,6 +12,25 @@ object Language {
     val code: String get() = java.util.Locale.getDefault().language.takeIf { it in SUPPORTED } ?: SUPPORTED.first()
 
     /**
+     * The language tag routing and speaking ask for (Valhalla's spoken instructions, the phone's voice): the device's
+     * country where it fits the language, else the language's usual one.
+     */
+    fun tag(lang: String = code): String {
+        val country = java.util.Locale.getDefault().takeIf { it.language == lang }?.country.orEmpty()
+        return when {
+            country.isNotEmpty() && "$lang-$country" in VALHALLA -> "$lang-$country"
+            else -> DEFAULT_TAG.getValue(lang)
+        }
+    }
+
+    /** [tag] as a locale, for a speech engine. */
+    fun locale(lang: String = code): java.util.Locale = java.util.Locale.forLanguageTag(tag(lang))
+
+    /** The language tags of Valhalla's narrative that belong to [SUPPORTED]. */
+    private val VALHALLA = setOf("en-US", "en-GB", "de-DE")
+    private val DEFAULT_TAG = mapOf("en" to "en-US", "de" to "de-DE")
+
+    /**
      * What a language listens and speaks with: the Whisper models offered (first = the standard, with the download in MB)
      * and the voice set up first. Alternatives side by side, the user chooses among those on the device.
      */

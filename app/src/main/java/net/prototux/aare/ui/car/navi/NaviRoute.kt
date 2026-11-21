@@ -99,7 +99,7 @@ internal class NaviRoute(val line: List<Position>, val km: Double, val minutes: 
             runCatching {
                 val body = JSONObject()
                     .put("locations", JSONArray().put(loc(from)).put(loc(to)))
-                    .put("costing", "auto").put("units", "kilometers").put("language", "de-DE")
+                    .put("costing", "auto").put("units", "kilometers").put("language", net.prototux.aare.Language.tag())
                 val c = URL("$base/route").openConnection() as HttpURLConnection
                 c.connectTimeout = 5000; c.readTimeout = 20000
                 c.requestMethod = "POST"; c.doOutput = true
