@@ -7,8 +7,10 @@ Gerät: kein Token, keine Adresse, nur den Tag (keine Uhrzeit) und den Ort des L
 4 Nachkommastellen (etwa 11 m - ein Lader ist ein öffentlicher Ort, eine Fahrt lässt sich daraus nicht lesen).
 
 Schnittstelle (hinter dem Tor unter /sammeln/...):
-  POST /bewertung  {"lat","lon","kw","netz"?,"sterne":1-5,"leistung"?:1-5,"preis"?:1-5,"funktion"?:1-5}
-  GET  /bewertungen            je Lader: Anzahl, Mittel der Sterne und Kriterien
+  POST /bewertung  {"lat","lon","kw","netz"?,"sterne"?:1-5,"leistung"?:1-3,"preis"?:1-3,"funktion"?:1-2}
+                   (wie Mate fragt: Leistung 1 wie angegeben, 2 gedrosselt, 3 sehr langsam; Preis 1 günstig,
+                   2 angemessen, 3 teuer; Funktion 1 ja, 2 nein; mindestens eins davon)
+  GET  /bewertungen            je Lader: Anzahl, Mittel der Sterne, Leistung, Preis, Anteil "funktioniert"
   POST /schild     {"lat","lon","alt":km/h,"neu":km/h,"richtung"?:Grad,"weg"?:OSM-Weg}
   GET  /schilder               alle Meldungen, neueste zuerst
   GET  /gesund                 Lebenszeichen
@@ -50,15 +52,13 @@ def ort(d):
     return round(lat, 4), round(lon, 4)
 
 
-def note(d, k, pflicht=False):
-    """Eine Note 1-5 (oder None, wo sie fehlen darf)."""
+def note(d, k, hoechstens):
+    """Eine Stufe 1..[hoechstens], None wo sie fehlt (0 = nicht angegeben, wie in Mate)."""
     v = d.get(k)
-    if v is None:
-        if pflicht:
-            raise ValueError(k)
+    if v is None or v == 0:
         return None
     v = int(v)
-    if not 1 <= v <= 5:
+    if not 1 <= v <= hoechstens:
         raise ValueError(k)
     return v
 
@@ -67,7 +67,10 @@ def bewertung_speichern(d):
     lat, lon = ort(d)
     kw = int(d.get("kw") or 0)
     netz = (str(d.get("netz") or "")[:40]) or None
-    zeile = (lat, lon, kw, netz, note(d, "sterne", True), note(d, "leistung"), note(d, "preis"), note(d, "funktion"), heute())
+    noten = (note(d, "sterne", 5), note(d, "leistung", 3), note(d, "preis", 3), note(d, "funktion", 2))
+    if all(n is None for n in noten):
+        raise ValueError("leer")
+    zeile = (lat, lon, kw, netz) + noten + (heute(),)
     with _lock, verbindung() as c:
         c.execute("INSERT INTO bewertung VALUES (?,?,?,?,?,?,?,?,?)", zeile)
 
@@ -75,10 +78,10 @@ def bewertung_speichern(d):
 def bewertungen():
     with _lock, verbindung() as c:
         rows = c.execute("""SELECT lat, lon, MAX(kw), MAX(netz), COUNT(*), AVG(sterne), AVG(leistung), AVG(preis),
-            AVG(funktion), MAX(tag) FROM bewertung GROUP BY lat, lon ORDER BY COUNT(*) DESC""").fetchall()
+            AVG(CASE funktion WHEN 1 THEN 1.0 WHEN 2 THEN 0.0 END), MAX(tag) FROM bewertung GROUP BY lat, lon ORDER BY COUNT(*) DESC""").fetchall()
     r1 = lambda v: None if v is None else round(v, 1)
     return [{"lat": a, "lon": b, "kw": kw, "netz": n, "anzahl": cnt, "sterne": r1(s), "leistung": r1(l),
-             "preis": r1(p), "funktion": r1(f), "zuletzt": t} for a, b, kw, n, cnt, s, l, p, f, t in rows]
+             "preis": r1(p), "funktioniert": None if f is None else round(f, 2), "zuletzt": t} for a, b, kw, n, cnt, s, l, p, f, t in rows]
 
 
 def schild_speichern(d):
