@@ -897,6 +897,7 @@
     <string name="tilecache_hint">The map need not load known areas again on every drive. When the storage is full, the tiles used longest ago go first.</string>
     <string name="tilecache_used">Used: %1$s MB</string>
     <string name="tilecache_clear">Empty</string>
+    <string name="voice_chosen_missing">The chosen voice %1$s is not on this device. Load it again below, or choose another one; until then Mate speaks with the phone\'s voice and apps using Mate\'s voices stay silent.</string>
     <string name="voice_engine_section">Mate\'s voice</string>
     <string name="voice_female">female</string>
     <string name="voice_male">male</string>

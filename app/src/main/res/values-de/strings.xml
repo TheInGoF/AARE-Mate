@@ -835,6 +835,7 @@
     <string name="tilecache_hint">Die Karte muss bekannte Gegenden nicht bei jeder Fahrt neu laden. Ist der Speicher voll, gehen die am längsten nicht genutzten Kacheln zuerst.</string>
     <string name="tilecache_used">Belegt: %1$s MB</string>
     <string name="tilecache_clear">Leeren</string>
+    <string name="voice_chosen_missing">Die gewählte Stimme %1$s ist nicht auf dem Gerät. Lade sie unten neu oder wähle eine andere; bis dahin spricht Mate mit der Stimme des Telefons, und Apps, die Mates Stimmen nutzen, bleiben stumm.</string>
     <string name="voice_engine_section">Stimme von Mate</string>
     <string name="voice_female">weiblich</string>
     <string name="voice_male">männlich</string>

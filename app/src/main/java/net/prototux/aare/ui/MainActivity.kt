@@ -1903,6 +1903,14 @@ private fun PiperChoice(settings: Settings) {
         androidx.compose.material3.OutlinedButton(modifier = Modifier.padding(top = 4.dp), onClick = {
             ctx.startSafely(Intent("com.android.settings.TTS_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }) { Text(stringResource(R.string.voice_all_apps_open)) }
+        // the chosen voice is not on the device (I-068: gone with a new install, the setting still naming it): said
+        // plainly, since Mate and every app using Mate's engine fall silent or back to the phone's voice until it is loaded
+        val missing = net.prototux.aare.speech.Voices.byId(engine)?.takeIf { v ->
+            net.prototux.aare.speech.ModelDownload.progress[v.id].let { it == null || it !in 0f..0.999f } &&
+                !net.prototux.aare.speech.Voices.available(ctx, v)
+        }
+        if (missing != null) Text(stringResource(R.string.voice_chosen_missing, missing.name), style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
         // the system's voice
         Row(Modifier.fillMaxWidth().padding(top = 6.dp).clickable { engine = "system"; settings.ttsEngine = "system" }, verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.material3.RadioButton(engine == "system", { engine = "system"; settings.ttsEngine = "system" })
