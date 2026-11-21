@@ -24,6 +24,12 @@
 		handle_path /suche/* {
 			reverse_proxy photon:2322
 		}
+		# Sammelstelle: Bewertungen und Schild-Korrekturen (der Dienst speichert nichts über das Gerät)
+		handle_path /sammeln/* {
+			reverse_proxy sammeln:8000 {
+				header_up -Authorization
+			}
+		}
 		handle_path /pakete/* {
 			root * /srv/pakete
 			file_server

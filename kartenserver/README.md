@@ -22,6 +22,7 @@ Geräte-Token.
 | `tor/Caddyfile` | Tor: Token-Prüfung, Weiterleitungen, TomTom ohne Geräte-Token |
 | `schluessel/schluessel.py` | Kopplungsdienst: Einmal-Codes, Geräte-Tokens, Sperren |
 | `regionen/regionen_dienst.py` | Weboberfläche: Regionen wählen, je Region ein Paket bauen und frisch halten, Höhenkacheln laden |
+| `sammeln/sammel_dienst.py` | Sammelstelle: Ladebewertungen und Schild-Korrekturen von Mate, anonym (SQLite) |
 
 Keine Adressen, Tokens oder Schlüssel in diesem Ordner: sie stehen als Umgebungsvariablen in Portainer
 (`TOMTOM_KEY`, `REGIONEN_PASS`, `BASIS_URL`, übergangsweise `MATE_TOKEN`).
@@ -36,6 +37,7 @@ Keine Adressen, Tokens oder Schlüssel in diesem Ordner: sie stehen als Umgebung
 | Kacheln | `karten-tiles` | 8581 | `tiles/` (Protomaps-Planet, ~140 GB) |
 | Kopplung | `karten-schluessel` | – (nur im Netz) | `schluessel/daten/` (nur Prüfsummen) |
 | Offline-Karten, Höhen | `karten-regionen` | 8095 | `regionen/daten/`, `pakete/`, `valhalla/elevation_data/` |
+| Sammelstelle | `karten-sammeln` | – (nur im Netz) | `sammeln/daten/` (`sammeln.db`) |
 
 Ports 8002, 2322, 8581, 8095 nur für LAN und Tailscale freigeben (DSM-Firewall, TCP). Der Router leitet keinen davon ins
 Internet weiter.
@@ -50,13 +52,17 @@ Internet weiter.
 | Verkehr | `GET /verkehr/traffic/…` (Flow-/Incident-Kacheln, `incidentDetails`) | TomTom, nur Pfade unter `/traffic/` |
 | Pakete | `GET /pakete/katalog.json`, `/pakete/<region>/…` | Dateien, mit Range (fortsetzbar) |
 | Koppeln | `POST /koppeln {"code": "…"}` (ohne Token) | Kopplungsdienst |
+| Bewertung | `POST /sammeln/bewertung {"lat","lon","kw","netz"?,"sterne":1-5,"leistung"?,"preis"?,"funktion"?}`, `GET /sammeln/bewertungen` | Sammelstelle |
+| Schild-Korrektur | `POST /sammeln/schild {"lat","lon","alt","neu","richtung"?,"weg"?}`, `GET /sammeln/schilder` | Sammelstelle |
+
+Die Sammelstelle speichert kein Token und keine Adresse, nur den Tag und den Ort auf 4 Nachkommastellen (~11 m).
 
 Jede Anfrage außer `/koppeln` trägt `Authorization: Bearer <Geräte-Token>`; sonst 401 mit leerem Body.
 
 ## Einrichten
 
 1. Netz und Ordner: `docker network create karten`, darunter `valhalla/`, `photon/`, `tiles/`, `tor/`, `schluessel/daten/`,
-   `regionen/daten/`, `pakete/` anlegen; die Dateien dieses Ordners an ihre Stelle kopieren.
+   `regionen/daten/`, `pakete/`, `sammeln/daten/` anlegen; die Dateien dieses Ordners an ihre Stelle kopieren.
 2. Stack „karten“ in Portainer aus `docker-compose.yml` anlegen, Umgebungsvariablen setzen.
 3. Nach jeder Änderung am Caddyfile: `docker restart karten-tor`.
 
