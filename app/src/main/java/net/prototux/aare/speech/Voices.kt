@@ -11,7 +11,7 @@ import java.io.File
  */
 object Voices {
     class Voice(val id: String, val name: String, val female: Boolean, val kind: Kind, val repo: String?, val model: String,
-                val voices: String = "voices.bin", val tokens: String = "tokens.txt", val sizeMb: Int)
+                val voices: String = "voices.bin", val tokens: String = "tokens.txt", val sizeMb: Int, val lang: String = "de")
     enum class Kind { PIPER, KOKORO }
 
     val ALL = listOf(
@@ -28,6 +28,17 @@ object Voices {
         Voice("piper-kerstin", "Kerstin (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-kerstin-low", "de_DE-kerstin-low.onnx", sizeMb = 64),
         Voice("piper-ramona", "Ramona (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-ramona-low", "de_DE-ramona-low.onnx", sizeMb = 64),
         Voice("piper-karlsson", "Karlsson (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-karlsson-low", "de_DE-karlsson-low.onnx", sizeMb = 64),
+        // German in high quality besides Thorsten (21.11.2026: "ob es eine weitere Piper hoch Stimme für deutsch gibt.
+        // Aktuell Eva ist sehr sparsam in der Aussprache"): dii (a woman) and miro (a man), OpenVoiceOS, CC BY-NC-SA 4.0
+        Voice("piper-dii-high", "Dii hoch (Piper)", true, Kind.PIPER, "csukuangfj/vits-piper-de_DE-dii-high", "de_DE-dii-high.onnx", sizeMb = 63),
+        Voice("piper-miro-high", "Miro hoch (Piper)", false, Kind.PIPER, "csukuangfj/vits-piper-de_DE-miro-high", "de_DE-miro-high.onnx", sizeMb = 63),
+        // English (the language library, 21.11.2026: "Zu den Sprachen gehört auch Alternativen whisper und Piper anzubieten"):
+        // American and British, women and men, all medium quality
+        Voice("piper-en-lessac", "Lessac (Piper, US)", true, Kind.PIPER, "csukuangfj/vits-piper-en_US-lessac-medium", "en_US-lessac-medium.onnx", sizeMb = 63, lang = "en"),
+        Voice("piper-en-ryan", "Ryan (Piper, US)", false, Kind.PIPER, "csukuangfj/vits-piper-en_US-ryan-medium", "en_US-ryan-medium.onnx", sizeMb = 63, lang = "en"),
+        Voice("piper-en-hfc-female", "HFC (Piper, US)", true, Kind.PIPER, "csukuangfj/vits-piper-en_US-hfc_female-medium", "en_US-hfc_female-medium.onnx", sizeMb = 63, lang = "en"),
+        Voice("piper-en-alba", "Alba (Piper, GB)", true, Kind.PIPER, "csukuangfj/vits-piper-en_GB-alba-medium", "en_GB-alba-medium.onnx", sizeMb = 63, lang = "en"),
+        Voice("piper-en-northern", "Northern English (Piper, GB)", false, Kind.PIPER, "csukuangfj/vits-piper-en_GB-northern_english_male-medium", "en_GB-northern_english_male-medium.onnx", sizeMb = 63, lang = "en"),
     )
 
     fun byId(id: String?) = ALL.firstOrNull { it.id == id }
@@ -56,6 +67,10 @@ object Voices {
         if (net.prototux.aare.Settings(context).ttsEngine == v.id) net.prototux.aare.Settings(context).ttsEngine = "system"
     }
 
-    /** Offered in the phone app: downloadable, or already on the device. */
-    fun offered(context: Context) = ALL.filter { it.repo != null || available(context, it) }
+    /** Offered in the phone app: the device language's voices, downloadable or already on the device. */
+    fun offered(context: Context, lang: String = net.prototux.aare.Language.code) =
+        ALL.filter { it.lang == lang && (it.repo != null || available(context, it)) }
+
+    /** The voice set up first for [lang] (Language.speech). */
+    fun standard(lang: String = net.prototux.aare.Language.code): Voice = byId(net.prototux.aare.Language.speech(lang).voice)!!
 }

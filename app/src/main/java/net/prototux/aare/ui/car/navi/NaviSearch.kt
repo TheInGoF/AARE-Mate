@@ -27,7 +27,7 @@ internal object NaviSearch {
             val url = (base(context) + "/reverse").toHttpUrl().newBuilder()
                 .addQueryParameter("lat", "%.6f".format(java.util.Locale.ROOT, at.latitude))
                 .addQueryParameter("lon", "%.6f".format(java.util.Locale.ROOT, at.longitude))
-                .addQueryParameter("lang", "de").build()
+                .addQueryParameter("lang", net.prototux.aare.Language.code).build()
             NaviServer.client(context).newCall(Request.Builder().url(url).build()).execute().use { r ->
                 if (!r.isSuccessful) return@runCatching null
                 val f = JSONObject(r.body.string()).optJSONArray("features")?.optJSONObject(0)?.optJSONObject("properties")
@@ -95,7 +95,7 @@ internal object NaviSearch {
             lastFailure = Failure.NO_SERVER; return@withContext null }
         runCatching {
             val url = (base(context) + "/api").toHttpUrl().newBuilder()
-                .addQueryParameter("q", query).addQueryParameter("lang", "de").addQueryParameter("limit", "6").apply {
+                .addQueryParameter("q", query).addQueryParameter("lang", net.prototux.aare.Language.code).addQueryParameter("limit", "6").apply {
                     near?.let {
                         addQueryParameter("lat", "%.5f".format(java.util.Locale.ROOT, it.latitude))
                         addQueryParameter("lon", "%.5f".format(java.util.Locale.ROOT, it.longitude))
@@ -140,7 +140,7 @@ internal object NaviSearch {
                 .addQueryParameter("lat", "%.5f".format(java.util.Locale.ROOT, near.latitude))
                 .addQueryParameter("lon", "%.5f".format(java.util.Locale.ROOT, near.longitude))
                 .addQueryParameter("radius", "10").addQueryParameter("osm_tag", tag)
-                .addQueryParameter("limit", "12").addQueryParameter("lang", "de").build()
+                .addQueryParameter("limit", "12").addQueryParameter("lang", net.prototux.aare.Language.code).build()
             NaviServer.client(context).newCall(Request.Builder().url(url).build()).execute().use { r ->
                 val raw = r.body.string()
                 android.util.Log.i("MateNavi", "nearby $tag: HTTP ${r.code}, ${raw.length} bytes")

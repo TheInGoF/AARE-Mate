@@ -174,8 +174,7 @@ class Dictation(private val context: Context) {
             users++
             runCatching { timer.removeCallbacks(free) }
             LocalAsr.cleanup(context)
-            val sizes = LocalAsr.installed(context)
-            val want = if (LocalAsr.STANDARD in sizes) LocalAsr.STANDARD else sizes.firstOrNull() ?: return null
+            val want = LocalAsr.chosen(context) ?: return null
             if (size != want || rec == null) {
                 rec?.release()
                 rec = null

@@ -11,17 +11,20 @@ object HudText {
     const val STEP_MS = 3_000L
     private val NUMBER = Regex("""^(?:[ABLKS]|E|St|Kr)\s?\d+[a-z]?$""")
 
+    /** "Exit 25" in the words of [w] (the language library), English where there are none. */
+    private fun exitShort(n: String, w: HudWords?) = (w?.exitShort ?: "Exit %s").format(n)
+
     /** The pieces of [text], in the order to show them; [text] itself when it fits. */
-    fun pieces(text: String): List<String> {
+    fun pieces(text: String, w: HudWords? = null): List<String> {
         val t = text.trim().replace(Regex("\\s+"), " ")
         if (t.length <= MAX) return listOfNotNull(t.ifEmpty { null })
         val out = ArrayList<String>()
-        // "Ausfahrt 25" / "Abfahrt 25" -> "Ausf. 25"
+        // "Ausfahrt 25" / "Abfahrt 25" -> "Ausf. 25" (the library's short form)
         val parts = t.split(Regex("\\s*(?:[:,;/·|]|\\s-\\s|\\s–\\s)\\s*")).map { it.trim() }.filter { it.isNotEmpty() }
         for (p in parts) {
             val exit = Regex("""^(?:Ausfahrt|Abfahrt|Exit)\s+(\S+)""", RegexOption.IGNORE_CASE).find(p)
             when {
-                exit != null -> out += "Ausf. " + exit.groupValues[1]
+                exit != null -> out += exitShort(exit.groupValues[1], w)
                 p.length <= MAX -> out += p
                 NUMBER.matches(p) -> out += p
                 else -> {
@@ -50,9 +53,9 @@ object HudText {
      * streets and places (18.11.2026: "die Ausfahrt wird mit B75 ... gekennzeichnet, aber da steht dann nur ZW ... dass
      * wir da gar keine Straßennamen machen, sondern einfach nur sagen, rechts abbiegen auf die B75, auffahren auf die A24").
      */
-    fun refs(text: String): List<String> {
+    fun refs(text: String, w: HudWords? = null): List<String> {
         val out = ArrayList<String>()
-        EXIT.findAll(text).forEach { out += "Ausf. " + it.groupValues[1] }
+        EXIT.findAll(text).forEach { out += exitShort(it.groupValues[1], w) }
         REF.findAll(text).forEach { out += it.groupValues[1] + " " + it.groupValues[2] }
         return out.distinct().filter { it.length <= MAX }
     }
@@ -62,25 +65,30 @@ object HudText {
      * ([far]) both take turns ("rechts ab", "B 75"); near it one stays, steady, so the car can count down: the number
      * where there is one, else the words. Empty where neither says anything (the arrow and the distance alone).
      */
-    fun line(words: String?, road: String, far: Boolean): List<String> {
-        val refs = refs(road).take(2)
+    fun line(words: String?, road: String, far: Boolean, w: HudWords? = null): List<String> {
+        val refs = refs(road, w).take(2)
         if (!far) return listOfNotNull(refs.firstOrNull() ?: words)
         return (listOfNotNull(words) + refs).distinct()
     }
 
-    /** The turn in words from a phone app's instruction (Google Maps says no maneuver), German only; null when unknown. */
-    fun wordsIn(instruction: String): String? {
+    /**
+     * The turn in words from a phone app's instruction (Google Maps says no maneuver), German or English, in the words of
+     * [w] (the language library); null when unknown or without words.
+     */
+    fun wordsIn(instruction: String, w: HudWords?): String? {
+        if (w == null) return null
         val t = instruction.lowercase()
-        val left = Regex("\\blinks\\b").containsMatchIn(t)
-        val right = Regex("\\brechts\\b").containsMatchIn(t)
+        val left = Regex("\\b(links|left)\\b").containsMatchIn(t)
+        val right = Regex("\\b(rechts|right)\\b").containsMatchIn(t)
         return when {
-            "kreisverkehr" in t -> Regex("(\\d+)\\.\\s*ausfahrt").find(t)?.let { "Kreisel " + it.groupValues[1] } ?: "Kreisel"
-            "wenden" in t -> "wenden"
-            "ausfahrt" in t || "abfahren" in t -> "Ausfahrt"
-            "auffahrt" in t || "auffahren" in t -> "Auffahrt"
-            "halten" in t -> if (left) "li halten" else if (right) "re halten" else null
-            "abbiegen" in t || "biegen" in t -> if (left) "links ab" else if (right) "rechts ab" else null
-            "ziel" in t -> "Ziel"
+            "kreisverkehr" in t || "roundabout" in t ->
+                Regex("(\\d+)(?:\\.|st|nd|rd|th)\\s*(?:ausfahrt|exit)").find(t)?.let { w.roundaboutExit.format(it.groupValues[1].toInt()) } ?: w.roundabout
+            "wenden" in t || "u-turn" in t || "make a u" in t -> w.uTurn
+            "ausfahrt" in t || "abfahren" in t || Regex("\\b(take|use) (the )?exit\\b|\\bexit\\b").containsMatchIn(t) -> w.offRamp
+            "auffahrt" in t || "auffahren" in t || "ramp" in t || "merge onto" in t -> w.onRamp
+            "halten" in t || "keep" in t -> if (left) w.keepLeft else if (right) w.keepRight else null
+            "abbiegen" in t || "biegen" in t || "turn" in t -> if (left) w.left else if (right) w.right else null
+            "ziel" in t || "destination" in t || "arrive" in t -> w.destination
             else -> null
         }
     }

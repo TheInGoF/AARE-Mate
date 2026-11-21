@@ -15,7 +15,8 @@ import java.io.File
  * and `<size>-tokens.txt`, as the sherpa-onnx model downloads name them.
  */
 object LocalAsr {
-    val SIZES = listOf("tiny", "base", "small")
+    /** Every model Mate knows: the languages' (Language.speech) and the ones of earlier versions, cleaned up. */
+    val SIZES: List<String> get() = (net.prototux.aare.Language.ALL_WHISPER + listOf("tiny", "base", "small")).distinct()
 
     fun dir(context: Context, size: String) = File(context.getExternalFilesDir(null), "sprache/whisper-$size")
 
@@ -23,12 +24,25 @@ object LocalAsr {
         Triple(File(it, "$size-encoder.int8.onnx"), File(it, "$size-decoder.int8.onnx"), File(it, "$size-tokens.txt"))
     }
 
-    /** The one model used (base); others left from earlier versions are deleted once it is there. */
-    const val STANDARD = "base"
+    /** The device language's standard model (the first offered), to set up first. */
+    val STANDARD: String get() = net.prototux.aare.Language.speech().whisper.keys.first()
 
+    /**
+     * The model to listen with: the one chosen in the phone app when it is on the device and fits the language, else the
+     * language's models in their order, else any on the device; null when there is none.
+     */
+    fun chosen(context: Context): String? {
+        val on = installed(context)
+        val offered = net.prototux.aare.Language.speech().whisper.keys
+        return net.prototux.aare.Settings(context).asrModel.takeIf { it in on && it in offered }
+            ?: offered.firstOrNull { it in on } ?: on.firstOrNull()
+    }
+
+    /** Models of no language any more (left from earlier versions) are deleted once a model of the language is there. */
     fun cleanup(context: Context) {
-        if (STANDARD !in installed(context)) return
-        SIZES.filter { it != STANDARD }.forEach { s -> dir(context, s).takeIf { it.exists() }?.deleteRecursively() }
+        val keep = net.prototux.aare.Language.ALL_WHISPER
+        if (installed(context).none { it in net.prototux.aare.Language.speech().whisper.keys }) return
+        SIZES.filter { it !in keep }.forEach { s -> dir(context, s).takeIf { it.exists() }?.deleteRecursively() }
     }
 
     /** The model sizes found on the device. */
@@ -40,7 +54,7 @@ object LocalAsr {
         val config = OfflineRecognizerConfig(
             featConfig = FeatureConfig(sampleRate = 16000, featureDim = 80),
             modelConfig = OfflineModelConfig(
-                whisper = OfflineWhisperModelConfig(encoder = enc.path, decoder = dec.path, language = "de", task = "transcribe"),
+                whisper = OfflineWhisperModelConfig(encoder = enc.path, decoder = dec.path, language = net.prototux.aare.Language.code, task = "transcribe"),
                 tokens = tok.path, numThreads = threads, modelType = "whisper", provider = "cpu",
             ),
             decodingMethod = "greedy_search",

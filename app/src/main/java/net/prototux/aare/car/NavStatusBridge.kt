@@ -1,5 +1,6 @@
 package net.prototux.aare.car
 
+import net.prototux.aare.R
 import aap_protobuf.service.navigationstatus.message.NavigationCueOuterClass.NavigationCue
 import aap_protobuf.service.navigationstatus.message.NavigationCurrentPositionOuterClass.NavigationCurrentPosition
 import aap_protobuf.service.navigationstatus.message.NavigationDestinationDistanceOuterClass.NavigationDestinationDistance
@@ -36,6 +37,8 @@ class NavStatusBridge(
     private val turnImage: (Maneuver, Int, Int) -> ByteArray?,
     /** A bitmap (the phone navigation app's turn arrow) as a PNG of the given size. */
     private val png: (Bitmap, Int, Int) -> ByteArray?,
+    /** The turn words for the head-up display, from the language library (hud_*). */
+    private val hudWords: HudWords? = null,
 ) {
     private var active = false
     /** REROUTING was sent: the next guidance sends ACTIVE again. */
@@ -176,8 +179,8 @@ class NavStatusBridge(
         // 18.11.2026 ("da steht dann nur ZW ... dass wir da gar keine Straßennamen machen, sondern einfach nur sagen, rechts
         // abbiegen auf die B75, auffahren auf die A24"): no names any more - the words and the road's number (HudText.line)
         val farM = stepEstimate?.remainingDistance?.let { metersOf(it) }
-        val said = maneuver?.let { words(it.type, it.roundaboutExitNumber) }
-        val line = HudText.line(said, road, far = farM == null || farM > WORDS_BEYOND_M)
+        val said = maneuver?.let { words(it.type, it.roundaboutExitNumber, hudWords) }
+        val line = HudText.line(said, road, far = farM == null || farM > WORDS_BEYOND_M, w = hudWords)
         val turn = NavigationNextTurnEvent.newBuilder().setRoad(HudText.at(line, android.os.SystemClock.elapsedRealtime()))
         maneuver?.let { m ->
             turn.setEvent(legacyEvent(protocolType(m.type))).setTurnSide(sideOf(m.type))
@@ -238,7 +241,7 @@ class NavStatusBridge(
         }
         // the phone app's instruction without names too (18.11.2026): its turn in words and the road's number
         val far = (g.distance?.meters ?: Int.MAX_VALUE) > WORDS_BEYOND_M
-        val turn = NavigationNextTurnEvent.newBuilder().setRoad(HudText.at(HudText.line(HudText.wordsIn(g.instruction), g.instruction, far), android.os.SystemClock.elapsedRealtime()))
+        val turn = NavigationNextTurnEvent.newBuilder().setRoad(HudText.at(HudText.line(HudText.wordsIn(g.instruction, hudWords), g.instruction, far, hudWords), android.os.SystemClock.elapsedRealtime()))
         val arrow = g.arrow
         if (arrow != null && channel.wantsImages) {
             val o = channel.imageOptions
@@ -359,25 +362,25 @@ class NavStatusBridge(
         private const val WORDS_BEYOND_M = 1000.0
 
         /**
-         * The turn in words that fit the head-up display's line (nine letters), or null where the arrow says it all
-         * (straight on, a new name) or the language is not German.
+         * The turn in words that fit the head-up display's line (nine letters), from the language library ([w]), or null
+         * where the arrow says it all (straight on, a new name).
          */
-        fun words(type: Int, exit: Int, german: Boolean = java.util.Locale.getDefault().language == "de"): String? {
-            if (!german) return null
+        fun words(type: Int, exit: Int, w: HudWords?): String? {
+            if (w == null) return null
             val n = maneuverName(protocolType(type))
             val left = "LEFT" in n
             return when {
-                n.startsWith("ROUNDABOUT") -> if (exit in 1..9) "Kreisel $exit" else "Kreisel"
-                n.startsWith("U_TURN") || n.startsWith("ON_RAMP_U_TURN") -> "wenden"
-                n.startsWith("OFF_RAMP") -> "Ausfahrt"
-                n.startsWith("ON_RAMP") -> "Auffahrt"
-                n.startsWith("FORK") || n.startsWith("KEEP") -> if (left) "li halten" else "re halten"
-                n.startsWith("TURN_SLIGHT") -> if (left) "halb li." else "halb re."
-                n.startsWith("TURN_SHARP") -> if (left) "scharf li" else "scharf re"
-                n.startsWith("TURN_NORMAL") -> if (left) "links ab" else "rechts ab"
-                n.startsWith("MERGE") -> "einfädeln"
-                n.startsWith("FERRY") -> "Fähre"
-                n.startsWith("DESTINATION") -> "Ziel"
+                n.startsWith("ROUNDABOUT") -> if (exit in 1..9) w.roundaboutExit.format(exit) else w.roundabout
+                n.startsWith("U_TURN") || n.startsWith("ON_RAMP_U_TURN") -> w.uTurn
+                n.startsWith("OFF_RAMP") -> w.offRamp
+                n.startsWith("ON_RAMP") -> w.onRamp
+                n.startsWith("FORK") || n.startsWith("KEEP") -> if (left) w.keepLeft else w.keepRight
+                n.startsWith("TURN_SLIGHT") -> if (left) w.slightLeft else w.slightRight
+                n.startsWith("TURN_SHARP") -> if (left) w.sharpLeft else w.sharpRight
+                n.startsWith("TURN_NORMAL") -> if (left) w.left else w.right
+                n.startsWith("MERGE") -> w.merge
+                n.startsWith("FERRY") -> w.ferry
+                n.startsWith("DESTINATION") -> w.destination
                 else -> null
             }
         }
@@ -399,4 +402,25 @@ private fun laneShape(shape: Int): NavigationLane.LaneDirection.Shape = when (sh
     androidx.car.app.navigation.model.LaneDirection.SHAPE_U_TURN_LEFT -> NavigationLane.LaneDirection.Shape.U_TURN_LEFT
     androidx.car.app.navigation.model.LaneDirection.SHAPE_U_TURN_RIGHT -> NavigationLane.LaneDirection.Shape.U_TURN_RIGHT
     else -> NavigationLane.LaneDirection.Shape.UNKNOWN
+}
+
+/** The head-up display's turn words (at most nine letters each) in the device's language, from the language library. */
+class HudWords(
+    val roundabout: String, val roundaboutExit: String, val uTurn: String, val offRamp: String, val onRamp: String,
+    val keepLeft: String, val keepRight: String, val slightLeft: String, val slightRight: String,
+    val sharpLeft: String, val sharpRight: String, val left: String, val right: String,
+    val merge: String, val ferry: String, val destination: String, val exitShort: String,
+) {
+    companion object {
+        fun of(c: android.content.Context) = with(c) {
+            HudWords(
+                getString(R.string.hud_roundabout), getString(R.string.hud_roundabout_exit), getString(R.string.hud_u_turn),
+                getString(R.string.hud_off_ramp), getString(R.string.hud_on_ramp), getString(R.string.hud_keep_left),
+                getString(R.string.hud_keep_right), getString(R.string.hud_slight_left), getString(R.string.hud_slight_right),
+                getString(R.string.hud_sharp_left), getString(R.string.hud_sharp_right), getString(R.string.hud_left),
+                getString(R.string.hud_right), getString(R.string.hud_merge), getString(R.string.hud_ferry),
+                getString(R.string.hud_destination), getString(R.string.hud_exit_short),
+            )
+        }
+    }
 }

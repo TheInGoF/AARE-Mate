@@ -404,6 +404,11 @@ class Settings(context: Context) {
         get() = prefs.getInt("music_level_boost_db", 0).coerceIn(0, 10)
         set(v) = prefs.edit { putInt("music_level_boost_db", v.coerceIn(0, 10)) }
 
+    /** The Whisper model chosen among those on the device (Language.speech); empty = the language's standard. */
+    var asrModel: String
+        get() = prefs.getString("asr_model", "") ?: ""
+        set(v) = prefs.edit { putString("asr_model", v) }
+
     /** The voice messages are read with: a voice name of the system's speech engine; null = the engine's own default. */
     /** The voice Mate reads with (O110): "system" (the phone's text-to-speech) or "piper" (Thorsten, on the device). */
     var ttsEngine: String

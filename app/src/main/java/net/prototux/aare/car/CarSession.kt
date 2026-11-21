@@ -390,7 +390,7 @@ class CarSession(
             if (closed) return@post
             listener.onStatus(this, context.getString(R.string.notif_status_projecting_to, shownName(headUnitName)))
             navStatus?.let {
-                navBridge = NavStatusBridge(it, { m, w, h -> turnImage(m, w, h) }, ::png)
+                navBridge = NavStatusBridge(it, { m, w, h -> turnImage(m, w, h) }, ::png, HudWords.of(context))
                 // whether the car draws its own symbols or takes pictures from Mate (18.11.2026: "Ich weiß nicht, ob eigene
                 // Grafiken möglich wären")
                 DiagLog.add("head-up display: the car " + if (it.wantsImages) "takes pictures from Mate (${it.imageOptions.width}x${it.imageOptions.height}, ${it.imageOptions.colourDepthBits} bit)"

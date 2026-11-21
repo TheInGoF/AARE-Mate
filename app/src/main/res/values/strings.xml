@@ -845,7 +845,7 @@
     <string name="speech_section_models">Speech recognition</string>
     <string name="speech_models">On the device: %1$s. Everything is computed here, nothing goes online.</string>
     <string name="speech_no_models">No speech model on the device yet.</string>
-    <string name="speech_models_where">Models go into the app\'s folder: Android/data/app.idmate.mate/files/sprache/whisper-tiny (or -base, -small).</string>
+    <string name="speech_models_where">Models go into the app\'s folder: Android/data/app.idmate.mate/files/sprache/whisper-&lt;model&gt; (e.g. whisper-base, whisper-base.en).</string>
     <string name="speech_section_bench">Speed</string>
     <string name="speech_bench_hint">The device\'s voice speaks three test sentences, each model recognizes them with 2 and 4 threads. A real-time factor below 1 is faster than spoken. Takes a few minutes depending on the model.</string>
     <string name="speech_bench_start">Measure the speed</string>
@@ -1397,4 +1397,28 @@
     <string name="logbook_charge_cut">End not seen: the car was switched off while charging.</string>
     <string name="logbook_delete">Delete</string>
     <string name="logbook_delete_title">Delete this entry?</string>
+    <!-- head-up display: the turn in words, at most nine letters each -->
+    <string name="hud_roundabout">Rndabout</string>
+    <string name="hud_roundabout_exit">Rbt %d</string>
+    <string name="hud_u_turn">U-turn</string>
+    <string name="hud_off_ramp">Exit</string>
+    <string name="hud_on_ramp">On-ramp</string>
+    <string name="hud_keep_left">Keep L</string>
+    <string name="hud_keep_right">Keep R</string>
+    <string name="hud_slight_left">Slight L</string>
+    <string name="hud_slight_right">Slight R</string>
+    <string name="hud_sharp_left">Sharp L</string>
+    <string name="hud_sharp_right">Sharp R</string>
+    <string name="hud_left">Left</string>
+    <string name="hud_right">Right</string>
+    <string name="hud_merge">Merge</string>
+    <string name="hud_ferry">Ferry</string>
+    <string name="hud_destination">Arrive</string>
+    <string name="hud_exit_short">Exit %s</string>
+    <string name="speech_bench_loading">Whisper %1$s, %2$d threads: loading …</string>
+    <string name="speech_bench_sentence">Whisper %1$s, %2$d threads: sentence %3$d</string>
+    <string name="speech_bench_speaking">Speaking the test sentences …</string>
+    <string name="speech_model_english_only">English only, the most exact for English</string>
+    <string name="speech_model_multilingual">Multilingual</string>
+    <string name="speech_model_choose">With more than one model on the device, Mate listens with the marked one.</string>
 </resources>

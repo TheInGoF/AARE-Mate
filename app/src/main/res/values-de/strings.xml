@@ -783,7 +783,7 @@
     <string name="speech_section_models">Spracherkennung</string>
     <string name="speech_models">Auf dem Gerät: %1$s. Alles wird hier gerechnet, nichts geht ins Netz.</string>
     <string name="speech_no_models">Noch kein Sprachmodell auf dem Gerät.</string>
-    <string name="speech_models_where">Modelle liegen im Ordner der App: Android/data/app.idmate.mate/files/sprache/whisper-tiny (bzw. -base, -small).</string>
+    <string name="speech_models_where">Modelle liegen im Ordner der App: Android/data/app.idmate.mate/files/sprache/whisper-&lt;Modell&gt; (z. B. whisper-base, whisper-base.en).</string>
     <string name="speech_section_bench">Geschwindigkeit</string>
     <string name="speech_bench_hint">Die Stimme des Geräts spricht drei Testsätze, jedes Modell erkennt sie mit 2 und 4 Threads. Echtzeitfaktor unter 1 = schneller als gesprochen. Dauert je nach Modell einige Minuten.</string>
     <string name="speech_bench_start">Geschwindigkeit messen</string>
@@ -1386,4 +1386,28 @@
     <string name="logbook_charge_cut">Ende nicht gesehen: Das Auto wurde während des Ladens ausgeschaltet.</string>
     <string name="logbook_delete">Löschen</string>
     <string name="logbook_delete_title">Eintrag löschen?</string>
+    <!-- head-up display: the turn in words, at most nine letters each -->
+    <string name="hud_roundabout">Kreisel</string>
+    <string name="hud_roundabout_exit">Kreisel %d</string>
+    <string name="hud_u_turn">wenden</string>
+    <string name="hud_off_ramp">Ausfahrt</string>
+    <string name="hud_on_ramp">Auffahrt</string>
+    <string name="hud_keep_left">li halten</string>
+    <string name="hud_keep_right">re halten</string>
+    <string name="hud_slight_left">halb li.</string>
+    <string name="hud_slight_right">halb re.</string>
+    <string name="hud_sharp_left">scharf li</string>
+    <string name="hud_sharp_right">scharf re</string>
+    <string name="hud_left">links ab</string>
+    <string name="hud_right">rechts ab</string>
+    <string name="hud_merge">einfädeln</string>
+    <string name="hud_ferry">Fähre</string>
+    <string name="hud_destination">Ziel</string>
+    <string name="hud_exit_short">Ausf. %s</string>
+    <string name="speech_bench_loading">Whisper %1$s, %2$d Threads: lädt …</string>
+    <string name="speech_bench_sentence">Whisper %1$s, %2$d Threads: Satz %3$d</string>
+    <string name="speech_bench_speaking">Testsätze werden gesprochen …</string>
+    <string name="speech_model_english_only">Nur Englisch, für Englisch am genauesten</string>
+    <string name="speech_model_multilingual">Mehrsprachig</string>
+    <string name="speech_model_choose">Liegen mehrere Modelle auf dem Gerät, hört Mate mit dem markierten.</string>
 </resources>

@@ -607,15 +607,23 @@ private fun FirstStartCard() {
     // and a voice deleted on purpose came back. "Nicht laden" is kept: no more asking, they can be loaded under Sprache.
     val progress = net.prototux.aare.speech.ModelDownload.progress
     val asrKey = net.prototux.aare.speech.LocalAsr.STANDARD
-    val voiceKey = net.prototux.aare.speech.ModelDownload.VOICE
+    // the device language's first voice (Thorsten in German, Lessac in English)
+    val firstVoice = net.prototux.aare.speech.Voices.standard()
+    val voiceKey = if (firstVoice.id == "piper") net.prototux.aare.speech.ModelDownload.VOICE else firstVoice.id
     val asrThere = asrKey in net.prototux.aare.speech.LocalAsr.installed(ctx) || progress[asrKey] == 1f
-    val voice = net.prototux.aare.speech.Voices.byId("piper")!!
+    val voice = firstVoice
     // any voice of the device will do, not only Thorsten (18.11.2026: "ich habe eine Sprache installiert, das reicht mir
     // vollkommen aus")
-    val voiceThere = net.prototux.aare.speech.Voices.ALL.any { runCatching { net.prototux.aare.speech.Voices.available(ctx, it) }.getOrDefault(false) } ||
+    val voiceThere = net.prototux.aare.speech.Voices.ALL.filter { it.lang == net.prototux.aare.Language.code }.any { runCatching { net.prototux.aare.speech.Voices.available(ctx, it) }.getOrDefault(false) } ||
         net.prototux.aare.speech.Voices.available(ctx, voice) || progress[voiceKey] == 1f
     var declined by remember { mutableStateOf(prefs.getStringSet("packages_declined", emptySet())?.toSet() ?: emptySet()) }
-    fun load(key: String) { if (key == voiceKey) net.prototux.aare.speech.ModelDownload.startVoice(ctx) else net.prototux.aare.speech.ModelDownload.start(ctx, key) }
+    fun load(key: String) {
+        when {
+            key != voiceKey -> net.prototux.aare.speech.ModelDownload.start(ctx, key)
+            firstVoice.id == "piper" -> net.prototux.aare.speech.ModelDownload.startVoice(ctx)
+            else -> net.prototux.aare.speech.ModelDownload.startKokoro(ctx, firstVoice)
+        }
+    }
     val packages = listOf(Triple(stringResource(R.string.first_packages_asr), asrKey, asrThere), Triple(stringResource(R.string.first_packages_voice), voiceKey, voiceThere))
     val missing = packages.filter { !it.third }
     // to ask for: missing, not refused, not loading (or failed) in this run
@@ -1765,13 +1773,21 @@ private fun SpeechCard() {
             Text(if (sizes.isEmpty()) stringResource(R.string.speech_no_models) else stringResource(R.string.speech_models, sizes.joinToString(", ") { "Whisper $it" }),
                 style = MaterialTheme.typography.bodyMedium)
             Text(stringResource(R.string.speech_models_where), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // load a model here instead of copying it over (O56)
-            net.prototux.aare.speech.ModelDownload.OFFERED.forEach { (size, mb) ->
+            // load a model here instead of copying it over (O56); the language's alternatives side by side, one chosen
+            val offered = net.prototux.aare.speech.ModelDownload.OFFERED
+            var chosen by remember(sizes) { mutableStateOf(net.prototux.aare.speech.LocalAsr.chosen(ctx)) }
+            if (offered.size > 1) Text(stringResource(R.string.speech_model_choose), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+            offered.forEach { (size, mb) ->
                 val p = net.prototux.aare.speech.ModelDownload.progress[size]
                 val there = (p == 1f) || size in net.prototux.aare.speech.LocalAsr.installed(ctx)
                 Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (offered.size > 1) androidx.compose.material3.RadioButton(chosen == size,
+                        { if (there) { net.prototux.aare.Settings(ctx).asrModel = size; chosen = size } }, enabled = there)
                     Column(Modifier.weight(1f)) {
                         Text(stringResource(R.string.speech_model_row, size, mb), style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(if (size.endsWith(".en")) R.string.speech_model_english_only else R.string.speech_model_multilingual),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(stringResource(when { there -> R.string.speech_model_there; p == -1f -> R.string.speech_model_failed
                             p != null -> R.string.speech_model_loading; else -> R.string.speech_model_absent }),
                             style = MaterialTheme.typography.bodySmall, color = if (p == -1f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -3060,6 +3076,12 @@ private val LICENCES: List<Pair<Int, List<Pair<String, String>>>> = listOf(
     R.string.licences_downloaded to listOf(
         "Whisper models (OpenAI)" to "MIT",
         "Piper voice Thorsten (Thorsten Müller)" to "CC0-1.0",
+        "Piper voices Kerstin, Karlsson (rhasspy)" to "CC0-1.0",
+        "Piper voices Eva, Ramona (M-AILABS)" to "M-AILABS licence (BSD-style)",
+        "Piper voices Dii, Miro (OpenVoiceOS), Ryan, HFC (US)" to "CC BY-NC-SA 4.0, private use only",
+        "Piper voice Lessac (US, Blizzard 2013)" to "Blizzard 2013 licence, non-commercial",
+        "Piper voice Alba (GB)" to "CC BY 4.0",
+        "Piper voice Northern English (GB, OpenSLR 83)" to "CC BY-SA 4.0",
         "Kokoro voices (Kokoro-82M)" to "Apache-2.0",
         "espeak-ng data" to "GPL-3.0"),
     R.string.licences_data to listOf(

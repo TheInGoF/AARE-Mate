@@ -47,8 +47,8 @@ object VoiceCommands {
 
     private val cache = HashMap<String, Grammar>()
 
-    /** The command words of [lang], German when there is no file for it. */
-    fun grammar(lang: String = java.util.Locale.getDefault().language): Grammar = synchronized(cache) {
+    /** The command words of [lang] (befehle-<lang>.json), German when there is no file for it. */
+    fun grammar(lang: String = net.prototux.aare.Language.code): Grammar = synchronized(cache) {
         cache.getOrPut(lang) {
             val res = VoiceCommands::class.java.getResourceAsStream("befehle-$lang.json")
                 ?: VoiceCommands::class.java.getResourceAsStream("befehle-de.json")!!

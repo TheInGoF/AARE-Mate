@@ -114,7 +114,7 @@ internal fun NaviRouteStrip(rows: List<NaviTripPlan.Row>, jams: List<Triple<Doub
             val at = dest?.arriveAtMillis ?: (now + (leftS * 1000).toLong())
             Text(net.prototux.aare.ui.Clock.format(at), color = teal, fontSize = 30.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Text(duration(leftS) + " · " + km(leftM), color = Color.White, fontSize = 20.sp, maxLines = 1)
-            dest?.arrivePercent?.let { Text("${it.roundToInt()} % am Ziel", color = Mate.textDim, fontSize = 18.sp, maxLines = 1) }
+            dest?.arrivePercent?.let { Text(androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_plan_destination, "${it.roundToInt()} %"), color = Mate.textDim, fontSize = 18.sp, maxLines = 1) }
         }
     }
 }

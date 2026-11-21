@@ -16,7 +16,7 @@ object ModelDownload {
      * Sizes offered, with their download size in MB: base only (18.11.2026: "das große Whisper-Modell mit 160 MB funktioniert
      * ganz gut, das nehmen wir als Standard, das kleine kann man rausnehmen"); small is too slow on the S6 Lite.
      */
-    val OFFERED = linkedMapOf("base" to 160)
+    val OFFERED: Map<String, Int> get() = net.prototux.aare.Language.speech().whisper
 
     /** size -> progress 0..1 while loading, -1 after a failure. */
     val progress = mutableStateMapOf<String, Float>()

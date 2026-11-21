@@ -12,20 +12,30 @@ import android.util.Log
  * Better Route Planner und Google, nutzen immer noch die billige Google-lokale Stimme ... schön, wenn alle Programme die
  * vernünftigen Kokoro-Sprachdateien bekommen würden"): any app that speaks through Android's text-to-speech gets the
  * voice chosen in Mate (Kokoro or Piper), once Mate is set as the preferred engine in the tablet's settings.
- * German only. Kokoro needs 2-3 s to the first sound on the S6 Lite - for turn prompts of other apps Piper (Thorsten)
+ * In the chosen voice's language (German or English). Kokoro needs 2-3 s to the first sound on the S6 Lite - for turn prompts of other apps Piper (Thorsten)
  * answers at once.
  */
 class MateTtsService : TextToSpeechService() {
+
     @Volatile private var stopped = false
 
-    override fun onIsLanguageAvailable(lang: String?, country: String?, variant: String?): Int = when {
-        lang == null || !lang.startsWith("de") -> TextToSpeech.LANG_NOT_SUPPORTED
-        !LocalTts.available(this) -> TextToSpeech.LANG_MISSING_DATA
-        country.isNullOrEmpty() || country == "DEU" || country == "DE" -> TextToSpeech.LANG_COUNTRY_AVAILABLE
-        else -> TextToSpeech.LANG_AVAILABLE
+    /** The chosen voice's language, the device's where none is chosen. */
+    private fun voiceLang(): String = LocalTts.chosen(this)?.lang ?: net.prototux.aare.Language.code
+
+    override fun onIsLanguageAvailable(lang: String?, country: String?, variant: String?): Int {
+        val mine = voiceLang()
+        return when {
+            lang == null || !lang.startsWith(mine) -> TextToSpeech.LANG_NOT_SUPPORTED
+            !LocalTts.available(this) -> TextToSpeech.LANG_MISSING_DATA
+            country.isNullOrEmpty() || country in COUNTRIES[mine].orEmpty() -> TextToSpeech.LANG_COUNTRY_AVAILABLE
+            else -> TextToSpeech.LANG_AVAILABLE
+        }
     }
 
-    override fun onGetLanguage(): Array<String> = arrayOf("deu", "DEU", "")
+    override fun onGetLanguage(): Array<String> = when (voiceLang()) {
+        "en" -> arrayOf("eng", if (LocalTts.chosen(this)?.name?.contains("GB") == true) "GBR" else "USA", "")
+        else -> arrayOf("deu", "DEU", "")
+    }
 
     override fun onLoadLanguage(lang: String?, country: String?, variant: String?): Int = onIsLanguageAvailable(lang, country, variant)
 
@@ -79,7 +89,11 @@ class MateTtsService : TextToSpeechService() {
 
     private fun callingPackage(): String = runCatching { packageManager.getNameForUid(android.os.Binder.getCallingUid()) }.getOrNull() ?: "?"
 
-    companion object { private const val TAG = "MateTts" }
+    companion object {
+        private const val TAG = "MateTts"
+        /** The countries a language's voices answer for fully (ISO 3166 alpha-2 and alpha-3). */
+        private val COUNTRIES = mapOf("de" to setOf("DE", "DEU"), "en" to setOf("US", "USA", "GB", "GBR"))
+    }
 }
 
 /** The words "Beispiel anhören" in the tablet's settings speaks (Android asks the engine for them). */

@@ -294,7 +294,7 @@ object CarTools {
                 t.setAudioAttributes(android.media.AudioAttributes.Builder()
                     .setUsage(if (args.optBoolean("media")) android.media.AudioAttributes.USAGE_MEDIA else android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
-                t.language = java.util.Locale.GERMANY
+                t.language = java.util.Locale.forLanguageTag(net.prototux.aare.Language.code)
                 android.util.Log.i("AareTools", "debug_say with engine ${t.defaultEngine}")
                 t.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "debug_say")
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ t.shutdown() }, 15_000)
@@ -309,7 +309,7 @@ object CarTools {
                 val t = tts ?: return@TextToSpeech
                 runCatching {
                     android.util.Log.i("AareVoices", "engine ${t.defaultEngine}, default ${t.defaultVoice?.name}, status $status")
-                    t.voices?.filter { it.locale.language == "de" }?.sortedByDescending { it.quality }?.forEach { v ->
+                    t.voices?.filter { it.locale.language == net.prototux.aare.Language.code }?.sortedByDescending { it.quality }?.forEach { v ->
                         android.util.Log.i("AareVoices", "${v.name} quality ${v.quality} latency ${v.latency} network ${v.isNetworkConnectionRequired}" +
                             if (v.features?.contains(android.speech.tts.TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) == true) " NOT INSTALLED" else "")
                     }

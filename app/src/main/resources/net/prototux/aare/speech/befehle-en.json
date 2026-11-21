@@ -1,0 +1,358 @@
+{
+ "lang": "en",
+ "note": "Command database for voice control (Whisper). Per command the verbs (at the start of the sentence, the longest wins) and the filler words before and after that are cut from the target. For another language: this file translated as befehle-<language>.json, with the same commands and the same words keys.",
+ "polite": [
+  "hey mate",
+  "hello mate",
+  "okay mate",
+  "ok mate",
+  "mate",
+  "please",
+  "can you",
+  "could you",
+  "would you",
+  "would you please",
+  "just",
+  "now"
+ ],
+ "articles": [
+  "the",
+  "a",
+  "an"
+ ],
+ "commands": [
+  {
+   "kind": "HOME",
+   "whole": [
+    "home",
+    "go home",
+    "drive home",
+    "take me home",
+    "navigate home",
+    "navigate to home",
+    "bring me home",
+    "guide me home",
+    "i want to go home",
+    "route home",
+    "navigation home",
+    "start navigation home",
+    "show me the way home",
+    "head home",
+    "lets go home"
+   ]
+  },
+  {
+   "kind": "NAVIGATE",
+   "verbs": [
+    "navigate",
+    "navigation",
+    "start navigation",
+    "start the navigation",
+    "start the route",
+    "drive",
+    "go",
+    "take me",
+    "bring me",
+    "guide me",
+    "lead me",
+    "route",
+    "plan a route",
+    "show me the way",
+    "how do i get",
+    "i want to go",
+    "i would like to go",
+    "destination is",
+    "new destination",
+    "go to",
+    "drive to",
+    "take me to",
+    "navigate to"
+   ],
+   "lead": [
+    "me",
+    "please",
+    "to",
+    "to the",
+    "towards",
+    "into",
+    "in",
+    "for",
+    "until",
+    "the"
+   ],
+   "trail": [
+    "please"
+   ],
+   "needsTarget": true
+  },
+  {
+   "kind": "OPEN_APP",
+   "verbs": [
+    "open",
+    "start",
+    "launch",
+    "show",
+    "show me",
+    "switch to",
+    "open up",
+    "bring up",
+    "run"
+   ],
+   "lead": [
+    "the",
+    "me",
+    "my",
+    "please"
+   ],
+   "trail": [
+    "app",
+    "application",
+    "please",
+    "up"
+   ],
+   "needsTarget": true
+  },
+  {
+   "kind": "PLAY",
+   "verbs": [
+    "play",
+    "play me",
+    "play some",
+    "listen to",
+    "i want to hear",
+    "i would like to hear",
+    "put on",
+    "music by",
+    "songs by",
+    "something by"
+   ],
+   "lead": [
+    "me",
+    "some",
+    "please",
+    "something by",
+    "music by",
+    "songs by",
+    "tracks by"
+   ],
+   "trail": [
+    "please",
+    "for me"
+   ],
+   "needsTarget": true
+  },
+  {
+   "kind": "CALL",
+   "verbs": [
+    "call",
+    "phone",
+    "ring",
+    "dial",
+    "make a call to",
+    "place a call to",
+    "call up"
+   ],
+   "lead": [
+    "up",
+    "please"
+   ],
+   "trail": [
+    "please",
+    "now"
+   ],
+   "needsTarget": true
+  },
+  {
+   "kind": "MESSAGE",
+   "verbs": [
+    "write",
+    "write to",
+    "send",
+    "text",
+    "message",
+    "reply",
+    "reply to",
+    "answer",
+    "new message to",
+    "send a message to"
+   ],
+   "lead": [
+    "please"
+   ],
+   "nouns": [
+    "message",
+    "messages",
+    "text",
+    "note"
+   ],
+   "to": [
+    "to",
+    "for"
+   ],
+   "via": [
+    "via",
+    "over",
+    "on",
+    "with",
+    "in",
+    "through",
+    "using"
+   ],
+   "textMark": [
+    "that",
+    "saying",
+    "with the text",
+    "with text",
+    "the text",
+    "as follows",
+    "text"
+   ],
+   "needsTarget": true
+  },
+  {
+   "kind": "PAUSE",
+   "whole": [
+    "pause",
+    "stop",
+    "halt",
+    "music off",
+    "stop music",
+    "stop the music",
+    "pause music",
+    "pause the music",
+    "quiet",
+    "silence",
+    "be quiet"
+   ]
+  },
+  {
+   "kind": "RESUME",
+   "whole": [
+    "resume",
+    "continue",
+    "keep playing",
+    "play on",
+    "music on",
+    "play",
+    "continue playing",
+    "resume music",
+    "unpause"
+   ]
+  },
+  {
+   "kind": "NEXT",
+   "whole": [
+    "next track",
+    "next song",
+    "next title",
+    "next",
+    "skip",
+    "skip this",
+    "skip song",
+    "the next one",
+    "next one"
+   ]
+  },
+  {
+   "kind": "PREVIOUS",
+   "whole": [
+    "previous track",
+    "previous song",
+    "last track",
+    "last song",
+    "back",
+    "previous",
+    "again",
+    "once more",
+    "from the start",
+    "play again"
+   ]
+  }
+ ],
+ "messengers": {
+  "com.whatsapp": [
+   "whatsapp",
+   "whats app",
+   "whatsapp message",
+   "whatsup",
+   "whats up"
+  ],
+  "io.element.android.x": [
+   "element x",
+   "elementx",
+   "element"
+  ],
+  "org.thoughtcrime.securesms": [
+   "signal"
+  ],
+  "org.telegram.messenger": [
+   "telegram"
+  ],
+  "com.google.android.apps.messaging": [
+   "sms",
+   "text message",
+   "short message"
+  ],
+  "com.facebook.orca": [
+   "messenger",
+   "facebook messenger"
+  ],
+  "ch.threema.app": [
+   "threema"
+  ]
+ },
+ "cancel": [
+  "cancel",
+  "abort",
+  "no",
+  "stop",
+  "halt",
+  "not",
+  "wrong",
+  "forget it",
+  "never mind",
+  "leave it",
+  "do not call",
+  "dont call"
+ ],
+ "confirm": [
+  "yes",
+  "yeah",
+  "yep",
+  "call",
+  "go",
+  "okay",
+  "ok",
+  "now",
+  "do it",
+  "right",
+  "correct",
+  "exactly"
+ ],
+ "home": [
+  "home",
+  "at home",
+  "my home",
+  "to home",
+  "house"
+ ],
+ "words": {
+  "say_unknown": "I did not understand that: %s",
+  "say_nothing": "I did not hear anything.",
+  "say_navigate": "Navigating to %s.",
+  "say_home": "Navigating home.",
+  "say_no_home": "No home is set. Set it in the Mate app under Destinations.",
+  "say_open": "Opening %s.",
+  "say_no_app": "No app %s found.",
+  "say_call": "Calling %s.",
+  "say_call_confirm": "Call %s?",
+  "say_call_cancelled": "Call cancelled.",
+  "say_no_contact": "No contact %s found.",
+  "say_message_ask": "What shall I write to %s?",
+  "say_message_sent": "Sent to %s.",
+  "say_message_none": "There is no open conversation with %s in %s that I can reply to.",
+  "say_message_none_any": "There is no open conversation with %s that I can reply to.",
+  "say_play_none": "I did not find %s in the music.",
+  "say_music_off": "Mate Music is not playing right now."
+ }
+}
