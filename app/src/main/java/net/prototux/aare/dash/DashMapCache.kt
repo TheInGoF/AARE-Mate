@@ -43,6 +43,8 @@ internal object DashMapCache {
     val rain: StateFlow<JSONObject?> get() = _rain
 
     @Volatile private var windRaw: JSONArray? = null
+    /** IDmate's last range area as it came, made anew when the wind changes (RangeWind). */
+    @Volatile private var areaRaw: JSONObject? = null
     @Volatile private var areaTs: String? = null
     @Volatile private var rainAt = 0L
     @Volatile private var windAt = 0L
@@ -68,6 +70,28 @@ internal object DashMapCache {
     /** A round now (the dashboard opened), off the main thread. */
     fun refreshSoon(context: Context) { val app = context.applicationContext; scope.launch { round(app) } }
 
+    /**
+     * IDmate's area with the wind put in by Mate where IDmate left it out (RangeWind): stretched from the car's place
+     * (else the middle of the area) by the mean of IDmate's wind points.
+     */
+    private fun makeArea(context: Context, raw: JSONObject): DashMapGeo.Area? {
+        val wind = windRaw?.let { w -> RangeWind.mean((0 until w.length()).mapNotNull { i -> w.optJSONObject(i)?.let { p ->
+            val kmh = p.optDouble("kmh", Double.NaN); val dir = p.optDouble("dir", Double.NaN)
+            if (kmh.isNaN() || dir.isNaN()) null else kmh to dir } }) }
+        if (wind == null || wind.ms < RangeWind.CALM_MS) return DashMapGeo.area(raw)
+        val t = Hub.get(context).telemetry
+        val lat = t.number("lat"); val lon = t.number("lon")
+        val car = net.prototux.aare.host.CarDataService.car(context) ?: net.prototux.aare.host.EnergyModel.Car(capacityWh = 77_000, socPercent = 50.0)
+        var center: DoubleArray? = if (lat != null && lon != null) doubleArrayOf(lon, lat) else null
+        val made = DashMapGeo.area(raw) { ring ->
+            val c = center ?: doubleArrayOf(ring.map { it[0] }.average(), ring.map { it[1] }.average()).also { center = it }
+            RangeWind.deform(ring, c, wind, car)
+        }
+        if (made != null) Log.i(TAG, "dashboard map: range with the wind from %.0f° at %.0f km/h put in by Mate (%.2f..%.2f of the range)".format(
+            java.util.Locale.ROOT, wind.fromDeg, wind.ms * 3.6, RangeWind.factor(wind.fromDeg, wind, car), RangeWind.factor((wind.fromDeg + 180) % 360, wind, car)))
+        return made
+    }
+
     @Synchronized private fun client(context: Context) = data ?: DashMapData(context).also { data = it }
 
     private val busy = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -80,15 +104,20 @@ internal object DashMapCache {
             if (got != null) {
                 val ts = got.optString("ts")
                 if (ts != areaTs) {
-                    val made = got.optJSONObject("geojson")?.let(DashMapGeo::area)
+                    val raw = got.optJSONObject("geojson")
+                    val made = raw?.let { makeArea(context, it) }
                     Log.i(TAG, "dashboard map: range area " + (if (made != null) "taken (${got.optJSONArray("kms")} km)" else "not readable"))
-                    if (made != null) { _area.value = made; areaTs = ts }
+                    if (made != null) { _area.value = made; areaTs = ts; areaRaw = raw }
                 }
             }
             d.trail()?.let { _trail.value = DashMapGeo.trail(it) }
             val now = System.currentTimeMillis()
             if (now - rainAt > RAIN_EVERY_MS) d.rain()?.let { _rain.value = it; rainAt = now }
-            if (now - windAt > WIND_EVERY_MS) d.wind()?.let { w -> windRaw = w; _wind.value = DashMapGeo.wind(w); _windSeen.value = w.length() > 0; windAt = now }
+            if (now - windAt > WIND_EVERY_MS) d.wind()?.let { w ->
+                windRaw = w; _wind.value = DashMapGeo.wind(w); _windSeen.value = w.length() > 0; windAt = now
+                // the range drawn anew with the new wind
+                areaRaw?.let { raw -> makeArea(context, raw)?.let { _area.value = it } }
+            }
         } catch (e: Exception) {
             Log.w(TAG, "dashboard map: a round failed: ${e.javaClass.simpleName}")
         } finally {
