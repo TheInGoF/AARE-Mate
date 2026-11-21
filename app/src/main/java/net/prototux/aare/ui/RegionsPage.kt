@@ -2,6 +2,7 @@ package net.prototux.aare.ui
 
 import android.text.format.Formatter
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -157,9 +158,12 @@ private fun StorageCard(busy: Boolean, changed: () -> Unit) {
             Text(stringResource(R.string.storage_intro), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (missing) Text(stringResource(R.string.storage_card_missing), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             vols.forEach { v ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.RadioButton(selected = v.id == chosen, enabled = moving == null && !busy && !missing,
-                        onClick = { if (v.id != chosen) { target = v; error = null } })
+                val pick = { if (v.id != chosen) { target = v; error = null } }
+                val can = moving == null && !busy && !missing
+                // the whole line picks the place, not only the small round button
+                Row(Modifier.fillMaxWidth().selectable(selected = v.id == chosen, enabled = can, onClick = pick),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.RadioButton(selected = v.id == chosen, enabled = can, onClick = pick)
                     Column(Modifier.weight(1f)) {
                         Text(v.label, style = MaterialTheme.typography.bodyLarge)
                         Text(stringResource(R.string.storage_free, size(v.free), size(v.total)) +
