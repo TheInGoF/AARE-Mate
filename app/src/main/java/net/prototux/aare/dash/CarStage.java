@@ -439,6 +439,9 @@ final class CarStage {
     /** Night or day before the page exists: the page takes it when it loads. */
     static void nightLater(boolean on) { sNight = on; DashMapView.night(on); }
 
+    /** Night on the car's screen (the values' painter: the charge bar's glow). */
+    static boolean isNight() { return sNight; }
+
     private static String nightJs() { return "window.__mateNight=" + sNight + ";"; }
 
     /** The car's lights changed to night or day: the map's colours follow at once. Main thread. */

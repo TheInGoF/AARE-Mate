@@ -27,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,6 +88,8 @@ import kotlin.time.Duration.Companion.milliseconds
 object DashMapView {
     /** Night on the car's screen: the map's colours as Mate Navi's at night. */
     internal val night = mutableStateOf(false)
+    /** The start's overview and glide to the car once per app start, as before (CarStage.sAutoDone). */
+    @Volatile internal var introDone = false
 
     @JvmStatic fun night(on: Boolean) { night.value = on }
 
@@ -111,6 +114,13 @@ private val CAR_TEAL = Color(0xFF00B3A4)
 /** IDmate's rain blues: lighter alone, deeper and more opaque beside the wind arrows (rainStyle). */
 private val RAIN_COLS = listOf(Color(0xFF9ECAE1), Color(0xFF4292C6), Color(0xFF08519C))
 private val RAIN_COLS_WIND = listOf(Color(0xFF6BAED6), Color(0xFF2171B5), Color(0xFF08306B))
+/**
+ * At night on the dark map (21.11.2026: "ob die Kontraste für die Wetteroberflächen dann noch zum Nachtmodus passen"):
+ * IDmate's deep blues vanished there, heavy rain the least seen - from a dim to a bright blue instead, the heavy the
+ * brightest; the ring light blue on a dark edge; out of reach darker.
+ */
+private val RAIN_COLS_NIGHT = listOf(Color(0xFF2B5C8A), Color(0xFF3D8BD9), Color(0xFF9CD0FF))
+private val MAP_BLUE_NIGHT = Color(0xFF58A6FF)
 private val WIND_COLS = listOf(0xFF57606A.toInt(), 0xFF0969DA.toInt(), 0xFFBC4C00.toInt(), 0xFFCF222E.toInt())
 private val WIND_SIZE = listOf(17, 21, 25, 25)
 private const val NEAR_ZOOM = 13.0
@@ -126,7 +136,6 @@ private fun DashMap(go: (String) -> Unit) {
     val density = LocalDensity.current.density
     val scope = rememberCoroutineScope()
     val night by DashMapView.night
-    val data = remember { DashMapData(context) }
 
     // the car: IDmate's position (stick or server), looked at every 2 s
     var car by remember { mutableStateOf<Position?>(null) }
@@ -152,53 +161,28 @@ private fun DashMap(go: (String) -> Unit) {
     LaunchedEffect(pack?.id) { Log.i(TAG, "dashboard map: base map " + (pack?.let { "package ${it.id} on the device" } ?: "from the map server (no package here)")) }
     val style = remember(night, pack?.file) { BaseStyle.Json(mapStyle(context, night, pack)) }
 
-    // IDmate's data: the area every 30 s, the trail every 30 s, the rain every minute, the wind every 10 minutes
-    var area by remember { mutableStateOf<DashMapGeo.Area?>(null) }
-    var areaTs by remember { mutableStateOf<String?>(null) }
-    var wind by remember { mutableStateOf(List(4) { DashMapGeo.EMPTY }) }
-    var rain by remember { mutableStateOf(List(3) { DashMapGeo.EMPTY }) }
-    var trail by remember { mutableStateOf(DashMapGeo.EMPTY) }
-    var rainAt by remember { mutableStateOf<String?>(null) }
-    var rainSrc by remember { mutableStateOf<String?>(null) }
+    // IDmate's data from the store kept while the car is connected (DashMapCache): the last ones at once, a round now
+    val area by DashMapCache.area.collectAsState()
+    val trail by DashMapCache.trail.collectAsState()
+    val wind by DashMapCache.wind.collectAsState()
+    val windSeen by DashMapCache.windSeen.collectAsState()
+    val rainRaw by DashMapCache.rain.collectAsState()
+    LaunchedEffect(Unit) { DashMapCache.refreshSoon(context) }
+    val rainFrame = remember(rainRaw) { DashMapGeo.rainNow(rainRaw) }
+    val rain = remember(rainFrame) { DashMapGeo.rain(rainFrame, rainRaw?.optDouble("cell_km", 0.0) ?: 0.0) }
+    val rainAt = remember(rainFrame) { rainFrame?.optString("t")?.let(::clock) }
+    val rainSrc = remember(rainFrame) { rainFrame?.optJSONArray("src")?.let { a -> (0 until a.length()).mapNotNull { SOURCES[a.optString(it)] }.joinToString(", ") }?.ifBlank { null } }
     // wind and rain switched on and off as on IDmate's page (wind on, rain off at first), kept on the device
     val prefs = remember { context.getSharedPreferences("dash_map", Context.MODE_PRIVATE) }
     var windOn by remember { mutableStateOf(prefs.getBoolean("wind", true)) }
     var rainOn by remember { mutableStateOf(prefs.getBoolean("rain", false)) }
-    var windSeen by remember { mutableStateOf(false) }
-    LaunchedEffect(rainOn) {
-        var round = 0
-        while (true) {
-            withContext(Dispatchers.IO) {
-                val got = data.area()
-                if (got == null) { if (area == null) Log.i(TAG, "dashboard map: no range area from IDmate (yet)") }
-                else {
-                    val ts = got.optString("ts")
-                    if (ts != areaTs) {
-                        val made = got.optJSONObject("geojson")?.let(DashMapGeo::area)
-                        Log.i(TAG, "dashboard map: range area " + (if (made != null) "drawn (${got.optJSONArray("kms")} km)" else "not readable"))
-                        if (made != null) { area = made; areaTs = ts }
-                    }
-                }
-                data.trail()?.let { trail = DashMapGeo.trail(it) }
-                if (rainOn && round % 2 == 0) data.rain()?.let { r ->
-                    val now = DashMapGeo.rainNow(r)
-                    rain = DashMapGeo.rain(now, r.optDouble("cell_km", 0.0))
-                    rainAt = now?.optString("t")?.let(::clock)
-                    rainSrc = now?.optJSONArray("src")?.let { a -> (0 until a.length()).mapNotNull { SOURCES[a.optString(it)] }.joinToString(", ") }?.ifBlank { null }
-                }
-                if (round % 20 == 0) data.wind()?.let { wind = DashMapGeo.wind(it); windSeen = it.length() > 0 }
-            }
-            round++
-            delay(30_000)
-        }
-    }
 
     // the camera: the whole area first, after 3 s to the car (once per start), then following the car while the crosshair is on
     val camera = rememberCameraState(CameraPosition(target = NOWHERE, zoom = START_ZOOM))
     var follow by remember { mutableStateOf(false) }
     // the zoom the following keeps: the car's moves must not undo a zoom on its way (they took the glide in back to 7)
     var followZoom by remember { mutableStateOf(NEAR_ZOOM) }
-    var introDone by remember { mutableStateOf(false) }
+    var introDone by remember { mutableStateOf(DashMapView.introDone) }
     /** The whole range: the road area, else the circle of the range around the car. */
     fun rangeBox(): DoubleArray? = area?.box ?: run {
         val c = car ?: return null; val km = rangeKm ?: return null
@@ -220,10 +204,12 @@ private fun DashMap(go: (String) -> Unit) {
         if (follow) { followZoom = (followZoom + d).coerceIn(3.0, 18.0); car?.let { c -> scope.launch { runCatching { camera.animateTo(CameraPosition(target = c, zoom = followZoom), 300.milliseconds) } } } }
         else scope.launch { runCatching { camera.animateTo(camera.position.copy(zoom = (camera.position.zoom + d).coerceIn(3.0, 18.0)), 300.milliseconds) } }
     }
+    // after the first time: straight to the car, following it
+    LaunchedEffect(car != null) { if (introDone && car != null && !follow) toCar(NEAR_ZOOM) }
     LaunchedEffect(car != null, area != null || rangeKm != null) {
         if (introDone || car == null) return@LaunchedEffect
         if (rangeBox() != null) { overview(); delay(3_000) }
-        introDone = true
+        introDone = true; DashMapView.introDone = true
         toCar(NEAR_ZOOM)
     }
     LaunchedEffect(car) { if (follow && introDone) car?.let { c -> runCatching { camera.animateTo(CameraPosition(target = c, zoom = followZoom), 900.milliseconds) } } }
@@ -251,23 +237,25 @@ private fun DashMap(go: (String) -> Unit) {
                 a?.shade ?: run { val p = car; val km = rangeKm; if (p == null || km == null) DashMapGeo.EMPTY else DashMapGeo.circleShade(p.latitude, p.longitude, km) }
             }
             FillLayer(id = "dash-shade", source = rememberGeoJsonSource(remember(shade) { GeoJsonData.JsonString(shade) }),
-                color = const(Color.Black), opacity = const(0.10f))
+                color = const(Color.Black), opacity = const(if (night) 0.25f else 0.10f))
             val windShown = windOn && windSeen
             for (g in 0 until 3) {
                 FillLayer(id = "dash-rain-$g", source = rememberGeoJsonSource(remember(rain[g], rainOn) { GeoJsonData.JsonString(if (rainOn) rain[g] else DashMapGeo.EMPTY) }),
-                    color = const(if (windShown) RAIN_COLS_WIND[g] else RAIN_COLS[g]), opacity = const(if (windShown) 0.7f else 0.5f))
+                    color = const(if (night) RAIN_COLS_NIGHT[g] else if (windShown) RAIN_COLS_WIND[g] else RAIN_COLS[g]),
+                    opacity = const(if (night) 0.55f else if (windShown) 0.7f else 0.5f))
             }
             // the one range ring: IDmate's expected range (with wind its outline), white edge under the blue line
             val outer = rememberGeoJsonSource(remember(a?.outer) { GeoJsonData.JsonString(a?.outer ?: DashMapGeo.EMPTY) })
-            LineLayer(id = "dash-area-halo", source = outer, color = const(Color.White), width = const(6.5.dp), opacity = const(0.9f), cap = const(LineCap.Round), join = const(LineJoin.Round))
-            LineLayer(id = "dash-area", source = outer, color = const(MAP_BLUE), width = const(3.dp), opacity = const(1f), cap = const(LineCap.Round), join = const(LineJoin.Round))
+            LineLayer(id = "dash-area-halo", source = outer, color = const(if (night) Color(0xFF0D1117) else Color.White), width = const(6.5.dp),
+                opacity = const(if (night) 0.8f else 0.9f), cap = const(LineCap.Round), join = const(LineJoin.Round))
+            LineLayer(id = "dash-area", source = outer, color = const(if (night) MAP_BLUE_NIGHT else MAP_BLUE), width = const(3.dp), opacity = const(1f), cap = const(LineCap.Round), join = const(LineJoin.Round))
             // no road area (yet): the range as a thin circle around the car, as IDmate's page
             val circle = remember(a == null, car, rangeKm?.toInt()) {
                 val p = car; val km = rangeKm
                 if (a != null || p == null || km == null) DashMapGeo.EMPTY else DashMapGeo.circle(p.latitude, p.longitude, km)
             }
             LineLayer(id = "dash-range-circle", source = rememberGeoJsonSource(remember(circle) { GeoJsonData.JsonString(circle) }),
-                color = const(MAP_BLUE), width = const(2.dp), opacity = const(0.8f))
+                color = const(if (night) MAP_BLUE_NIGHT else MAP_BLUE), width = const(2.dp), opacity = const(0.8f))
             LineLayer(id = "dash-trail", source = rememberGeoJsonSource(remember(trail) { GeoJsonData.JsonString(trail) }),
                 color = const(CAR_TEAL), width = const(4.dp), opacity = const(0.8f), cap = const(LineCap.Round), join = const(LineJoin.Round))
             for (k in 0 until 4) {
@@ -296,7 +284,7 @@ private fun DashMap(go: (String) -> Unit) {
                 }
             }
             if (rainOn) Legend(stringResource(R.string.dash_map_rain)) {
-                val cols = if (windOn && windSeen) RAIN_COLS_WIND else RAIN_COLS
+                val cols = if (night) RAIN_COLS_NIGHT else if (windOn && windSeen) RAIN_COLS_WIND else RAIN_COLS
                 listOf(R.string.dash_rain_light, R.string.dash_rain_moderate, R.string.dash_rain_heavy).forEachIndexed { g, id ->
                     LegendRow({ Box(Modifier.size(18.dp).clip(RoundedCornerShape(3.dp)).background(cols[g])) }, stringResource(id))
                 }
@@ -334,7 +322,7 @@ private fun clock(iso: String): String? = runCatching {
 @Composable
 private fun SignButton(sign: Sign, on: Boolean, label: String, onClick: () -> Unit) {
     Box(Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)).background(Color(if (on) 0xF20E3B36 else 0xE6161B22))
-        .border(1.2.dp, Color(if (on) 0xFF1DE9B6 else 0xFF30363D), RoundedCornerShape(10.dp))
+        .border(1.2.dp, Color(if (on) 0xFF1DE9B6 else 0xFF57606A), RoundedCornerShape(10.dp))
         .clickable(onClickLabel = label, onClick = onClick)) {
         androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
             val u = size.width / 52f; val cx = size.width / 2; val cy = size.height / 2
@@ -368,7 +356,9 @@ private fun SignButton(sign: Sign, on: Boolean, label: String, onClick: () -> Un
 
 @Composable
 private fun Legend(title: String, rows: @Composable () -> Unit) {
-    Column(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xE6161B22)).padding(horizontal = 12.dp, vertical = 10.dp),
+    // a light edge: on the dark night map the dark plate would melt into it
+    Column(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xE6161B22)).border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(10.dp))
+        .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title, color = Color.White, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
         rows()

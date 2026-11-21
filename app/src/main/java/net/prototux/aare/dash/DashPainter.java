@@ -48,6 +48,8 @@ final class DashPainter {
      * Alles zeichnen. mapPlaceholder: links ein Kartenfeld mit Position zeichnen (wenn keine echte Karte
      * daneben liegt und die Flaeche breit genug ist).
      */
+    private final android.graphics.Paint mGlow = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
     void paint(Canvas cv, Rect r, float dp, boolean mapPlaceholder) {
         Paint p = mPaint;
         p.reset();
@@ -89,6 +91,19 @@ final class DashPainter {
             boolean charging = Boolean.TRUE.equals(mTelemetry.flag("charging"));
             p.setColor(soc < 15 ? RED : charging ? ACCENT : GREEN);
             float w = (colR - colL) * (float) Math.max(0, Math.min(100, soc)) / 100f;
+            /* at night a light glow in the bar's colour (21.11.2026: "Im Nachtmodus soll der Ladebalken im Dashboard
+               einen leichten Glow bekommen") */
+            if (CarStage.isNight()) {
+                /* layered rims fading outwards (a blur filter did not show in this view) */
+                int col = p.getColor();
+                float right = colL + Math.max(w, barH);
+                for (int k = 4; k >= 1; k--) {
+                    float g = k * 1.6f * dp;
+                    mGlow.setColor(col);
+                    mGlow.setAlpha(18 + (4 - k) * 14);
+                    cv.drawRoundRect(colL - g, y - g, right + g, y + barH + g, barH / 2 + g, barH / 2 + g, mGlow);
+                }
+            }
             cv.drawRoundRect(colL, y, colL + Math.max(w, barH), y + barH, barH / 2, barH / 2, p);
         }
         y += barH + 12 * dp;

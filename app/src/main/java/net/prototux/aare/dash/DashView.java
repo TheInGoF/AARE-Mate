@@ -82,6 +82,8 @@ public final class DashView {
         if (sCar) return;
         sCar = true;
         Hub.get(ctx.getApplicationContext()).acquire();
+        /* the map's data at hand while the car is connected: no waiting when the dashboard opens */
+        DashMapCache.INSTANCE.start(ctx);
     }
 
     /** The car gone. Main thread. */
@@ -89,6 +91,7 @@ public final class DashView {
         if (!sCar) return;
         sCar = false;
         Hub.get(ctx.getApplicationContext()).release();
+        DashMapCache.INSTANCE.stop();
     }
 
     /** Night or day on the car's screen (System L-074): the map's colours follow. Main thread. */
