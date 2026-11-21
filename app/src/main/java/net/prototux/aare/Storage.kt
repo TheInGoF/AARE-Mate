@@ -64,7 +64,13 @@ internal object Storage {
             val uuid = v.uuid ?: return@forEach
             // a card formatted by Android is called only "External" by it: named as a memory card, its own name in brackets
             val desc = v.getDescription(app)
-            val label = if (v.isRemovable && !desc.contains("SD", ignoreCase = true)) app.getString(R.string.storage_card, desc) else desc
+            // ("External" alone, the system's word in every language, said as "Speicherkarte" - 21.11.2026 it read
+            // "Speicherkarte (External)" in the German pages)
+            val label = when {
+                v.isRemovable && desc.trim().equals("External", ignoreCase = true) -> app.getString(R.string.storage_card_plain)
+                v.isRemovable && !desc.contains("SD", ignoreCase = true) -> app.getString(R.string.storage_card, desc)
+                else -> desc
+            }
             out += Volume(uuid, label, f, v.isRemovable, freeOf(f), totalOf(f), fsType(uuid) == "vfat")
         }
         return out
