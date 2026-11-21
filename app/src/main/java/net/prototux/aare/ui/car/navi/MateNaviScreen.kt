@@ -1430,8 +1430,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 val car = net.prototux.aare.host.CarDataService.car(context)
                 val g = guided
                 if (rollNow != null && car != null && g != null) {
-                    val p = rollNow.levelAt(g.distance - trip.progress.distanceRemaining, car.socPercent, rollNow.endM) + charged
-                    NaviCharge.Arrival(p, p < NaviCharge.RESERVE_PERCENT)
+                    val driven = g.distance - trip.progress.distanceRemaining
+                    val p = rollNow.levelAt(driven, car.socPercent, rollNow.endM) + charged
+                    NaviCharge.Arrival(p, p < NaviCharge.RESERVE_PERCENT, spread = rollNow.spreadAt(driven, car.socPercent, rollNow.endM))
                 } else NaviCharge.arrival(context, trip.remainingSteps, trip.progress.distanceToNextManeuver, charged)
             }
             SideEffect { arrivalNow = arrival }
@@ -1444,8 +1445,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 val driven = g?.let { it.distance - trip.progress.distanceRemaining }
                 val car = net.prototux.aare.host.CarDataService.car(context)
                 if (next != null && rollNow != null && car != null && driven != null && rollNow.alongM(next.charger) > driven) {
-                    val p = rollNow.levelAt(driven, car.socPercent, rollNow.alongM(next.charger))
-                    NaviCharge.Arrival(p, p < NaviCharge.CHARGER_WARN_PERCENT, atCharger = true)
+                    val at = rollNow.alongM(next.charger)
+                    val p = rollNow.levelAt(driven, car.socPercent, at)
+                    NaviCharge.Arrival(p, p < NaviCharge.CHARGER_WARN_PERCENT, atCharger = true, spread = rollNow.spreadAt(driven, car.socPercent, at))
                 } else if (mark != null && driven != null && mark.metres > driven)
                     NaviCharge.arrivalAtCharger(context, trip.remainingSteps, trip.progress.distanceToNextManeuver, mark.metres - driven) ?: arrival
                 else arrival
@@ -1456,8 +1458,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 val t = tileArrival ?: return@LaunchedEffect
                 val car = net.prototux.aare.host.CarDataService.car(context)
                 val age = (System.currentTimeMillis() - net.prototux.aare.dash.DashData.socAtMs(context)) / 60_000
-                net.prototux.aare.DiagLog.add("charging: tile %.0f %% at the %s - level now %s (IDmate's reading %d min old), %.1f km left on the route"
-                    .format(java.util.Locale.ROOT, t.percent, if (t.atCharger) "next charger" else "destination",
+                net.prototux.aare.DiagLog.add("charging: tile %.0f %%%s at the %s - level now %s (IDmate's reading %d min old), %.1f km left on the route"
+                    .format(java.util.Locale.ROOT, t.percent, t.spread?.let { " ± %.1f".format(java.util.Locale.ROOT, it) } ?: "", if (t.atCharger) "next charger" else "destination",
                         car?.let { "%.1f %%".format(java.util.Locale.ROOT, it.socPercent) } ?: "unknown", age, trip.progress.distanceRemaining / 1000), area = "CHARGE")
             }
             androidx.compose.foundation.layout.Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = covered + 12.dp),

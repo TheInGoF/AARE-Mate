@@ -96,6 +96,20 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
      */
     fun levelAt(drivenM: Double, soc: Double, toM: Double): Double = soc - used(drivenM, toM) * scale(drivenM, soc)
 
+    /**
+     * How sure [levelAt] is, as ± percent (N-019 step 1, E-029: "Anzeige ‚Ankunft 11 % ± 2' mit schrumpfendem ±"): the
+     * car's whole-percent reading ([READING]) and the model's error on what is still to go - [REL_START] of it at the
+     * start, down to [REL_LEARNED] once the drive has shown how the car takes it (the same trust as [scale]). Shrinks as
+     * the way ahead gets shorter and the drive longer.
+     */
+    fun spreadAt(drivenM: Double, soc: Double, toM: Double): Double {
+        val ahead = maxOf(0.0, used(drivenM, toM) * scale(drivenM, soc))
+        val km = kmEarlier + kmBefore + (drivenM - refM) / 1000
+        val trust = minOf(1.0, km / TRUST_DOWN_KM)
+        val rel = REL_START + (REL_LEARNED - REL_START) * trust
+        return Math.sqrt(READING * READING + (ahead * rel) * (ahead * rel))
+    }
+
     /** The present track's length in metres. */
     val endM: Double get() = track.metres.last()
 
@@ -229,6 +243,11 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
         private const val MIN_USED = 2.0
         private const val TRUST_UP_KM = 30.0
         private const val TRUST_DOWN_KM = 60.0
+        /** The level is read in whole percent, a few minutes old: about this much either way. */
+        const val READING = 0.6
+        /** The model's error on the way ahead before the drive has taught anything, and once it has. */
+        const val REL_START = 0.12
+        const val REL_LEARNED = 0.04
         private const val LOW_SCALE = 0.7
         private const val HIGH_SCALE = 1.5
     }

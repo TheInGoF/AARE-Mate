@@ -485,6 +485,23 @@ class CarScreenPreview {
         }
     }
 
+    /** Navi N-019 step 1: the tile above the speed with how sure it is ("11 % ± 2"), at a charger and at the destination. */
+    @Test fun arrivalSpread() { if (System.getProperty("preview") == null) return
+        net.prototux.aare.ui.car.Mate.init(androidx.test.core.app.ApplicationProvider.getApplicationContext())
+        shoot("ankunft-spanne") {
+            CompositionLocalProvider(LocalDensity provides car(1f)) {
+                Box(Modifier.fillMaxSize()) {
+                    Row(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 40.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        net.prototux.aare.ui.car.navi.NaviChargeTile(net.prototux.aare.ui.car.navi.NaviCharge.Arrival(11.0, false, spread = 2.3), Modifier)
+                        net.prototux.aare.ui.car.navi.NaviChargeTile(net.prototux.aare.ui.car.navi.NaviCharge.Arrival(14.0, false, atCharger = true, spread = 0.7), Modifier)
+                        net.prototux.aare.ui.car.navi.NaviChargeTile(net.prototux.aare.ui.car.navi.NaviCharge.Arrival(4.0, true, spread = 3.4), Modifier)
+                        net.prototux.aare.ui.car.navi.NaviChargeTile(net.prototux.aare.ui.car.navi.NaviCharge.Arrival(23.0, false), Modifier)
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun music() {
         if (System.getProperty("preview") == null) return
         shoot("musik") {

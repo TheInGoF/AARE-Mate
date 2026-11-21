@@ -129,4 +129,19 @@ class ChargeRollingTest {
         val now = roll.levelAt(50_000.0, soc, roll.endM)
         assertTrue(now < planned - 50 * perKm * 0.2 + 1e-9)
     }
+
+    /** N-019 step 1: "Ankunft 11 % ± 2" - the ± shrinks as the way ahead gets shorter and the drive has taught more. */
+    @Test fun spreadShrinksOnTheWay() {
+        val track = w.track(200)
+        val roll = ChargeRolling(track, car, ChargePlanner.Rules(), w.near(emptyList()), 80.0, emptyList())
+        val perKm = 180.0 / 770
+        val atStart = roll.spreadAt(0.0, 80.0, roll.endM)
+        // 200 km at the start: about 12 % of the ~47 % ahead
+        assertEquals(Math.sqrt(0.36 + Math.pow(200 * perKm * 0.12, 2.0)), atStart, 1e-6)
+        val half = roll.spreadAt(100_000.0, 80.0 - 100 * perKm, roll.endM)
+        val near = roll.spreadAt(195_000.0, 80.0 - 195 * perKm, roll.endM)
+        assertTrue("start %.2f, half %.2f, near %.2f".format(atStart, half, near), atStart > half && half > near)
+        // at the end only the reading is left
+        assertEquals(ChargeRolling.READING, roll.spreadAt(200_000.0, 80.0 - 200 * perKm, roll.endM), 0.05)
+    }
 }

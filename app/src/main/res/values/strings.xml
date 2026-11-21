@@ -919,6 +919,7 @@
     <string name="mate_navi_trip_fuel">That much energy is in %1$s l of petrol 95 · %2$s l of petrol 98 · %3$s l of diesel</string>
     <string name="mate_navi_trip_estimated">estimated</string>
     <string name="mate_navi_charge_at_charger">at the charger</string>
+    <string name="mate_navi_charge_spread">± %1$d</string>
     <string name="mate_navi_charge_at_destination">at destination</string>
     <string name="mate_navi_eta_arrival">Arrival</string>
     <string name="mate_navi_eta_time">Time left</string>

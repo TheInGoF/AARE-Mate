@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,7 +41,8 @@ internal object NaviCharge {
     const val RESERVE_PERCENT = 10.0
 
     /** [atCharger]: the level on arrival at the next planned charging stop (not at the destination). */
-    class Arrival(val percent: Double, val needsCharge: Boolean, val atCharger: Boolean = false)
+    /** [spread]: ± percent where the drive's own model counts it (ChargeRolling.spreadAt), null where it is not known. */
+    class Arrival(val percent: Double, val needsCharge: Boolean, val atCharger: Boolean = false, val spread: Double? = null)
 
     /**
      * Energy in Wh for the first [untilM] metres of [steps] (the first step only from [firstLeftM] on) - the way to a
@@ -110,8 +112,15 @@ internal fun NaviChargeTile(a: NaviCharge.Arrival?, modifier: Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             val p = a?.percent
-            Text(p?.let { "${it.coerceAtLeast(0.0).roundToInt()} %" } ?: "–", style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold, color = if (a?.needsCharge == true) Mate.warn else Mate.text)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(p?.let { "${it.coerceAtLeast(0.0).roundToInt()} %" } ?: "–", style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.SemiBold, color = if (a?.needsCharge == true) Mate.warn else Mate.text)
+                // how sure it is, smaller beside it (N-019 step 1): "± 2", at least 1 - it shrinks on the way
+                a?.spread?.takeIf { p != null }?.let { sp ->
+                    Text(stringResource(R.string.mate_navi_charge_spread, maxOf(1, sp.roundToInt())), style = MaterialTheme.typography.titleSmall,
+                        color = Mate.textDim, modifier = Modifier.padding(start = 6.dp, bottom = 4.dp))
+                }
+            }
             Text(stringResource(if (a?.atCharger == true) R.string.mate_navi_charge_at_charger else R.string.mate_navi_charge_at_destination),
                 style = MaterialTheme.typography.labelSmall, color = Mate.textDim)
         }
