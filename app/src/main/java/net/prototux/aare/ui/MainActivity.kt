@@ -372,7 +372,6 @@ private fun Home() {
                         Page.DASHBOARD -> {
                             item { CombustionCard(settings) }
                             item { DashboardCard(refresh) }
-                            item { TileCacheCard() }
                         }
                         Page.NAVI -> {
                             item { NaviChoiceCard() }
@@ -1988,28 +1987,6 @@ private fun DashboardCard(refresh: Int = 0) {
             else stringResource(if (stick) R.string.dashboard_card_connected_stick else R.string.dashboard_card_connected, server),
             server != null, changeLabel = stringResource(R.string.music_change)) {
             ctx.startActivity(Intent(ctx, net.prototux.aare.dash.SetupActivity::class.java))
-        }
-    }
-}
-
-/** The dashboard map's tiles kept on the device (O109): how much, how much is used, empty it. */
-@Composable
-private fun TileCacheCard() {
-    val ctx = LocalContext.current
-    val prefs = remember { ctx.getSharedPreferences(net.prototux.aare.dash.TileCache.PREFS, android.content.Context.MODE_PRIVATE) }
-    var mb by remember { mutableStateOf(net.prototux.aare.dash.TileCache.limitMb(ctx)) }
-    var used by remember { mutableStateOf(-1L) }
-    LaunchedEffect(Unit) { while (true) { used = withContext(Dispatchers.IO) { net.prototux.aare.dash.TileCache.sizeBytes(ctx) }; kotlinx.coroutines.delay(3000) } }
-    Section(stringResource(R.string.tilecache_section)) {
-        Choices(stringResource(R.string.tilecache_size), net.prototux.aare.dash.TileCache.CHOICES_MB.map { v ->
-            "$v" to when { v == 0 -> ctx.getString(R.string.tilecache_off); v >= 1024 -> "${v / 1024} GB"; else -> "$v MB" }
-        }, "$mb") { mb = it.toInt(); prefs.edit().putInt(net.prototux.aare.dash.TileCache.KEY_MB, mb).apply() }
-        Spacer(Modifier.height(8.dp))
-        Text(stringResource(R.string.tilecache_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (used < 0) "…" else stringResource(R.string.tilecache_used, "%.1f".format(used / 1048576.0)),
-                style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            androidx.compose.material3.OutlinedButton(onClick = { net.prototux.aare.dash.TileCache.clear(ctx); used = 0 }) { Text(stringResource(R.string.tilecache_clear)) }
         }
     }
 }

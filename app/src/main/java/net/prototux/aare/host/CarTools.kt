@@ -208,17 +208,6 @@ object CarTools {
             net.prototux.aare.speech.Dictation.debugWave = net.prototux.aare.speech.SpeechBench.readWav(f.readBytes())
             JSONObject().put("ok", true).put("file", f.name)
         }.getOrElse { JSONObject().put("ok", false).put("error", it.message) }
-        // debug builds: a question to the dashboard's page (which map layers, which zoom), answered within 5 s
-        // debug builds: a question to the dashboard's page (which map layers, which zoom); the answer is fetched with
-        // {"js":""} a moment later (the page answers on the main thread, which this call must not wait on)
-        "debug_dash_js" -> if (!net.prototux.aare.BuildConfig.DEBUG) JSONObject().put("ok", false) else {
-            val code = args.optString("js")
-            if (code.isBlank()) JSONObject().put("ok", true).put("answer", net.prototux.aare.dash.StageDebug.last ?: JSONObject.NULL)
-            else { net.prototux.aare.dash.StageDebug.last = null
-                JSONObject().put("ok", net.prototux.aare.dash.StageDebug.js(code) { net.prototux.aare.dash.StageDebug.last = it ?: "null" }) }
-        }
-        "debug_crash_map_renderer" -> if (!net.prototux.aare.BuildConfig.DEBUG) JSONObject().put("ok", false)
-            else JSONObject().put("ok", net.prototux.aare.dash.StageDebug.crashRenderer())
         "debug_projected_key" -> if (!net.prototux.aare.BuildConfig.DEBUG) JSONObject().put("ok", false) else {
             val host = net.prototux.aare.host.projected.ProjectedHost.live
             val code = args.optInt("code", android.view.KeyEvent.KEYCODE_BACK)

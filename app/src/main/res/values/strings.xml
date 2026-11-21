@@ -891,12 +891,6 @@
     <string name="speech_model_failed">Loading failed – check the network and try again</string>
     <string name="speech_model_load">Load</string>
     <string name="idmate_mic_in_use">Microphone in use</string>
-    <string name="tilecache_section">Map storage</string>
-    <string name="tilecache_size">Keep the dashboard map\'s tiles on the device</string>
-    <string name="tilecache_off">off</string>
-    <string name="tilecache_hint">The map need not load known areas again on every drive. When the storage is full, the tiles used longest ago go first.</string>
-    <string name="tilecache_used">Used: %1$s MB</string>
-    <string name="tilecache_clear">Empty</string>
     <string name="voice_chosen_missing">The chosen voice %1$s is not on this device. Load it again below, or choose another one; until then Mate speaks with the phone\'s voice and apps using Mate\'s voices stay silent.</string>
     <string name="voice_engine_section">Mate\'s voice</string>
     <string name="voice_female">female</string>
@@ -905,7 +899,6 @@
     <string name="voice_engine_system">The phone\'s text-to-speech</string>
     <string name="voice_engine_piper">Thorsten (natural, on the device)</string>
     <string name="voice_engine_hint">Reads messages and speaks the navigation. The voices on the device sound more natural than the phone\'s and need no network; Kokoro voices sound best. Mate computes the announcements ahead as soon as the route is set. Load once, then “Listen”.</string>
-    <string name="voice_engine_missing">Thorsten is not on the device yet.</string>
     <string name="voice_engine_try">Hear a sample</string>
     <string name="voice_engine_sample" formatted="true">Hello, this is %1$s. In three hundred metres turn right onto the B 86 towards Hamburg, then take the second exit at the roundabout. Traffic jam on the A 4, about ten minutes of delay. Charging stop reached, charge to eighty percent.</string>
     <string name="voice_engine_load">Load</string>

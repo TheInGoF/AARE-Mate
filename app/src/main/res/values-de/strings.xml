@@ -829,12 +829,6 @@
     <string name="speech_model_failed">Laden fehlgeschlagen – Netz prüfen und erneut versuchen</string>
     <string name="speech_model_load">Laden</string>
     <string name="idmate_mic_in_use">Mikrofon aktiv</string>
-    <string name="tilecache_section">Kartenspeicher</string>
-    <string name="tilecache_size">Kacheln der Dashboard-Karte auf dem Gerät behalten</string>
-    <string name="tilecache_off">aus</string>
-    <string name="tilecache_hint">Die Karte muss bekannte Gegenden nicht bei jeder Fahrt neu laden. Ist der Speicher voll, gehen die am längsten nicht genutzten Kacheln zuerst.</string>
-    <string name="tilecache_used">Belegt: %1$s MB</string>
-    <string name="tilecache_clear">Leeren</string>
     <string name="voice_chosen_missing">Die gewählte Stimme %1$s ist nicht auf dem Gerät. Lade sie unten neu oder wähle eine andere; bis dahin spricht Mate mit der Stimme des Telefons, und Apps, die Mates Stimmen nutzen, bleiben stumm.</string>
     <string name="voice_engine_section">Stimme von Mate</string>
     <string name="voice_female">weiblich</string>
@@ -843,7 +837,6 @@
     <string name="voice_engine_system">Sprachausgabe des Telefons</string>
     <string name="voice_engine_piper">Thorsten (natürlich, auf dem Gerät)</string>
     <string name="voice_engine_hint">Liest Nachrichten vor und spricht die Navi-Ansagen. Die Stimmen auf dem Gerät klingen natürlicher als die des Telefons und brauchen kein Netz; Kokoro-Stimmen klingen am besten. Navi-Ansagen rechnet Mate dafür schon vorab, sobald die Route steht. Einmal laden, dann „Probe hören“.</string>
-    <string name="voice_engine_missing">Thorsten ist noch nicht auf dem Gerät.</string>
     <string name="voice_engine_try">Probe hören</string>
     <string name="voice_engine_sample" formatted="true">Hallo, hier spricht %1$s. In dreihundert Metern rechts abbiegen auf die B 86 Richtung Hamburg, danach an der zweiten Ausfahrt den Kreisverkehr verlassen. Stau auf der A 4, etwa zehn Minuten Verzögerung. Ladestopp erreicht, lade bis achtzig Prozent.</string>
     <string name="voice_engine_load">Laden</string>
