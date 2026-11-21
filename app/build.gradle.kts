@@ -86,6 +86,16 @@ android {
             matchingFallbacks += listOf("release")
             buildConfigField("boolean", "TEST_HOOKS", "true")
         }
+        // A test build beside the Panel-Store's install (21.11.2026: "für sowas lohnt sich ja ne 2. branch oder nicht? test
+        // builds"): its own app id and name ("Mate Probe"), so the store's Mate keeps its data and updates - the release key
+        // is only in the release workflow, a desk build cannot go over the store's. Without the TEMPLATE_RENDERER
+        // definition the store's Mate already holds (src/probe). ./gradlew :app:assembleProbe
+        create("probe") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".probe"
+            versionNameSuffix = "-probe"
+            matchingFallbacks += listOf("debug")
+        }
     }
     compileOptions {
         // Ferrostar uses java.time on every Android version Mate runs on (minSdk 26)

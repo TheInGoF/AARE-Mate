@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The test build beside the store's Mate: that one defines the permission, this one only holds it. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <permission android:name="android.car.permission.TEMPLATE_RENDERER" tools:node="remove" />
+</manifest>
