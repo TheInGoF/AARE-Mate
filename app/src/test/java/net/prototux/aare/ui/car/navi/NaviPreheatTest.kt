@@ -47,4 +47,14 @@ class NaviPreheatTest {
         assertNull(w.reading(7.0, t0 + 8 * 60_000))
         assertNull(w.reading(7.5, t0 + 12 * 60_000))
     }
+
+    /** Review 21.11.2026: a warming while charging is the charge, not the heater - after reset() nothing of it counts. */
+    @Test fun resetWhileCharging() {
+        val w = NaviPreheat.Watch()
+        val t0 = 1_000_000L
+        assertNull(w.reading(5.0, t0))
+        w.reset()      // charging
+        assertNull(w.reading(9.0, t0 + 5 * 60_000))
+        assertNull(w.reading(10.0, t0 + 6 * 60_000))
+    }
 }

@@ -52,6 +52,11 @@ public final class DashData {
         return ((Number) v.v).doubleValue();
     }
 
+    /** The car charges now (IDmate's flag), false when unknown: a battery warming while charging is no heating rate. */
+    public static boolean charging(Context c) {
+        return Boolean.TRUE.equals(Hub.get(c).telemetry.flag("charging"));
+    }
+
     /** When the battery's temperature was read (epoch ms), 0 when never. */
     public static long batteryAtMs(Context c) {
         Telemetry.Value v = Hub.get(c).telemetry.get("t_batt");

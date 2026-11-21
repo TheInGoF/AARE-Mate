@@ -95,6 +95,9 @@ internal object NaviPreheat {
     class Watch {
         private var startC = Double.NaN; private var startMs = 0L; private var lastC = Double.NaN
 
+        /** Nothing seen so far counts (the car charged meanwhile). */
+        fun reset() { startC = Double.NaN; lastC = Double.NaN; startMs = 0L }
+
         /** A reading of [batteryC] at [atMs]; the rate in K/min when a warming has just been seen, else null. */
         fun reading(batteryC: Double, atMs: Long): Double? {
             if (lastC.isNaN() || batteryC < lastC - 0.5 || atMs - startMs > WINDOW_MIN * 60_000) { startC = batteryC; startMs = atMs }

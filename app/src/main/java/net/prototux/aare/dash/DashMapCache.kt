@@ -82,9 +82,14 @@ internal object DashMapCache {
         val t = Hub.get(context).telemetry
         val lat = t.number("lat"); val lon = t.number("lon")
         val car = net.prototux.aare.host.CarDataService.car(context) ?: net.prototux.aare.host.EnergyModel.Car(capacityWh = 77_000, socPercent = 50.0)
-        var center: DoubleArray? = if (lat != null && lon != null) doubleArrayOf(lon, lat) else null
+        var center: DoubleArray? = null
         val made = DashMapGeo.area(raw) { ring ->
-            val c = center ?: doubleArrayOf(ring.map { it[0] }.average(), ring.map { it[1] }.average()).also { center = it }
+            // the car's place when it lies in the area (it was made around it), else the area's middle: an area of
+            // earlier with the car far off since would be stretched around a point outside it
+            val c = center ?: run {
+                val inside = lat != null && lon != null && lon in ring.minOf { it[0] }..ring.maxOf { it[0] } && lat in ring.minOf { it[1] }..ring.maxOf { it[1] }
+                if (inside) doubleArrayOf(lon!!, lat!!) else doubleArrayOf(ring.map { it[0] }.average(), ring.map { it[1] }.average())
+            }.also { center = it }
             RangeWind.deform(ring, c, wind, car)
         }
         if (made != null) Log.i(TAG, "dashboard map: range with the wind from %.0f° at %.0f km/h put in by Mate (%.2f..%.2f of the range)".format(
