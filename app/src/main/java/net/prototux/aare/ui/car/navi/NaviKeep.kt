@@ -372,6 +372,33 @@ internal object NaviKeep {
         return car ?: t.userLocation.speed?.value
     }
     private const val SIM_WARP = 3
+
+    /**
+     * How long from an announcement being due to its sound in the car: the position comes once a second (on average half
+     * a second old when the distance is passed), the music is lowered first (MediaFade.DOWN_MS), the player starts and the
+     * sound goes over USB to the car and its buffer. The announcements are computed ahead, so no computing time.
+     */
+    internal const val LEAD_MS = 1_300L
+
+    /** The speed the car covers ground at in real time (a test drive runs [SIM_WARP] times as fast, its time is real). */
+    private fun leadSpeedMs(t: TripState.Navigating, session: NaviSession): Double? =
+        if (session.simulating) t.userLocation.speed?.value else speedMs(t, session)
+
+    /**
+     * The current step's announcement due now when it is said [LEAD_MS] early: of those whose distance before the turn is
+     * reached within the way the car covers meanwhile, the nearest to the turn. Null without a step (Ferrostar's own then).
+     */
+    internal fun dueInstruction(t: TripState.Navigating, speedMs: Double?): uniffi.ferrostar.SpokenInstruction? {
+        val step = t.remainingSteps.firstOrNull() ?: return null
+        val i = dueIndex(t.progress.distanceToNextManeuver, speedMs, step.spokenInstructions.map { it.triggerDistanceBeforeManeuver }) ?: return null
+        return step.spokenInstructions[i]
+    }
+
+    /** Of the announcements' [triggers] (metres before the turn), the one due [leftM] before it at [speedMs]; null for none. */
+    internal fun dueIndex(leftM: Double, speedMs: Double?, triggers: List<Double>): Int? {
+        val early = (speedMs ?: 0.0).coerceIn(0.0, 70.0) * LEAD_MS / 1000.0
+        return triggers.indices.filter { leftM - early <= triggers[it] }.minByOrNull { triggers[it] }
+    }
     /** Standing (under 3 km/h) so close to the route's end, as the crow flies and along the way, counts towards the arrival. */
     internal const val ARRIVE_CROW_M = 120.0
     internal const val ARRIVE_WAY_M = 300.0
@@ -457,6 +484,8 @@ internal object NaviKeep {
         watching = scope.launch {
             var lastHeadUp: Pair<Int, Long>? = null
             var lastHeadUpMs = 0L
+            // the announcements said, by their id: each once, and an older one never after a newer
+            val said = LinkedHashSet<java.util.UUID>()
             var sentNothing = true
             var lastWaypoints: List<uniffi.ferrostar.Waypoint> = emptyList()
             var approaching: ChargePlanner.Stop? = null
@@ -516,8 +545,11 @@ internal object NaviKeep {
                 // computed without end on two cores beside the map. The next ones are ready long before they are due.
                 val ahead = t.remainingSteps.asSequence().flatMap { st -> st.spokenInstructions.asSequence().map { it.text } }.take(NaviKokoro.AHEAD).toList()
                 if (ahead != preparedFor) { preparedFor = ahead; speaker.prepare(ahead) }
-                // F4: each instruction once when Ferrostar reaches its distance
-                t.spokenInstruction?.let { speaker.say(it.utteranceId, it.text, t.remainingSteps.size, it.triggerDistanceBeforeManeuver) }
+                // F4: each instruction once at its distance - early by the way the car goes while Mate's chain takes to
+                // the car's speakers (21.11.2026: "vor berechnen und zum richtigen Zeitpunkt ausgeben"), so it is heard at
+                // its distance, not one or two seconds (20 to 55 m) after it
+                val due = dueInstruction(t, leadSpeedMs(t, session)) ?: t.spokenInstruction
+                due?.let { if (said.add(it.utteranceId)) { if (said.size > 500) said.remove(said.first()); speaker.say(it.utteranceId, it.text, t.remainingSteps.size, it.triggerDistanceBeforeManeuver) } }
                 // step 8: once per 10 m and each new step
                 // at most once a second (as Android Auto's own rate), a new step at once - every 10 m was three times a
                 // second on the main thread in the faster test drive
