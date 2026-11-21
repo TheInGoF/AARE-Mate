@@ -58,30 +58,15 @@ internal fun RegionsPage() {
             c == null -> Text(stringResource(R.string.mapserver_checking))
             else -> {
                 val singles = RegionPacks.singles(c)
-                val whole = RegionPacks.whole(c)?.takeIf { it.files.isNotEmpty() }
+                // once the server offers single regions the old whole package is no longer shown (21.11.2026: its file was
+                // already gone at the server while the catalogue still named it); a begun one counts as no longer offered
+                val whole = RegionPacks.whole(c)?.takeIf { it.files.isNotEmpty() && singles.isEmpty() }
                 if (singles.isEmpty() && whole == null) Text(stringResource(R.string.regions_none_yet), style = MaterialTheme.typography.bodyMedium)
-                if (singles.isNotEmpty()) {
-                    val states = singles.associateWith { RegionPacks.state(ctx, it) }
-                    val here = singles.filter { states[it] != RegionPacks.State.NONE }
-                    val updates = singles.filter { states[it] == RegionPacks.State.UPDATE }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.regions_on_device, here.size, singles.size, Formatter.formatShortFileSize(ctx, here.sumOf { it.bytes })),
-                            Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                        if (updates.isNotEmpty()) FilledTonalButton(onClick = { updates.forEach { loads.start(ctx, it) } }) {
-                            Text(stringResource(R.string.regions_update_all, Formatter.formatShortFileSize(ctx, updates.sumOf { it.bytes })))
-                        }
-                    }
-                    // grouped by where they lie ("Europe › Germany"), by name within
-                    val collator = java.text.Collator.getInstance(java.util.Locale.getDefault())
-                    singles.groupBy { it.path.joinToString(" › ") }.toSortedMap(collator).forEach { (path, rs) ->
-                        if (path.isNotEmpty()) Text(path, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        rs.sortedWith(compareBy(collator) { it.name }).forEach { r -> PackageCard(r, r.mapDate.ifBlank { c.mapDate }) { version++ } }
-                    }
-                    Text(stringResource(R.string.regions_choose_at_server), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                if (singles.isNotEmpty()) RegionList(singles, c.mapDate, version) { version++ }
                 whole?.let { WholePackage(it, c.mapDate) { version++ } }
                 // on the device but no longer offered (the old whole package once the server builds regions, regions dropped there)
-                val orphans = RegionPacks.orphans(ctx, c).filter { it !in loads.progress && it !in loads.waiting }
+                val offered = if (singles.isEmpty()) c else RegionPacks.Catalogue(c.mapDate, c.regions.filter { it.id != RegionPacks.GESAMT })
+                val orphans = RegionPacks.orphans(ctx, offered).filter { it !in loads.progress && it !in loads.waiting }
                 if (orphans.isNotEmpty()) Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         val size = orphans.sumOf { RegionPacks.dir(ctx, it).walkTopDown().filter { f -> f.isFile }.sumOf { f -> f.length() } }
@@ -95,8 +80,96 @@ internal fun RegionsPage() {
     }
 }
 
+/**
+ * The regions as a list with a box each (21.11.2026: "am besten die regionen auswählbar machen und er lädt die dann nach
+ * und nach"): ticked = wanted on this device - ticking queues the load (one after the other, RegionPacks.Loads), unticking
+ * deletes after asking. Grouped by where they lie ("Europe › Germany"), with a box for the whole group.
+ */
 @Composable
-private fun PackageCard(r: RegionPacks.Region, mapDate: String, changed: () -> Unit) = WholePackage(r, mapDate, compact = true, changed = changed)
+private fun RegionList(singles: List<RegionPacks.Region>, mapDate: String, version: Int, changed: () -> Unit) {
+    val ctx = LocalContext.current
+    val loads = RegionPacks.Loads
+    val size = { b: Long -> Formatter.formatShortFileSize(ctx, b) }
+    var ask by remember { mutableStateOf<List<RegionPacks.Region>>(emptyList()) }
+    fun running(r: RegionPacks.Region) = loads.progress.containsKey(r.id) || r.id in loads.waiting
+    // the states on the device are read anew after each finished load and each change here (version)
+    val states = remember(singles, version, loads.finished.intValue) { singles.associateWith { RegionPacks.state(ctx, it) } }
+    fun wanted(r: RegionPacks.Region) = states[r] != RegionPacks.State.NONE || running(r)
+    val here = singles.filter { states[it] != RegionPacks.State.NONE }
+    val updates = singles.filter { states[it] == RegionPacks.State.UPDATE && !running(it) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.regions_on_device, here.size, singles.size, size(here.sumOf { it.bytes })),
+            Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+        if (updates.isNotEmpty()) FilledTonalButton(onClick = { updates.forEach { loads.start(ctx, it) } }) {
+            Text(stringResource(R.string.regions_update_all, size(updates.sumOf { it.bytes })))
+        }
+    }
+    val collator = java.text.Collator.getInstance(java.util.Locale.getDefault())
+    singles.groupBy { it.path.joinToString(" › ") }.toSortedMap(collator).forEach { (path, group) ->
+        val rs = group.sortedWith(compareBy(collator) { it.name })
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(vertical = 4.dp)) {
+                val on = rs.count { wanted(it) }
+                Row(Modifier.fillMaxWidth().padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.TriStateCheckbox(
+                        state = when (on) { 0 -> androidx.compose.ui.state.ToggleableState.Off; rs.size -> androidx.compose.ui.state.ToggleableState.On
+                            else -> androidx.compose.ui.state.ToggleableState.Indeterminate },
+                        onClick = { if (on == rs.size) ask = rs.filter { wanted(it) } else rs.filter { !wanted(it) }.forEach { loads.start(ctx, it) } })
+                    Text(path.ifEmpty { stringResource(R.string.regions_title) }, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary)
+                    Text(stringResource(R.string.regions_group, on, rs.size, size(rs.filter { wanted(it) }.sumOf { it.bytes })),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                rs.forEach { r -> RegionRow(r, states[r] ?: RegionPacks.State.NONE, running(r), wanted(r), onTick = { t -> if (t) loads.start(ctx, r) else ask = listOf(r) }) }
+            }
+        }
+    }
+    Text(stringResource(R.string.regions_choose_at_server), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (ask.isNotEmpty()) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { ask = emptyList() },
+        title = { Text(stringResource(R.string.regions_delete_title)) },
+        text = { Text(stringResource(R.string.regions_delete_ask, ask.joinToString(", ") { it.name }, size(ask.sumOf { it.bytes }))) },
+        confirmButton = { TextButton(onClick = {
+            ask.forEach { r -> if (running(r)) loads.stop(r.id); RegionPacks.delete(ctx, r) }
+            ask = emptyList(); changed()
+        }) { Text(stringResource(R.string.regions_delete)) } },
+        dismissButton = { TextButton(onClick = { ask = emptyList() }) { Text(stringResource(android.R.string.cancel)) } })
+}
+
+@Composable
+private fun RegionRow(r: RegionPacks.Region, state: RegionPacks.State, running: Boolean, wanted: Boolean, onTick: (Boolean) -> Unit) {
+    val ctx = LocalContext.current
+    val loads = RegionPacks.Loads
+    val locale = java.util.Locale.getDefault()
+    Column(Modifier.fillMaxWidth().selectable(selected = wanted, onClick = { onTick(!wanted) }).padding(end = 16.dp, bottom = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.Checkbox(checked = wanted, onCheckedChange = onTick)
+            Column(Modifier.weight(1f)) {
+                Text(r.name, style = MaterialTheme.typography.bodyLarge)
+                val what = when {
+                    r.id in loads.waiting -> stringResource(R.string.regions_waiting)
+                    loads.bytes[r.id] != null -> loads.bytes[r.id]!!.let { (done, all) -> stringResource(R.string.regions_speed,
+                        String.format(locale, "%.1f", loads.speed[r.id] ?: 0.0), Formatter.formatShortFileSize(ctx, done), Formatter.formatShortFileSize(ctx, all)) }
+                    else -> stringResource(when (state) {
+                        RegionPacks.State.NONE -> R.string.regions_state_none
+                        RegionPacks.State.PARTLY -> R.string.regions_state_partly
+                        RegionPacks.State.CURRENT -> R.string.regions_state_current
+                        RegionPacks.State.UPDATE -> R.string.regions_state_update
+                    })
+                }
+                Text(Formatter.formatShortFileSize(ctx, r.bytes) + " · " + what, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            when {
+                running -> TextButton(onClick = { loads.stop(r.id) }) { Text(stringResource(R.string.regions_pause)) }
+                state == RegionPacks.State.UPDATE -> TextButton(onClick = { loads.start(ctx, r) }) { Text(stringResource(R.string.regions_update)) }
+                state == RegionPacks.State.PARTLY -> TextButton(onClick = { loads.start(ctx, r) }) { Text(stringResource(R.string.regions_resume)) }
+            }
+        }
+        loads.progress[r.id]?.let { LinearProgressIndicator(progress = { it }, Modifier.fillMaxWidth().padding(start = 48.dp)) }
+        loads.errors[r.id]?.let { Text(it, Modifier.padding(start = 48.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    }
+}
 
 @Composable
 private fun WholePackage(r: RegionPacks.Region, mapDate: String, compact: Boolean = false, changed: () -> Unit) {

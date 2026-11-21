@@ -1065,6 +1065,9 @@
     <string name="regions_update_all">Alle aktualisieren (%1$s)</string>
     <string name="regions_orphans">Auf dem Gerät, aber nicht mehr vom Server angeboten: %1$s (%2$s).</string>
     <string name="regions_old_whole">das alte Gesamtpaket</string>
+    <string name="regions_group">%1$d von %2$d · %3$s</string>
+    <string name="regions_delete_title">Vom Gerät löschen?</string>
+    <string name="regions_delete_ask">%1$s (%2$s) wird vom Gerät gelöscht. Wieder ankreuzen lädt es neu.</string>
     <string name="regions_speed">%1$s MB/s · %2$s von %3$s</string>
     <string name="storage_title">Speicherort</string>
     <string name="storage_intro">Offline-Karten und Sprachmodelle können auf der Speicherkarte liegen. Wählst du einen anderen Ort, ziehen sie dorthin um; sie werden geprüft, bevor die alten Kopien gelöscht werden.</string>

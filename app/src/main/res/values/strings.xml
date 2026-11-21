@@ -1076,6 +1076,9 @@
     <string name="regions_update_all">Update all (%1$s)</string>
     <string name="regions_orphans">On this device but no longer offered by the server: %1$s (%2$s).</string>
     <string name="regions_old_whole">the old whole package</string>
+    <string name="regions_group">%1$d of %2$d · %3$s</string>
+    <string name="regions_delete_title">Delete from this device?</string>
+    <string name="regions_delete_ask">%1$s (%2$s) will be deleted from this device. Ticking it again loads it anew.</string>
     <string name="regions_speed">%1$s MB/s · %2$s of %3$s</string>
     <string name="storage_title">Storage place</string>
     <string name="storage_intro">Offline maps and speech models can lie on the memory card. Choosing another place moves them there; they are checked before the old copies go.</string>
