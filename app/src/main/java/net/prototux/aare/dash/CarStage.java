@@ -72,6 +72,8 @@ final class CarStage {
     private final Runnable mRefresh = new Runnable() {
         @Override public void run() {
             mMain.removeCallbacks(this);
+            /* the own map (DashMap) asks IDmate for the range itself, every 30 s: no page to load anew */
+            if (mWeb == null) return;
             mMain.postDelayed(this, MAP_REFRESH_MS);
             /* not while parked (done on coming back), the driver touches the map or a new page is on its way */
             if (mParked || mLink == null || mMapFrame == null || mNextWeb != null || mTouching) return;
@@ -435,12 +437,13 @@ final class CarStage {
     private static volatile boolean sNight;
 
     /** Night or day before the page exists: the page takes it when it loads. */
-    static void nightLater(boolean on) { sNight = on; }
+    static void nightLater(boolean on) { sNight = on; DashMapView.night(on); }
 
     private static String nightJs() { return "window.__mateNight=" + sNight + ";"; }
 
     /** The car's lights changed to night or day: the map's colours follow at once. Main thread. */
     void night(boolean on) {
+        DashMapView.night(on);
         if (sNight == on) return;
         sNight = on;
         String code = nightJs() + "if (window.__mate && __mate.night) __mate.night(" + on + ");";
@@ -734,30 +737,18 @@ final class CarStage {
                 @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
             });
 
-            addWeb(link, null);
+            /*
+             * The map drawn by Mate (System L-079, 21.11.2026: "Die Dashboard-Seite sollte schon lange keine Website mehr
+             * sein"): the region package on the device as base map, IDmate's range, wind, rain and trail over it, the
+             * controls and the long press in the map itself (DashMap.kt). The web view of IDmate's page is gone.
+             */
+            DashMapView.night(sNight);
+            mMapFrame.addView(DashMapView.create(mHostCtx, dpi, at -> {
+                java.util.function.Consumer<String> g = sGo;
+                if (g != null) g.accept(at);
+            }), 0, new FrameLayout.LayoutParams(-1, -1));
             mLink = link;
             mLoadedAt = SystemClock.uptimeMillis();
-            mMain.removeCallbacks(mRefresh);
-            mMain.postDelayed(mRefresh, MAP_REFRESH_MS);
-
-            /* eigene Knoepfe: unten an der Fahrerseite, ueber dem Platz der Bedienleiste der Auto-Oberflaeche */
-            mButtonCol = new LinearLayout(mHostCtx);
-            mButtonCol.setOrientation(LinearLayout.VERTICAL);
-            mButtonCol.setVisibility(View.GONE);
-            mMapMode = "";
-            for (int k = 0; k < mButtons.length; k++) {
-                mButtons[k] = new MapButton(mHostCtx, k);
-                final int kind = k;
-                mButtons[k].setOnClickListener(v -> { hidePick(); pressed(kind); });
-                /* 18.11.2026 ("die Buttons auf der Map nur 2/3 so gross wie jetzt, und der Minus-Button wird nicht richtig
-                   dargestellt"): 56 -> 38 dp, the gap 14 -> 10 dp - all six fit on the map again, the minus was cut off below */
-                LinearLayout.LayoutParams lb = new LinearLayout.LayoutParams((int) (38 * mDp), (int) (38 * mDp));
-                lb.topMargin = (int) (10 * mDp);
-                mButtonCol.addView(mButtons[k], lb);
-            }
-            FrameLayout.LayoutParams lc = new FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM | android.view.Gravity.START);
-            lc.setMargins((int) (10 * mDp), 0, 0, (int) (64 * mDp));
-            mMapFrame.addView(mButtonCol, lc);
 
             mDash = new View(mHostCtx) {
                 private final Rect mArea = new Rect();

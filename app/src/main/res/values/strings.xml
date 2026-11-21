@@ -1421,4 +1421,14 @@
     <string name="speech_model_english_only">English only, the most exact for English</string>
     <string name="speech_model_multilingual">Multilingual</string>
     <string name="speech_model_choose">With more than one model on the device, Mate listens with the marked one.</string>
+    <string name="dash_map_follow">Follow the car</string>
+    <string name="dash_map_range">The whole range</string>
+    <string name="dash_map_wind">Wind</string>
+    <string name="dash_map_rain">Rain (radar)</string>
+    <string name="dash_rain_light">light · under 1 mm/h</string>
+    <string name="dash_rain_moderate">moderate · 1–5 mm/h</string>
+    <string name="dash_rain_heavy">heavy · over 5 mm/h</string>
+    <string name="dash_rain_now">now %1$s</string>
+    <string name="dash_rain_source">Radar: %1$s</string>
+    <string name="dash_rain_waiting">loading …</string>
 </resources>

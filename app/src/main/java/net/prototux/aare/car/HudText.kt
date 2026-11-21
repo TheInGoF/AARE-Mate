@@ -82,7 +82,7 @@ object HudText {
         val right = Regex("\\b(rechts|right)\\b").containsMatchIn(t)
         return when {
             "kreisverkehr" in t || "roundabout" in t ->
-                Regex("(\\d+)(?:\\.|st|nd|rd|th)\\s*(?:ausfahrt|exit)").find(t)?.let { w.roundaboutExit.format(it.groupValues[1].toInt()) } ?: w.roundabout
+                Regex("(\\d{1,2})(?:\\.|st|nd|rd|th)\\s*(?:ausfahrt|exit)").find(t)?.let { w.roundaboutExit.format(it.groupValues[1].toInt()) } ?: w.roundabout
             "wenden" in t || "u-turn" in t || "make a u" in t -> w.uTurn
             "ausfahrt" in t || "abfahren" in t || Regex("\\b(take|use) (the )?exit\\b|\\bexit\\b").containsMatchIn(t) -> w.offRamp
             "auffahrt" in t || "auffahren" in t || "ramp" in t || "merge onto" in t -> w.onRamp

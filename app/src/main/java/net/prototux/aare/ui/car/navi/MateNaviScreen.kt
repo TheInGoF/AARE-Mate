@@ -512,7 +512,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val k = order.indices.firstOrNull { places.getOrNull(it)?.at != order[it].first } ?: return
         // the route as it was up to the place before the first one moved: its waypoints (own stops and chargers) kept
         val keepTo = if (k == 0) -1 else rows.indexOf(places[k - 1])
-        val keptRows = rows.take(keepTo + 1).filter { it.kind == NaviTripPlan.Kind.OWN || (it.kind == NaviTripPlan.Kind.CHARGE && it.charger != null) }
+        // an own stop without its place is left out (rows elsewhere check "at != null" too; it.at!! below took Mate down)
+        val keptRows = rows.take(keepTo + 1).filter { (it.kind == NaviTripPlan.Kind.OWN && it.at != null) || (it.kind == NaviTripPlan.Kind.CHARGE && it.charger != null) }
         val kept = keptRows.mapNotNull { it.charger }
         val newDest = order.last(); val newOwn = order.dropLast(1)
         val to = net.prototux.aare.places.Places.Place("map", "", newDest.second, "", newDest.first.latitude, newDest.first.longitude)
@@ -521,7 +522,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         if (car == null) { purpose = Purpose.NEW; choose(to, newOwn); return }
         pending = to; pendingOwn = newOwn; holdStart = true; planGen++
         planFrom = Triple(from, newDest.first, newOwn.map { it.first })
-        val via = keptRows.map { it.charger?.at ?: it.at!! } + newOwn.drop(keptRows.count { it.kind == NaviTripPlan.Kind.OWN }).map { it.first }
+        val via = keptRows.mapNotNull { it.charger?.at ?: it.at } + newOwn.drop(keptRows.count { it.kind == NaviTripPlan.Kind.OWN }).map { it.first }
         preview = null
         scope.launch {
             val r = runCatching { session.planOne(o.kind, from, newDest.first, via, RouteOptions.of(net.prototux.aare.Settings(context))) }
@@ -1030,8 +1031,19 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             // "Die App stürzt beim Navigieren oder beim Berechnen der Route ab": "Layer ID 'gewaessername' not found in
             // base style" - the map takes the style's layers when it has loaded, and the anchor came before). A style not
             // loaded yet has no such source: then nothing happens, and it is set once the source is there.
+            // A new style (night, traffic, offline) leaves the old source's native side gone for a moment ("invalid native
+            // peer", found at the desk head unit on switching to night while guiding): tried again until the new style's
+            // source takes it, for a few seconds at most.
             val veil = styleState.sources[VEIL_ID] as? org.maplibre.compose.sources.GeoJsonSource
-            LaunchedEffect(veil, guiding) { veil?.setData(GeoJsonData.JsonString(if (guiding) VEIL_WORLD else VEIL_NONE)) }
+            LaunchedEffect(veil, guiding, style) {
+                val data = GeoJsonData.JsonString(if (guiding) VEIL_WORLD else VEIL_NONE)
+                repeat(20) {
+                    val now = styleState.sources[VEIL_ID] as? org.maplibre.compose.sources.GeoJsonSource
+                    if (now != null && runCatching { now.setData(data) }.isSuccess) return@LaunchedEffect
+                    kotlinx.coroutines.delay(250)
+                }
+                Log.w(TAG, "guiding veil: the style's source did not take it")
+            }
             // F5: the other routes of the preview, under the chosen one (only while choosing)
             if (panel is NaviStep.Preview) altJson?.let { json ->
                 val altData = remember(json) { GeoJsonData.JsonString(json) }
