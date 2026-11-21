@@ -124,6 +124,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     // F2: the traffic layer follows its switch in the route options
     val trafficShown = NaviTrafficSwitch.on.value ?: net.prototux.aare.Settings(context).trafficShown
     val style = remember(night, offlineMap, trafficShown) { BaseStyle.Json(mapStyle(context, night, offlineMap)) }
+    // the loaded style's own sources (the guiding veil's among them)
+    val styleState = org.maplibre.compose.style.rememberStyleState()
     val camera = rememberCameraState(CameraPosition(target = TEST_FROM, zoom = START_ZOOM))
     val scope = rememberCoroutineScope()
     val parts = remember { NaviServer.install(context); RouteOptions.of(net.prototux.aare.Settings(context)).let { o -> NaviKeep.parts(context, o) { sc, lv -> NaviSession(sc, NaviServer.valhalla(context), NaviServer.client(context), o, lv) } } }
@@ -1015,7 +1017,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             }
         }
     }) {
-        MaplibreMap(modifier = Modifier.fillMaxSize(), baseStyle = style, cameraState = camera, options = options,
+        MaplibreMap(modifier = Modifier.fillMaxSize(), baseStyle = style, cameraState = camera, styleState = styleState, options = options,
             // O217: "lange auf das gewünschte Ziel in der Map drücken" - a pin there and the choice, as Google offers it
             onMapLongClick = { pos, _ ->
                 Log.i(TAG, "map held: a place picked")
@@ -1023,10 +1025,13 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 org.maplibre.compose.util.ClickResult.Consume
             }) {
             // Navi L-047: while guiding the other roads step back - a veil in the land's colour over the base map, under
-            // its labels and the route (only the drawing, nothing reloaded); the route itself a little wider
-            if (guiding) org.maplibre.compose.layers.Anchor.Below(FIRST_LABEL_LAYER) {
-                org.maplibre.compose.layers.BackgroundLayer(id = "fuehrung-schleier", color = const(Mate.mapLand), opacity = const(GUIDE_VEIL))
-            }
+            // its labels and the route. It lies in the style itself (withVeil), empty, and only gets its extent here:
+            // anchored from Compose below a label layer it brought Mate down at every start of a guidance (21.11.2026,
+            // "Die App stürzt beim Navigieren oder beim Berechnen der Route ab": "Layer ID 'gewaessername' not found in
+            // base style" - the map takes the style's layers when it has loaded, and the anchor came before). A style not
+            // loaded yet has no such source: then nothing happens, and it is set once the source is there.
+            val veil = styleState.sources[VEIL_ID] as? org.maplibre.compose.sources.GeoJsonSource
+            LaunchedEffect(veil, guiding) { veil?.setData(GeoJsonData.JsonString(if (guiding) VEIL_WORLD else VEIL_NONE)) }
             // F5: the other routes of the preview, under the chosen one (only while choosing)
             if (panel is NaviStep.Preview) altJson?.let { json ->
                 val altData = remember(json) { GeoJsonData.JsonString(json) }
@@ -1637,8 +1642,11 @@ private fun pointAt(line: List<Position>, m: Double): Position {
 }
 
 /** O237: the jam's sign, "+4 min" in white on the map's jam red, as Google's; nothing for an empty [text]. */
-/** The style's first label layer (`navi/karte-v4.json`, checked by NaviStyleTest): the guiding veil goes under it (L-047). */
-internal const val FIRST_LABEL_LAYER = "gewaessername"
+/** The guiding veil (L-047): its source and layer in the style, under the first label layer (withVeil, NaviStyleTest). */
+internal const val VEIL_ID = "fuehrung-schleier"
+private const val VEIL_NONE = """{"type":"FeatureCollection","features":[]}"""
+/** The whole world (Web Mercator's latitudes) - while guiding. */
+private const val VEIL_WORLD = """{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[-180,-85.05],[180,-85.05],[180,85.05],[-180,85.05],[-180,-85.05]]]}}"""
 
 /** How strongly the other roads step back while guiding (L-047): the land's colour over the base map. */
 private const val GUIDE_VEIL = 0.35f
@@ -1702,12 +1710,31 @@ internal fun mapStyle(context: Context, night: Boolean, offline: RegionPacks.Loc
     val styled = Regex("""\{k:([a-z_]+)\}""").replace(json.replace("{TILES}", NaviServer.tiles(context))) { m ->
         Mate.karte(context, m.groupValues[1], night)?.let(::hex) ?: "#FF00FF"
     }
-    if (offline == null) return if (net.prototux.aare.Settings(context).trafficShown && !TomTomBudget.exhausted(context)) withTraffic(context, styled, night) else styled
+    // the land's colour for the guiding veil, from the context (Mate's colours may not be set up yet, e.g. in the phone app)
+    val land = String.format("#%06X", context.getColor(net.prototux.aare.R.color.mate_map_land) and 0xFFFFFF)
+    if (offline == null) return withVeil(if (net.prototux.aare.Settings(context).trafficShown && !TomTomBudget.exhausted(context)) withTraffic(context, styled, night) else styled, land)
     // without the net: the same style on a package's PMTiles file on the device (server handover, "Regionspakete")
     val o = org.json.JSONObject(styled)
     o.getJSONObject("sources").getJSONObject("pm").apply { remove("tiles"); put("url", "pmtiles://file://" + offline.file.absolutePath) }
-    return o.toString()
+    return withVeil(o.toString(), land)
 }
+
+/**
+ * The guiding veil (L-047) in [style] itself: an empty GeoJSON source and a fill in the land's colour right under the
+ * first label layer (over the traffic, as before). Mate Navi gives it the world's extent while guiding.
+ */
+internal fun withVeil(style: String, land: String): String = runCatching {
+    val o = org.json.JSONObject(style)
+    o.getJSONObject("sources").put(VEIL_ID, org.json.JSONObject("""{"type":"geojson","data":$VEIL_NONE}"""))
+    val layers = o.getJSONArray("layers")
+    val veil = org.json.JSONObject("""{"id":"$VEIL_ID","type":"fill","source":"$VEIL_ID","paint":{"fill-color":"$land","fill-opacity":$GUIDE_VEIL}}""")
+    val at = (0 until layers.length()).firstOrNull { layers.getJSONObject(it).optString("type") == "symbol" } ?: layers.length()
+    val out = org.json.JSONArray()
+    for (i in 0 until layers.length()) { if (i == at) out.put(veil); out.put(layers.get(i)) }
+    if (at == layers.length()) out.put(veil)
+    o.put("layers", out)
+    o.toString()
+}.getOrDefault(style)
 
 /**
  * F2: the traffic on the roads from TomTom's flow tiles through the map server's gate (handover: the gate passes
