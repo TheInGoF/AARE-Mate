@@ -1,5 +1,6 @@
 package net.prototux.aare.ui.car.navi
 
+import okhttp3.RequestBody.Companion.toRequestBody
 import com.stadiamaps.ferrostar.core.FerrostarCore
 import com.stadiamaps.ferrostar.core.NavigationState
 import com.stadiamaps.ferrostar.core.http.OkHttpClientProvider
@@ -66,7 +67,35 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
     )
 
     /** Valhalla's answers read for the ferries on the way (NaviFerries) before Ferrostar takes them. */
-    private val routeHttp = http.newBuilder().addInterceptor(NaviFerries.interceptor).build()
+    private val routeHttp: okhttp3.OkHttpClient = http.newBuilder().addInterceptor(closuresIn).addInterceptor(NaviFerries.interceptor).build()
+
+    /**
+     * System I-090 (22.11.2026: "die Sperrung wurde angezeigt auf der Karte, aber er hat dadurch navigieren wollen"): the
+     * new route after a deviation is asked by Ferrostar with the options the session was made with - without the closures
+     * found later, so Valhalla led back into the closed road again and again. Every route request without closures of its
+     * own gets the trip's ones now (not those close to the car: a car standing in a closed stretch must get out).
+     */
+    private val closuresIn: okhttp3.Interceptor get() = okhttp3.Interceptor { chain ->
+        val req = chain.request()
+        val body = req.body
+        // only the guidance's own new route after a deviation: the planning puts its closures in itself (and leaves out
+        // those near a charging stop on purpose)
+        val deviating = offRoute.value || (core.state.value.tripState as? uniffi.ferrostar.TripState.Navigating)?.deviation is uniffi.ferrostar.RouteDeviation.Deviation
+        if (!deviating || !req.url.encodedPath.endsWith("/route") || body == null || (closures.isEmpty() && closureAreas.isEmpty())) return@Interceptor chain.proceed(req)
+        val text = runCatching { okio.Buffer().also { body.writeTo(it) }.readUtf8() }.getOrNull() ?: return@Interceptor chain.proceed(req)
+        val json = runCatching { org.json.JSONObject(text) }.getOrNull()
+        if (json == null || json.has("exclude_locations") || json.has("exclude_polygons")) return@Interceptor chain.proceed(req)
+        val from = json.optJSONArray("locations")?.optJSONObject(0)?.let { Position(longitude = it.optDouble("lon"), latitude = it.optDouble("lat")) }
+        val points = closures.filter { from == null || ChargerIndex.distanceM(it, from) > NEAR_CAR_M }
+        if (points.isNotEmpty()) json.put("exclude_locations", org.json.JSONArray(points.map { org.json.JSONObject().put("lat", it.latitude).put("lon", it.longitude) }))
+        val areas = closureAreas.filter { ring -> from == null || ring.none { ChargerIndex.distanceM(it, from) < NEAR_CAR_M } }
+        if (areas.isNotEmpty()) json.put("exclude_polygons", org.json.JSONArray(areas.map { ring -> org.json.JSONArray(ring.map { org.json.JSONArray().put(it.longitude).put(it.latitude) }) }))
+        if (points.isEmpty() && areas.isEmpty()) return@Interceptor chain.proceed(req)
+        android.util.Log.i(TAG, "route request: the trip's ${points.size} closure point(s), ${areas.size} area(s) put in")
+        val first = chain.proceed(req.newBuilder().method(req.method, json.toString().toRequestBody(body.contentType())).build())
+        // refused with them (a point Valhalla cannot place): once more as it was
+        if (first.code == 400) { first.close(); net.prototux.aare.DiagLog.add("reroute: refused with the trip's closures - asked without them"); chain.proceed(req) } else first
+    }
 
     private val core = FerrostarCore(
         // German instructions (specification F-06); without it Valhalla answers in English
