@@ -18,6 +18,7 @@ internal class NaviTrack(private val line: List<Position>) {
     }
     val length get() = cum.last()
     private var hint = 0
+    private var lastS = -1.0
 
     private fun metres(a: Position, b: Position) =
         hypot((b.latitude - a.latitude) * k, (b.longitude - a.longitude) * k * cosLat)
@@ -25,10 +26,13 @@ internal class NaviTrack(private val line: List<Position>) {
     /** Distance along the line of the point on it nearest to [lat]/[lon]; looks near the last answer first. */
     fun project(lat: Double, lon: Double): Double {
         var best = Double.MAX_VALUE
+        var bestCost = Double.MAX_VALUE
         var bestS = 0.0
+        var bestI = hint
         val from = (hint - 40).coerceAtLeast(0)
         val to = (hint + 200).coerceAtMost(line.size - 2)
-        fun scan(range: IntRange) {
+        val prev = lastS
+        fun scan(range: IntRange, keepOn: Boolean) {
             for (i in range) {
                 val a = line[i]; val b = line[i + 1]
                 val ax = 0.0; val ay = 0.0
@@ -38,11 +42,21 @@ internal class NaviTrack(private val line: List<Position>) {
                 val t = if (len2 < 1e-9) 0.0 else ((px - ax) * bx + (py - ay) * by) / len2
                 val tt = t.coerceIn(0.0, 1.0)
                 val d = hypot(px - bx * tt, py - by * tt)
-                if (d < best) { best = d; bestS = cum[i] + (cum[i + 1] - cum[i]) * tt; hint = i }
+                val sc = cum[i] + (cum[i + 1] - cum[i]) * tt
+                // System I-086 (22.11.2026: "Er fährt die letzten Meter rückwärts zu Säule"): the way into a charger and back
+                // out runs on the same road - the way out lay as near as the way in and won by a metre of GPS noise, so the
+                // car stood beyond the charger and drove back to it. Far ahead of the last place counts only when it is
+                // clearly nearer: the further a place lies from the last one along the line, ahead or back, the more it must
+                // beat the others by (a fifth of a metre for each metre beyond [AHEAD_FREE_M]) - on an ordinary road only one
+                // stretch is near, so this decides only between stretches lying on top of each other
+                val cost = if (!keepOn || prev < 0) d else d + 0.2 * (Math.abs(sc - prev) - AHEAD_FREE_M).coerceAtLeast(0.0)
+                if (cost < bestCost) { bestCost = cost; best = d; bestS = sc; bestI = i }
             }
         }
-        scan(from..to)
-        if (best > 50) scan(0..line.size - 2)   // far off the window (start, a jump): the whole line
+        scan(from..to, true)
+        if (best > 50) { bestCost = Double.MAX_VALUE; scan(0..line.size - 2, false) }   // far off the window (start, a jump): the whole line
+        hint = bestI
+        lastS = bestS
         return bestS
     }
 
@@ -69,3 +83,6 @@ internal class NaviTrack(private val line: List<Position>) {
 
     companion object { const val HEADING_SPAN_M = 10.0 }
 }
+
+/** How far from the last place along the line a position may move before it must be clearly nearer (System I-086). */
+private const val AHEAD_FREE_M = 10.0
