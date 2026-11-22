@@ -356,7 +356,6 @@ private fun DashMap(go: (String) -> Unit) {
                     LegendRow({ Box(Modifier.size(18.dp).clip(RoundedCornerShape(3.dp)).background(cols[g])) }, stringResource(id))
                 }
                 Text(rainAt?.let { stringResource(R.string.dash_rain_now, it) } ?: stringResource(R.string.dash_rain_waiting), color = Mate.textSoft, fontSize = Mate.caption)
-                rainSrc?.let { Text(stringResource(R.string.dash_rain_source, it), color = Mate.textFaint, fontSize = Mate.caption) }
             }
         }
         // the map data's credit, as on Mate Navi's map (ODbL)
@@ -366,7 +365,9 @@ private fun DashMap(go: (String) -> Unit) {
         val credit = buildString {
             append(net.prototux.aare.ui.car.navi.OSM_CREDIT)
             if (windOn && windSeen) append(" · Wind: Open-Meteo")
-            if (rainOn) append(" · Radar: ").append(rainSrc ?: SOURCES.values.joinToString(", "))
+            // only what is drawn (22.11.2026: "in der map auch nur die aktiven gezeigten"): the radar once a frame is
+            // there, with the services that made it; the sources not in the legend ("reicht unten in der map")
+            if (rainOn) rainSrc?.let { append(" · Radar: ").append(it) }
         }
         // on a light plate (night: a dark one), readable over the busy map
         Text(credit, color = if (night) Color(0xFFB1BAC4) else Color(0xFF57606A), fontSize = 11.sp,

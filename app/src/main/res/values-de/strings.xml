@@ -1452,6 +1452,5 @@
     <string name="dash_rain_moderate">mittel · 1–5 mm/h</string>
     <string name="dash_rain_heavy">stark · über 5 mm/h</string>
     <string name="dash_rain_now">jetzt %1$s</string>
-    <string name="dash_rain_source">Radar: %1$s</string>
     <string name="dash_rain_waiting">wird geladen …</string>
 </resources>
