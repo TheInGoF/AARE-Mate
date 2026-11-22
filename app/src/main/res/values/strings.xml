@@ -1080,12 +1080,12 @@
     <string name="regions_delete_ask">%1$s (%2$s) will be deleted from this device. Ticking it again loads it anew.</string>
     <string name="regions_speed">%1$s MB/s · %2$s of %3$s</string>
     <string name="storage_title">Storage place</string>
-    <string name="storage_intro">Offline maps and speech models can lie on the memory card. Choosing another place moves them there; they are checked before the old copies go.</string>
+    <string name="storage_intro">Offline maps, speech models and downloaded music can lie on the memory card. Choosing another place moves them there; they are checked before the old copies go.</string>
     <string name="storage_card">Memory card (%1$s)</string>
     <string name="storage_card_plain">Memory card</string>
     <string name="storage_internal">Device storage</string>
     <string name="storage_free">%1$s free of %2$s</string>
-    <string name="storage_move_ask">Move maps and speech models to “%1$s” (%2$s)?</string>
+    <string name="storage_move_ask">Move maps, speech models and music to “%1$s” (%2$s)?</string>
     <string name="storage_move">Move</string>
     <string name="storage_copying">Copying – %1$s of %2$s</string>
     <string name="storage_checking">Checking – %1$s of %2$s</string>
@@ -1093,7 +1093,7 @@
     <string name="storage_no_room">Not enough room: %1$s needed, %2$s free.</string>
     <string name="storage_fat32">This card is formatted FAT32 and takes no file of 4 GB or more – the map package is one file of %1$s. Remedy: format the card in Android’s settings (Storage → card → Format as portable); cards above 32 GB then get exFAT. Formatting erases the card. Otherwise keep the maps in the device storage.</string>
     <string name="storage_fat32_load">The memory card is formatted FAT32 and takes no file of 4 GB or more. Format it as exFAT (Android settings → Storage) or choose the device storage above.</string>
-    <string name="storage_card_missing">The memory card with the maps and speech models is not there. Put it back in – until then Mate draws the map from the net and speaks with the device’s voice.</string>
+    <string name="storage_card_missing">The memory card with the maps, speech models and music is not there. Put it back in – until then Mate draws the map from the net, speaks with the device’s voice and streams the music.</string>
     <string name="storage_busy">A map is loading – the place can be changed once it is done.</string>
     <string name="mate_navi_charger">Fast charger</string>
     <string name="mate_navi_charge_stop">Arrive %1$d %% → charge to %2$d %% · %3$d\u00A0min</string>

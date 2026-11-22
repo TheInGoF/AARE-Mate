@@ -273,7 +273,7 @@ private fun StorageCard(busy: Boolean, changed: () -> Unit) {
             val t = target
             if (t != null && moving == null) {
                 val problem = remember(t, tick) { net.prototux.aare.Storage.problem(ctx, t) }
-                val need = remember(t, tick) { net.prototux.aare.Storage.bytes(ctx, net.prototux.aare.Storage.MAPS) + net.prototux.aare.Storage.bytes(ctx, net.prototux.aare.Storage.SPEECH) }
+                val need = remember(t, tick) { net.prototux.aare.Storage.KINDS.sumOf { net.prototux.aare.Storage.bytes(ctx, it) } }
                 when (problem) {
                     is net.prototux.aare.Storage.Problem.TooLarge -> Text(stringResource(R.string.storage_fat32, size(problem.bytes)),
                         color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)

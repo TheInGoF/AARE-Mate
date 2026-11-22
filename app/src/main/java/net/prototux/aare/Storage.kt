@@ -22,6 +22,10 @@ import java.io.IOException
 internal object Storage {
     const val MAPS = "regionen"
     const val SPEECH = "sprache"
+    /** Mate Musik's downloaded titles, lists and covers (System L-086, 22.11.2026: "Musik muss ich auch auf der externen SD-Karte speichern können"). */
+    const val MUSIC = "musik"
+    /** Everything that moves with the chosen place. */
+    val KINDS = listOf(MAPS, SPEECH, MUSIC)
     private const val TAG = "MateStorage"
     /** The largest file FAT32 takes (4 GiB - 1). */
     const val FAT32_MAX = 4L * 1024 * 1024 * 1024 - 1
@@ -38,8 +42,11 @@ internal object Storage {
     fun chosen(c: Context): String = prefs(c).getString("volume", "") ?: ""
 
     /** The device's own folder of [kind] - where the files always lay before L-080. */
-    fun internalDir(c: Context, kind: String): File =
-        if (kind == MAPS) File(c.filesDir, MAPS) else File(c.getExternalFilesDir(null) ?: c.filesDir, kind)
+    fun internalDir(c: Context, kind: String): File = when (kind) {
+        MAPS -> File(c.filesDir, MAPS)
+        MUSIC -> File(c.noBackupFilesDir, "music")          // where the downloads always lay
+        else -> File(c.getExternalFilesDir(null) ?: c.filesDir, kind)
+    }
 
     /** The folder of [kind] in the chosen place (on a card even while it is out - see [cardMissing]). */
     fun dir(c: Context, kind: String): File {
@@ -102,7 +109,7 @@ internal object Storage {
     }
 
     fun problem(c: Context, to: Volume): Problem? {
-        val from = listOf(MAPS, SPEECH).map { dir(c, it) }
+        val from = KINDS.map { dir(c, it) }
         val big = from.maxOf { largest(it) }
         if (to.fat32 && big > FAT32_MAX) return Problem.TooLarge(big)
         val need = from.sumOf { sizeOf(it) }
@@ -130,7 +137,7 @@ internal object Storage {
         val app = c.applicationContext
         // the same check the page shows, here too: nothing is copied that cannot fit
         problem(app, to)?.let { throw IOException(if (it is Problem.TooLarge) "FAT32" else "room") }
-        val pairs = listOf(MAPS, SPEECH).map { dir(app, it) to target(app, to, it) }.filter { (a, b) -> a.exists() && a.canonicalPath != b.canonicalPath }
+        val pairs = KINDS.map { dir(app, it) to target(app, to, it) }.filter { (a, b) -> a.exists() && a.canonicalPath != b.canonicalPath }
         val files = pairs.flatMap { (a, b) -> a.walkTopDown().filter { it.isFile }.map { it to File(b, it.relativeTo(a).path) }.toList() }
         val total = files.sumOf { it.first.length() }
         Log.i(TAG, "move to ${if (to.internal) "device storage" else "card"}: ${files.size} files, $total bytes")
@@ -161,10 +168,11 @@ internal object Storage {
         }
         prefs(app).edit().putString("volume", to.id).putString("root", to.root.path).commit()
         pairs.forEach { (a, _) -> a.deleteRecursively() }
+        net.prototux.aare.music.Offline.forgetDir()
         Log.i(TAG, "moved, the old files are gone")
     }
 
-    private fun target(c: Context, to: Volume, kind: String) = if (to.internal) internalDir(c, kind) else File(to.root, kind)
+    internal fun target(c: Context, to: Volume, kind: String) = if (to.internal) internalDir(c, kind) else File(to.root, kind)
 
     private fun sha256(f: File, read: (Int) -> Unit): String {
         val md = java.security.MessageDigest.getInstance("SHA-256")

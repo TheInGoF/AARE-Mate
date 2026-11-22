@@ -45,9 +45,13 @@ public final class Offline {
 
     private Offline() {}
 
+    /** The place changed (Storage.move): the folder is looked up anew. */
+    public static synchronized void forgetDir() { sDir = null; }
+
     static synchronized File dir(Context c) {
         if (sDir == null) {
-            sDir = new File(c.getApplicationContext().getNoBackupFilesDir(), "music");
+            // in the place chosen for the large files: the device or the memory card (Storage, System L-086)
+            sDir = net.prototux.aare.Storage.INSTANCE.dir(c.getApplicationContext(), net.prototux.aare.Storage.MUSIC);
             new File(sDir, "t").mkdirs();
             new File(sDir, "l").mkdirs();
             new File(sDir, "a").mkdirs();
