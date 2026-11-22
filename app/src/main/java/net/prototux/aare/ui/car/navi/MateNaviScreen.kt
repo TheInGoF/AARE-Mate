@@ -1082,8 +1082,12 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             // A new style (night, traffic, offline) leaves the old source's native side gone for a moment ("invalid native
             // peer", found at the desk head unit on switching to night while guiding): tried again until the new style's
             // source takes it, for a few seconds at most.
-            val veil = styleState.sources[VEIL_ID] as? org.maplibre.compose.sources.GeoJsonSource
-            LaunchedEffect(veil, guiding, style) {
+            // Keyed on whether the source is there, not on its object: styleState.sources wraps every source anew whenever
+            // any source is added or removed (route, signs, markers), and keyed on that wrapper the veil was set again and
+            // again - the map flickered, standing most (I-074, 22.11.2026: "Das map flackern ist bei .3 nur im stand
+            // vorhanden", "Es lief letzte Woche vor 2.1").
+            val veilThere = styleState.sources[VEIL_ID] is org.maplibre.compose.sources.GeoJsonSource
+            LaunchedEffect(veilThere, guiding, style) {
                 val data = GeoJsonData.JsonString(if (guiding) VEIL_WORLD else VEIL_NONE)
                 repeat(20) {
                     val now = styleState.sources[VEIL_ID] as? org.maplibre.compose.sources.GeoJsonSource
