@@ -1711,8 +1711,12 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         // the licence asks for OpenStreetMap to be named (ODbL), not the library: small, at the free bottom right - at
         // the top right while the title strip takes the bottom edge
         // TomTom's traffic named as its terms ask, while it is drawn (22.11.2026: "die copyrights erwähnungen … fehlen")
+        // System I-085 (22.11.2026: "der Wegstrahl … über den Text von OpenStreetMap … im geteilten Display … unter dem
+        // Bedienfeld die Copyrights … Da müssten die oben angezeigt werden"): at the bottom only where nothing covers it -
+        // no title strip and no controls laid over the map's bottom edge; otherwise at the top, left of the route strip
+        val bottomCovered = strip || net.prototux.aare.host.templates.LocalCarBottomInset.current > 0.dp
         Text(if (trafficShown) "$OSM_CREDIT · $TOMTOM_CREDIT" else OSM_CREDIT, color = Mate.textFaint, style = MaterialTheme.typography.labelSmall,
-            modifier = if (strip) Modifier.align(Alignment.TopEnd).padding(end = 16.dp, top = 12.dp)
+            modifier = if (bottomCovered) Modifier.align(Alignment.TopEnd).padding(end = if (slimStrip) STRIP_ROOM else 16.dp, top = 2.dp)
                 else Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 12.dp))
         // a quarter of the screen: the route strip over the map
         if (stripData != null && share < 0.3f && trip != null)
