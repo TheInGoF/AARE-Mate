@@ -23,7 +23,9 @@ internal object ChargePlanner {
                      /** O226: the driver's rating of a charger (0 none, 1-5), for choosing among those allowed. */
                      val rating: (Charger) -> Int = { 0 },
                      /** Navi L-029 step D: percent on top of the least levels for a stop this many km ahead. */
-                     val buffer: (Double) -> Double = { 0.0 }) {
+                     val buffer: (Double) -> Double = { 0.0 },
+                     /** Navi O-015, Q-050: a stop that charges charges at least this long (0: as short as it needs). */
+                     val minMinutes: Double = 0.0) {
         /** Strictly the chosen networks (O213). */
         val strict get() = only && preferred.isNotEmpty()
         /** A charger outside the chosen networks, when there are some. */
@@ -32,7 +34,7 @@ internal object ChargePlanner {
             /** The driver's own values from the phone app (O205). */
             fun of(s: net.prototux.aare.Settings) = Rules(s.chargeMinAtCharger.toDouble(), s.chargeMinAtDestination.toDouble(),
                 s.chargeMaxLevel.toDouble(), preferred = s.chargeNetworks, only = s.chargeNetworksOnly,
-                rating = { ch -> ChargerVisits.rating(s.appContext, ch) })
+                rating = { ch -> ChargerVisits.rating(s.appContext, ch) }, minMinutes = s.chargeMinMinutes.toDouble())
         }
     }
 
@@ -81,6 +83,7 @@ internal object ChargePlanner {
                 val needNext = pct(track.wh[j] - track.wh[i]) + rules.atCharger + MARGIN
                 if (leave < needNext) leave = minOf(FULL, needNext)
             }
+            leave = longEnough(leave, rules) { chargeMinutes(arrive, it, c.kw, car) }
             Stop(c, track.metres[i], arrive, leave, chargeMinutes(arrive, leave, c.kw, car), leave > rules.chargeUpTo + 0.5)
                 .also { level = leave; fromI = i }
         }
@@ -116,6 +119,8 @@ internal object ChargePlanner {
 
     fun prune(track: Track, car: EnergyModel.Car, startPercent: Double, stops: List<Charger>, rules: Rules = Rules(),
               above: Set<Charger> = emptySet()): List<Charger> {
+        // the stops a plan needs, before any of them is made to charge longer (Rules.minMinutes)
+        val rules = rules.copy(minMinutes = 0.0)
         var left = stops
         while (true) {
             val plan = replay(track, car, startPercent, left, rules, above)
@@ -165,6 +170,19 @@ internal object ChargePlanner {
 
     private const val BEFORE_M = 25_000.0
     private const val AFTER_M = 10_000.0
+
+    /**
+     * The level to leave with so that the stop charges at least [Rules.minMinutes] (Navi O-015, Q-050; Ingo, 22.11.2026:
+     * "Q50 ja, Option in den Einstellungen"): a stop of 1 min (22 -> 24 %) costs the way there and plugging in all the same,
+     * so it charges on, in 1 % steps, up to the highest level - never above it for this, and never less than [leave].
+     * [minutes] gives the charging time up to a level.
+     */
+    fun longEnough(leave: Double, rules: Rules, minutes: (Double) -> Double): Double {
+        if (rules.minMinutes <= 0.0 || leave >= rules.chargeUpTo || minutes(leave) >= rules.minMinutes) return leave
+        var l = leave
+        while (l < rules.chargeUpTo && minutes(l) < rules.minMinutes) l = minOf(rules.chargeUpTo, l + 1.0)
+        return l
+    }
 
     /** Minutes from [fromPercent] to [toPercent] in 1 % steps at the lower of the charger and the car's curve. */
     fun chargeMinutes(fromPercent: Double, toPercent: Double, chargerKw: Int, car: EnergyModel.Car): Double {

@@ -312,6 +312,7 @@ private fun Home() {
                             } }
                             // O205: the charge levels of the charging plan
                             item { Section(stringResource(R.string.routing_charge_title)) {
+                                val offLabel = stringResource(R.string.routing_min_minutes_off)
                                 var atCharger by remember { mutableStateOf(settings.chargeMinAtCharger.toString()) }
                                 var atDest by remember { mutableStateOf(settings.chargeMinAtDestination.toString()) }
                                 var atHome by remember { mutableStateOf(settings.chargeMinAtHome.toString()) }
@@ -326,6 +327,10 @@ private fun Home() {
                                 Spacer(Modifier.height(12.dp))
                                 Choices(stringResource(R.string.routing_max_level), listOf(70, 80, 90, 100).map { "$it" to "$it %" }, max) { max = it; settings.chargeMaxLevel = it.toInt() }
                                 Text(stringResource(R.string.routing_max_level_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(Modifier.height(12.dp))
+                                var minMin by remember { mutableStateOf(settings.chargeMinMinutes.toString()) }
+                                Choices(stringResource(R.string.routing_min_minutes), listOf(0, 5, 10, 15, 20).map { "$it" to if (it == 0) offLabel else "$it min" }, minMin) { minMin = it; settings.chargeMinMinutes = it.toInt() }
+                                Text(stringResource(R.string.routing_min_minutes_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } }
                             // O226: the chargers charged at, to rate - the planner prefers the well rated among the allowed ones
                             // (first on the page while charges wait to be looked at: the badge led here, Navi L-005)

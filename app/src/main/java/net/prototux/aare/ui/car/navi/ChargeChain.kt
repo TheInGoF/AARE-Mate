@@ -173,7 +173,7 @@ internal object ChargeChain {
         val links = chain.map { (k, l) ->
             val a = level - m.used(prev, k)
             short = maxOf(short, m.required(k) - a)
-            val leave = maxOf(a, l * m.step)
+            val leave = ChargePlanner.longEnough(maxOf(a, l * m.step), m.rules) { m.chargeMinutes(k, a, it) }
             val min = m.chargeMinutes(k, a, leave)
             minutes += min + m.stopMinutes(k).coerceAtMost(STOP_MIN) + m.cands[k - 1].detourS / 60.0
             level = leave; prev = k

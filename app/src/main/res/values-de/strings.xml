@@ -1120,6 +1120,9 @@
     <string name="routing_min_home_hint">Gilt nur, wenn zuhause eine Wallbox ist (Ziele → deine Liste → Zuhause).</string>
     <string name="routing_max_level">Höchstens laden bis</string>
     <string name="routing_max_level_hint">Höher nur, wenn sonst kein Lader weiterreicht – die Route sagt das dann.</string>
+    <string name="routing_min_minutes">Mindestens laden je Stopp</string>
+    <string name="routing_min_minutes_hint">Ein nötiger Halt lädt mindestens so lange (bis zum Höchststand) – ein Stopp für 1 Minute lohnt Anfahrt und Anstecken nicht.</string>
+    <string name="routing_min_minutes_off">aus</string>
     <string name="routing_networks_title">Ladenetze</string>
     <string name="routing_visits_title">Besuchte Ladepunkte</string>
     <string name="transfer_title">Einstellungen übertragen</string>

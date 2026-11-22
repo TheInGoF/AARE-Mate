@@ -111,6 +111,10 @@ class Settings(context: Context) {
     var trafficShown: Boolean
         get() = prefs.getBoolean("traffic_shown", true)
         set(v) = prefs.edit { putBoolean("traffic_shown", v) }
+    /** Navi O-015, Q-050: the least minutes a needed stop charges (0: off). */
+    var chargeMinMinutes: Int
+        get() = prefs.getInt("charge_min_minutes", 10)
+        set(v) = prefs.edit { putInt("charge_min_minutes", v) }
     var chargeMaxLevel: Int
         get() = prefs.getInt("charge_max_level", 80)
         set(v) = prefs.edit { putInt("charge_max_level", v) }
