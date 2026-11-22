@@ -38,12 +38,36 @@ fun ProjectedAppScreen(
                 var host: ProjectedHost? = null
                 var surface: Surface? = null
                 var frames = 0
+                var size = 0 to 0
                 val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                // I-081: the app kept from its last time on screen (paused, its picture's surface kept): it goes on where it
+                // was - the route, the place found - instead of starting afresh
+                val key = ProjectedKeep.key(app, densityDpi)
+                ProjectedKeep.take(key)?.let { k ->
+                    host = k.host; surface = k.surface; size = k.width to k.height
+                    setSurfaceTexture(k.texture)
+                    Log.i("ProjectedHost", "back on screen: kept app resumed (${k.width}x${k.height})")
+                    k.host.resume()
+                    // no picture within 3 s: started afresh on the same surface, as before I-081 - never worse than that
+                    handler.postDelayed({
+                        if (frames == 0 && host === k.host && surface != null) {
+                            Log.w("ProjectedHost", "kept app showed no picture after resuming: started afresh")
+                            k.host.stop()
+                            host = hostFactory(app).also { it.insetBottom = insetPx; it.start(surface!!, size.first, size.second, densityDpi) }
+                        }
+                    }, 3000)
+                    // another size than when it was left (split, full screen): told as a resize
+                    addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
+                        val w = r - l; val h = b - t
+                        if (w > 0 && h > 0 && (w to h) != size) { size = w to h; k.texture.setDefaultBufferSize(w, h); host?.resize(w, h) }
+                    }
+                }
                 surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                     override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
                         if (w <= 0 || h <= 0) return
                         st.setDefaultBufferSize(w, h)
                         surface = Surface(st)
+                        size = w to h
                         Log.i("ProjectedHost", "surface ${w}x$h")
                         host = hostFactory(app).also { it.insetBottom = insetPx; it.start(surface!!, w, h, densityDpi) }
                     }
@@ -53,6 +77,7 @@ fun ProjectedAppScreen(
                     override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
                         if (w <= 0 || h <= 0) return
                         st.setDefaultBufferSize(w, h)
+                        size = w to h
                         handler.removeCallbacksAndMessages(null)
                         handler.postDelayed({
                             val hst = host ?: return@postDelayed
@@ -71,8 +96,15 @@ fun ProjectedAppScreen(
                     }
                     override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
                         handler.removeCallbacksAndMessages(null)
-                        host?.stop(); host = null
-                        surface?.release(); surface = null
+                        val h = host; val sf = surface
+                        host = null; surface = null
+                        // another area in front (I-081): the app paused and kept with its surface, as Android Auto keeps the
+                        // navigation running behind another app - the texture is not let go (false)
+                        if (h != null && sf != null && size.first > 0) {
+                            ProjectedKeep.park(ProjectedKeep.Kept(key, h, st, sf, size.first, size.second))
+                            return false
+                        }
+                        h?.stop(); sf?.release()
                         return true
                     }
                     override fun onSurfaceTextureUpdated(st: SurfaceTexture) {
@@ -106,3 +138,49 @@ private fun describe(view: TextureView): String = runCatching {
     val bright = px.sumOf { ((it shr 16 and 255) * 3 + (it shr 8 and 255) * 6 + (it and 255)) / 10 } / px.size
     "$colours colours, brightness $bright of 255, ${clear * 100 / px.size} % see-through"
 }.getOrElse { "unreadable (${it.javaClass.simpleName})" }
+
+/**
+ * I-081 (22.11.2026: "wenn man Google Maps verlässt und dann auf eine Musik-App geht und wieder zurück auf Google Maps,
+ * dann lädt er die komplette Route neu ... wäre irgendwie cool, wenn die Navigation im Hintergrund weiterlaufen würde,
+ * wie auch bei der Navi-App"): one projected app is kept while another area is in front - paused (onProjectionPause),
+ * bound, its picture's surface kept - and resumed on the same surface when it comes back. Let go when another app is
+ * kept, after [KEEP_MS] in the background, and when the car's connection ends ([releaseAll]).
+ */
+internal object ProjectedKeep {
+    class Kept(val key: String, val host: ProjectedHost, val texture: SurfaceTexture, val surface: Surface, val width: Int, val height: Int)
+
+    private var kept: Kept? = null
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val expire = Runnable { releaseAll("in the background too long") }
+
+    fun key(app: ProjectedAppInfo, densityDpi: Int) = app.service.flattenToString() + "@" + densityDpi
+
+    fun park(k: Kept) {
+        if (kept != null && kept !== k) releaseAll("another app kept")
+        kept = k
+        k.host.pause()
+        handler.removeCallbacks(expire)
+        handler.postDelayed(expire, KEEP_MS)
+        Log.i("ProjectedHost", "left the screen: app paused and kept (${k.key})")
+    }
+
+    fun take(key: String): Kept? {
+        val k = kept?.takeIf { it.key == key } ?: return null
+        kept = null
+        handler.removeCallbacks(expire)
+        return k
+    }
+
+    fun releaseAll(why: String) {
+        val k = kept ?: return
+        kept = null
+        handler.removeCallbacks(expire)
+        Log.i("ProjectedHost", "kept app let go: $why")
+        runCatching { k.host.stop() }
+        runCatching { k.surface.release() }
+        runCatching { k.texture.release() }
+    }
+
+    /** As long as a drive's break: a longer pause starts the app afresh when it comes back. */
+    private const val KEEP_MS = 3 * 3600_000L
+}

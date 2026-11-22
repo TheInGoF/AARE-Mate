@@ -422,6 +422,8 @@ class CarRuntime(
 
     fun stop() {
         running.remove(this)
+        // the projected app kept behind another area (I-081) ends with the car's connection
+        net.prototux.aare.host.projected.ProjectedKeep.releaseAll("the car's connection ended")
         net.prototux.aare.trips.TripWatch.stop(context)
         net.prototux.aare.dash.DashView.carStop(context)
         runCatching { context.unregisterReceiver(packageReceiver) }
