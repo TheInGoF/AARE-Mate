@@ -150,6 +150,8 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                                /** System L-092: other chargers for a stop, one shown on the map, one taken instead (only this stop changes) */
                                /** the stop whose alternatives are on the map now, how many, the one tapped on the map */
                                altFor: Charger? = null, altCount: Int = 0, altPicked: NaviTripPlan.Option? = null,
+                               /** the stations on the map as a list too, nearest to the stop first (22.11.2026: "dass man dann auch eine Liste bekommt") */
+                               altList: List<NaviTripPlan.Option> = emptyList(), onAltPick: (NaviTripPlan.Option) -> Unit = {},
                                onAlternatives: ((Charger) -> Unit)? = null, onAltClose: () -> Unit = {},
                                onSwap: ((Charger, Charger) -> Unit)? = null) {
     PanelHeader(stringResource(R.string.mate_navi_plan), onBack, onClose)
@@ -292,10 +294,14 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                         Text(stringResource(R.string.mate_navi_alt_hide), style = MaterialTheme.typography.titleSmall, color = Mate.accent,
                             modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { onAltClose() }.heightIn(min = 52.dp).padding(horizontal = 12.dp, vertical = 14.dp))
                     }
-                    altPicked?.let { o ->
+                    // the list beside the map: the nearest first, the picked one framed with "Nehmen" (the map's logos say the same)
+                    (altList.sortedBy { Math.abs(it.shiftM) }.take(ALT_LIST_MAX).let { l -> if (altPicked != null && altPicked !in l) listOf(altPicked) + l else l }).forEach { o ->
+                        val picked = o === altPicked
                         Spacer(Modifier.size(6.dp))
-                        Row(Modifier.padding(start = 40.dp).fillMaxWidth().heightIn(min = 68.dp).clip(RoundedCornerShape(14.dp))
-                            .background(Mate.surfaceHigh).border(2.dp, Mate.accent, RoundedCornerShape(14.dp))
+                        Row(Modifier.padding(start = 40.dp).fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(14.dp))
+                            .background(if (picked) Mate.surfaceHigh else Mate.surface)
+                            .then(if (picked) Modifier.border(2.dp, Mate.accent, RoundedCornerShape(14.dp)) else Modifier)
+                            .clickable { onAltPick(o) }
                             .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             NetworkLogo(o.charger.network, 26.dp)
                             Spacer(Modifier.width(12.dp))
@@ -307,7 +313,7 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                                 Text(o.arrivePercent?.let { stringResource(R.string.mate_navi_alt_arrive, where, pct(it)) } ?: where,
                                     style = MaterialTheme.typography.bodySmall, color = Mate.textDim, maxLines = 1)
                             }
-                            Text(stringResource(R.string.mate_navi_alt_take), style = MaterialTheme.typography.titleSmall, color = Mate.onAccent,
+                            if (picked) Text(stringResource(R.string.mate_navi_alt_take), style = MaterialTheme.typography.titleSmall, color = Mate.onAccent,
                                 modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Mate.accent).clickable { onSwap(ch, o.charger) }
                                     .heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 14.dp))
                         }
@@ -337,6 +343,8 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
 }
 
 private fun pct(p: Double?) = "${(p ?: 0.0).coerceAtLeast(0.0).roundToInt()} %"
+/** How many alternatives the list shows (the map shows all of them). */
+private const val ALT_LIST_MAX = 8
 /** The height of a stretch's line between two stops. */
 private val LEG_H = 40.dp
 private fun duration(min: Double): String { val m = min.roundToInt(); return if (m >= 60) "%d h %02d min".format(m / 60, m % 60) else "$m min" }

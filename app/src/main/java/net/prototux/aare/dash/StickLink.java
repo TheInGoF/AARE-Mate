@@ -83,6 +83,28 @@ final class StickLink {
         return c.getSharedPreferences("dash_stick", Context.MODE_PRIVATE).getString("address", null);
     }
 
+    /**
+     * "Kopplung loesen" (22.11.2026: "Wie kann ich den Telemetrie-Stick jetzt vom Tablet entfernen, damit ich nochmal eine
+     * vernuenftige Kopplung stattfinden lassen kann?"): the tablet's pairing with the remembered stick dropped and the stick
+     * forgotten. False when Android would not drop it (then by hand: Bluetooth settings, device "OBDII").
+     */
+    static boolean unpair(Context c) {
+        String address = saved(c);
+        boolean ok = true;
+        BluetoothManager m = c.getSystemService(BluetoothManager.class);
+        BluetoothAdapter ad = m == null ? null : m.getAdapter();
+        if (ad != null && permitted(c)) {
+            java.util.Set<BluetoothDevice> bonded = ad.getBondedDevices();
+            if (bonded != null) for (BluetoothDevice d : bonded) {
+                boolean ours = address != null ? d.getAddress().equals(address) : "OBDII".equals(d.getName());
+                if (ours && !removeBond(d)) ok = false;
+            }
+        }
+        forget(c);
+        net.prototux.aare.DiagLog.INSTANCE.add("stick: pairing dropped by the driver" + (ok ? "" : " - Android refused, by hand"), null, "DASH");
+        return ok;
+    }
+
     /** Gemerkten Stick vergessen (die Kopplung selbst loescht man in den Bluetooth-Einstellungen von Android). */
     static void forget(Context c) {
         c.getSharedPreferences("dash_stick", Context.MODE_PRIVATE).edit().clear().apply();
@@ -174,6 +196,27 @@ final class StickLink {
         }
     }
 
+    private boolean mServicesAsked, mSubscribed;
+
+    private void askServices(BluetoothGatt g) {
+        if (mServicesAsked) return;
+        mServicesAsked = true;
+        state("verbunden, lese Dienste …");
+        if (!g.discoverServices()) again("Dienste nicht lesbar");
+    }
+
+    /** Connected 25 s ago and still not subscribed: the old pairing is dropped and made anew, or the driver is told how. */
+    private final Runnable mStuck = this::stuck;
+
+    private void stuck() {
+        BluetoothGatt g = mGatt;
+        if (g == null || mSubscribed || mBonding || !mRunning) return;
+        log("connected 25 s ago, still not subscribed (bond " + bond(g.getDevice().getBondState()) + ")");
+        if (!pairAllowed()) { fail(mCtx.getString(R.string.stick_no_data)); close(); mRunning = false; return; }
+        mGotData = false;
+        noData();
+    }
+
     private boolean mGotData;
     /** Subscribed, yet nothing came: the pairing does not hold on the stick's side. */
     private final Runnable mNoData = this::noData;
@@ -220,6 +263,7 @@ final class StickLink {
             mBonding = false;
             unwatchBond();
             mMain.removeCallbacks(mNoData);
+            mMain.removeCallbacks(mStuck);
             mMain.removeCallbacks(mRetry);
             mMain.removeCallbacks(mScanEnd);
             stopScan();
@@ -306,6 +350,7 @@ final class StickLink {
 
     private void open(BluetoothDevice d) {
         close();
+        mSubscribed = false;
         state("verbinde mit " + d.getAddress() + " …");
         mGatt = d.connectGatt(mCtx, false, mCallback, BluetoothDevice.TRANSPORT_LE);
     }
@@ -322,7 +367,14 @@ final class StickLink {
                 if (g != mGatt) return;
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     state("verbunden, handle Nachrichtengroesse aus …");
-                    if (!g.requestMtu(MTU)) g.discoverServices();
+                    mServicesAsked = false;
+                    if (!g.requestMtu(MTU)) askServices(g);
+                    /* the answer to the size may never come (22.11.2026: "Er sagt bei dem Stick immer noch verbunden, handle
+                       Nachrichtengroesse aus. Dabei ist er nicht verbunden") - on after 3 s without it */
+                    mMain.postDelayed(() -> { if (g == mGatt && !mServicesAsked) { log("no answer to the message size in 3 s - on without it"); askServices(g); } }, 3_000);
+                    /* nothing subscribed 25 s after connecting: the pairing does not hold (System I-084) */
+                    mMain.removeCallbacks(mStuck);
+                    mMain.postDelayed(mStuck, 25_000);
                 } else if (mBonding) {
                     /* the pairing goes on without the connection; its end decides (watchBond) */
                     log("Verbindung waehrend der Kopplung getrennt (Status " + status + ")");
@@ -336,7 +388,7 @@ final class StickLink {
             mMain.post(() -> {
                 if (g != mGatt) return;
                 mMtu = mtu;
-                g.discoverServices();
+                askServices(g);
             });
         }
 
@@ -377,6 +429,8 @@ final class StickLink {
             mMain.post(() -> {
                 if (g != mGatt) return;
                 if (status == BluetoothGatt.GATT_SUCCESS) {
+                    mSubscribed = true;
+                    mMain.removeCallbacks(mStuck);
                     state("abonniert (MTU " + mMtu + ", " + bond(g.getDevice().getBondState()) + ")");
                     mMain.removeCallbacks(mNoData);
                     mMain.postDelayed(mNoData, 20_000);

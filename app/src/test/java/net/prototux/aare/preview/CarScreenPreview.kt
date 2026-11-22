@@ -254,9 +254,12 @@ class CarScreenPreview {
                 Box(Modifier.fillMaxSize().background(Color(0xFF3A4A40))) {
                     net.prototux.aare.ui.car.navi.NaviPanel(Modifier.padding(start = 16.dp, top = 140.dp, bottom = 140.dp).fillMaxWidth(0.4f)) {
                         val shell = net.prototux.aare.ui.car.navi.Charger(org.maplibre.spatialk.geojson.Position(longitude = 10.01, latitude = 52.9), 300, 8, "IONITY")
+                        val pickedAlt = net.prototux.aare.ui.car.navi.NaviTripPlan.Option(shell, -18_000.0, 16.0)
                         NaviTripPlanPanel(rows, onBack = {}, onClose = {}, onDropCharge = {}, nowPercent = 51.0,
                             selected = tesla.at, onPick = {}, altFor = tesla, altCount = 7,
-                            altPicked = net.prototux.aare.ui.car.navi.NaviTripPlan.Option(shell, -18_000.0, 16.0), onAlternatives = {}, onSwap = { _, _ -> })
+                            altPicked = pickedAlt, altList = listOf(pickedAlt,
+                                net.prototux.aare.ui.car.navi.NaviTripPlan.Option(net.prototux.aare.ui.car.navi.Charger(org.maplibre.spatialk.geojson.Position(longitude = 10.02, latitude = 52.95), 150, 4, "Aral pulse"), 4_000.0, 10.0)),
+                            onAlternatives = {}, onSwap = { _, _ -> })
                     }
                 }
             }

@@ -673,8 +673,10 @@
     <string name="stick_title">Telemetrie-Stick</string>
     <string name="stick_hint">Live-Daten direkt vom Stick über Bluetooth. Am Stick: Einstellungen → BLE / ABRP → Live-Daten über Bluetooth, danach neu starten. Dann am Stick „Gerät koppeln“ drücken und hier „Stick suchen“: Android fragt nach dem Code, der am Stick steht – er muss innerhalb von 30 Sekunden eingegeben sein.</string>
     <string name="stick_search">Stick suchen</string>
+    <string name="stick_unpair">Kopplung lösen</string>
+    <string name="stick_unpaired">Kopplung gelöst. Jetzt am Stick „Gerät koppeln“ drücken, Code bereithalten, dann „Stick suchen“.</string>
     <string name="stick_no_data">Verbunden, aber der Stick sendet nichts: am Stick „Gerät koppeln“ drücken, dann hier „Stick suchen“.</string>
-    <string name="stick_unpair_by_hand">Die alte Kopplung ließ sich nicht lösen: den Stick in den Android-Einstellungen → Bluetooth entkoppeln, dann am Stick „Gerät koppeln“ und hier „Stick suchen“.</string>
+    <string name="stick_unpair_by_hand">Die alte Kopplung ließ sich nicht lösen: den Stick in den Android-Einstellungen → Verbundene Geräte → „OBDII“ → Zahnrad → Entkoppeln, dann am Stick „Gerät koppeln“ und hier „Stick suchen“.</string>
     <string name="stick_pair_now">Koppeln: jetzt den Code vom Stick eingeben – Bluetooth lässt dafür 30 Sekunden</string>
     <string name="stick_paired">Mit dem Stick gekoppelt</string>
     <string name="stick_pair_failed">Kopplung abgebrochen (Code nicht innerhalb von 30 Sekunden oder falsch eingegeben). Am Stick erneut „Gerät koppeln“ drücken, Code bereithalten, dann hier „Stick suchen“.</string>
@@ -1126,7 +1128,7 @@
     <string name="mate_navi_plan_alternatives">Alternativen anzeigen</string>
     <string name="mate_navi_alt_take">Nehmen</string>
     <string name="mate_navi_alt_hide">Ausblenden</string>
-    <plurals name="mate_navi_alt_on_map"><item quantity="one">%1$d Station auf der Karte – antippen</item><item quantity="other">%1$d Stationen auf der Karte – hineinzoomen und eine antippen</item></plurals>
+    <plurals name="mate_navi_alt_on_map"><item quantity="one">%1$d Station – in der Liste oder auf der Karte antippen</item><item quantity="other">%1$d Stationen – in der Liste oder auf der Karte antippen</item></plurals>
     <string name="mate_navi_alt_arrive">%1$s · etwa %2$s bei Ankunft</string>
     <string name="mate_navi_voice">Sprechen</string>
     <string name="mate_navi_voice_listen">Sprich jetzt …</string>

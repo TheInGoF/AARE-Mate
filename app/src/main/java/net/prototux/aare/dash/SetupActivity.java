@@ -151,6 +151,16 @@ public final class SetupActivity extends Activity {
             debug();
         }));
         stick.addView(stickRow);
+        /* 22.11.2026: the pairing dropped on the tablet, for a clean new one - a row of its own (three buttons do not fit) */
+        stickRow = row();
+        stickRow.setPadding(0, dp(10), 0, 0);
+        stickRow.addView(button(R.string.stick_unpair, false, v -> {
+            mHub.stickEnabled(false);
+            boolean ok = StickLink.unpair(this);
+            android.widget.Toast.makeText(this, ok ? R.string.stick_unpaired : R.string.stick_unpair_by_hand, android.widget.Toast.LENGTH_LONG).show();
+            debug();
+        }));
+        stick.addView(stickRow);
 
         /* Fehlersuche */
         LinearLayout dbg = card(root, R.string.dbg_title);

@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
@@ -51,6 +52,30 @@ internal object NetworkLogos {
     )
 
     fun of(network: String?): Int? = network?.let { LOGOS[it] }
+
+    /**
+     * The logo on its light plate as a picture for the map (22.11.2026: "statt graue Symbole die Ladestation
+     * Anbietersymbole"), [heightPx] high and 1.6 times as wide, a dark edge round it; null for a network without one.
+     */
+    fun bitmap(context: android.content.Context, network: String?, heightPx: Int, plate: Int, edge: Int): androidx.compose.ui.graphics.ImageBitmap? {
+        val res = of(network) ?: return null
+        val d = androidx.core.content.ContextCompat.getDrawable(context, res) ?: return null
+        val w = (heightPx * 1.6f).toInt(); val h = heightPx
+        val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(bmp)
+        val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        val r = h / 4f; val e = h * 0.08f
+        p.color = edge; c.drawRoundRect(0f, 0f, w.toFloat(), h.toFloat(), r, r, p)
+        p.color = plate; c.drawRoundRect(e, e, w - e, h - e, r, r, p)
+        // the mark fitted into the plate, its sides kept
+        val pad = h / 6f; val bw = w - 2 * pad; val bh = h - 2 * pad
+        val iw = d.intrinsicWidth.takeIf { it > 0 } ?: 1; val ih = d.intrinsicHeight.takeIf { it > 0 } ?: 1
+        val s = minOf(bw / iw, bh / ih)
+        val dw = iw * s; val dh = ih * s
+        d.setBounds(((w - dw) / 2).toInt(), ((h - dh) / 2).toInt(), ((w + dw) / 2).toInt(), ((h + dh) / 2).toInt())
+        d.draw(c)
+        return bmp.asImageBitmap()
+    }
 }
 
 /** The logo of [network] on its plate, [height] high and 1.6 times as wide; the bolt in [boltTint] without one. */

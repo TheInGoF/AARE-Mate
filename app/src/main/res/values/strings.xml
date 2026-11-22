@@ -735,8 +735,10 @@
     <string name="stick_title">Telemetry stick</string>
     <string name="stick_hint">Live data straight from the stick over Bluetooth. On the stick: Config → BLE / ABRP → Live data over Bluetooth, then restart it. Then press "Gerät koppeln" on the stick and "Stick suchen" here: Android asks for the code shown on the stick - it must be entered within 30 seconds.</string>
     <string name="stick_search">Find stick</string>
+    <string name="stick_unpair">Drop pairing</string>
+    <string name="stick_unpaired">Pairing dropped. Now press "Gerät koppeln" on the stick, have the code ready, then "Stick suchen".</string>
     <string name="stick_no_data">Connected, but the stick sends nothing: press "Gerät koppeln" on the stick, then "Stick suchen" here.</string>
-    <string name="stick_unpair_by_hand">The old pairing could not be dropped: remove the stick under Android settings → Bluetooth (unpair), then "Gerät koppeln" on the stick and "Stick suchen" here.</string>
+    <string name="stick_unpair_by_hand">The old pairing could not be dropped: remove the stick under Android settings → Connected devices → "OBDII" → gear → Unpair, then "Gerät koppeln" on the stick and "Stick suchen" here.</string>
     <string name="stick_pair_now">Pairing: enter the code shown on the stick now - Bluetooth allows 30 seconds</string>
     <string name="stick_paired">Paired with the stick</string>
     <string name="stick_pair_failed">Pairing broke off (the code was not entered within 30 seconds, or a wrong one). Press "Gerät koppeln" on the stick again, have the code ready, then "Stick suchen" here.</string>
@@ -1137,7 +1139,7 @@
     <string name="mate_navi_plan_alternatives">Show alternatives</string>
     <string name="mate_navi_alt_take">Take</string>
     <string name="mate_navi_alt_hide">Hide</string>
-    <plurals name="mate_navi_alt_on_map"><item quantity="one">%1$d station on the map - tap it</item><item quantity="other">%1$d stations on the map - zoom in and tap one</item></plurals>
+    <plurals name="mate_navi_alt_on_map"><item quantity="one">%1$d station - tap it in the list or on the map</item><item quantity="other">%1$d stations - tap one in the list or on the map</item></plurals>
     <string name="mate_navi_alt_arrive">%1$s · about %2$s on arrival</string>
     <string name="mate_navi_voice">Speak</string>
     <string name="mate_navi_voice_listen">Speak now …</string>

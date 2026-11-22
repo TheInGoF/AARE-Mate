@@ -1265,23 +1265,27 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport),
                     iconAllowOverlap = const(true), iconIgnorePlacement = const(true))
             }
-            // L-092: the alternatives of a stop, all of them, the tapped one as a planned stop
+            // L-092: the alternatives of a stop, all of them, each with its network's logo (22.11.2026: "statt graue Symbole
+            // die Ladestation Anbietersymbole"), the bolt without one; the tapped one larger
             if (altMarks.isNotEmpty()) {
-                val altJson = remember(altMarks, altPicked) { org.json.JSONObject().put("type", "FeatureCollection").put("features",
-                    org.json.JSONArray().apply { altMarks.forEach { o -> put(org.json.JSONObject().put("type", "Feature")
-                        .put("properties", org.json.JSONObject().put("picked", o === altPicked))
-                        .put("geometry", org.json.JSONObject().put("type", "Point").put("coordinates", org.json.JSONArray().put(o.charger.at.longitude).put(o.charger.at.latitude)))) } }).toString() }
-                val altSource = rememberGeoJsonSource(remember(altJson) { GeoJsonData.JsonString(altJson) })
-                val altImage = remember { NaviChargers.image(STOP_PX, stop = false) }
-                val altPickedImage = remember { NaviChargers.image(STOP_PX, stop = true) }
-                org.maplibre.compose.layers.SymbolLayer(id = "alt-chargers", source = altSource,
-                    iconImage = org.maplibre.compose.expressions.dsl.image(altImage),
-                    iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport),
-                    iconAllowOverlap = const(true), iconIgnorePlacement = const(true))
+                val ctxMap = LocalContext.current
+                val logoPx = (34 * altDensity).toInt()
+                val plate = Mate.logoPlate.toArgb(); val edge = Mate.text.copy(alpha = 0.85f).toArgb()
+                val groups = remember(altMarks) { altMarks.groupBy { it.charger.network?.takeIf { n -> NetworkLogos.of(n) != null } ?: "" } }
+                groups.forEach { (net, list) ->
+                    val img = remember(net, logoPx) { NetworkLogos.bitmap(ctxMap, net, logoPx, plate, edge) ?: NaviChargers.image(STOP_PX, stop = false) }
+                    val json = remember(list) { NaviPins.geoJson(list.map { it.charger.at }) }
+                    org.maplibre.compose.layers.SymbolLayer(id = "alt-chargers-${net.ifEmpty { "other" }}", source = rememberGeoJsonSource(remember(json) { GeoJsonData.JsonString(json) }),
+                        iconImage = org.maplibre.compose.expressions.dsl.image(img),
+                        iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport),
+                        iconAllowOverlap = const(true), iconIgnorePlacement = const(true))
+                }
                 altPicked?.let { o ->
+                    val net = o.charger.network?.takeIf { n -> NetworkLogos.of(n) != null } ?: ""
+                    val img = remember(net, logoPx) { NetworkLogos.bitmap(ctxMap, net, (logoPx * 1.5f).toInt(), plate, Mate.accent.toArgb()) ?: NaviChargers.image(STOP_PX, stop = true) }
                     val one = remember(o) { GeoJsonData.JsonString(NaviPins.geoJson(listOf(o.charger.at))) }
                     org.maplibre.compose.layers.SymbolLayer(id = "alt-picked", source = rememberGeoJsonSource(one),
-                        iconImage = org.maplibre.compose.expressions.dsl.image(altPickedImage),
+                        iconImage = org.maplibre.compose.expressions.dsl.image(img),
                         iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport),
                         iconAllowOverlap = const(true), iconIgnorePlacement = const(true))
                 }
@@ -1449,7 +1453,12 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 NaviTripPlanPanel(rows, onBack = { panel = NaviStep.Menu }, onClose = { panel = NaviStep.None },
                     nowPercent = net.prototux.aare.host.CarDataService.car(context)?.socPercent,
                     selected = planLook,
-                    altFor = altFor, altCount = altMarks.size, altPicked = altPicked,
+                    altFor = altFor, altCount = altMarks.size, altPicked = altPicked, altList = altMarks,
+                    onAltPick = { o ->
+                        altPicked = o; planLook = o.charger.at; following = false; touchedAt = android.os.SystemClock.uptimeMillis()
+                        scope.launch { runCatching { camera.animateTo(CameraPosition(target = o.charger.at, zoom = PLAN_LOOK_ZOOM - 1, bearing = 0.0, tilt = 0.0,
+                            padding = PaddingValues(start = 640.dp, top = 80.dp, end = 80.dp, bottom = 160.dp)), kotlin.time.Duration.parse("900ms")) } }
+                    },
                     onAlternatives = { ch ->
                         val opts = guidedOptions(ch)
                         altFor = ch; altMarks = opts; altPicked = null
