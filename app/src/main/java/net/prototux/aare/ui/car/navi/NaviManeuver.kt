@@ -137,6 +137,8 @@ internal object NaviManeuver {
         }
         if (angle != null && exit > 0) t = if (t == Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW) Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW_WITH_ANGLE
             else Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CCW_WITH_ANGLE
+        // onto a ferry (Valhalla's ferry steps, NaviFerries): the ship, on the turn card and the car's displays
+        if (!round && !NaviFerries.isFerry(s) && after.firstOrNull()?.let { NaviFerries.isFerry(it) } == true) t = Maneuver.TYPE_FERRY_BOAT
         val m = Maneuver.Builder(t)
         if (exit > 0 && isRoundabout(c.maneuverType)) m.setRoundaboutExitNumber(exit)
         if (angle != null && exit > 0) m.setRoundaboutExitAngle(angle)

@@ -975,6 +975,7 @@
     <string name="mate_navi_plan_stop">Halt</string>
     <string name="mate_navi_plan_charge">an %1$s · %2$d min laden · ab %3$s</string>
     <string name="mate_navi_plan_destination">%1$s am Ziel</string>
+    <string name="mate_navi_plan_ferry">Fähre · %1$d km auf See · %2$s, ohne Verbrauch</string>
     <string name="mate_navi_networks_outside">Nur mit %1$s nicht erreichbar – andere Anbieter eingeplant</string>
     <string name="places_on_map">Ort auf der Karte</string>
     <string name="mapserver_title">Kartenserver</string>

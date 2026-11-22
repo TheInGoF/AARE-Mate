@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DirectionsBoat
 import androidx.compose.material.icons.rounded.EvStation
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Place
@@ -97,7 +98,7 @@ internal fun NaviRouteStrip(rows: List<NaviTripPlan.Row>, jams: List<Triple<Doub
             val y = yOf(r.metresLeft)
             Box(Modifier.offset(cx - 20.dp, y - 20.dp).size(40.dp).clip(CircleShape)
                 .background(if (r.kind == NaviTripPlan.Kind.CHARGE) Color(0xFF0E3B36) else Mate.cardSolid), contentAlignment = Alignment.Center) {
-                Icon(if (r.kind == NaviTripPlan.Kind.CHARGE) Icons.Rounded.EvStation else Icons.Rounded.Place, null,
+                Icon(when (r.kind) { NaviTripPlan.Kind.CHARGE -> Icons.Rounded.EvStation; NaviTripPlan.Kind.FERRY -> Icons.Rounded.DirectionsBoat; else -> Icons.Rounded.Place }, null,
                     tint = if (r.kind == NaviTripPlan.Kind.CHARGE) teal else Color.White, modifier = Modifier.size(24.dp))
             }
             Side(Modifier.offset(0.dp, y - 22.dp).width(cx - 28.dp), TextAlign.End,
@@ -159,7 +160,8 @@ private fun SlimStrip(rows: List<NaviTripPlan.Row>, jams: List<Triple<Double, Do
         rows.forEach { r ->
             val y = yOf(r.metresLeft)
             val charge = r.kind == NaviTripPlan.Kind.CHARGE
-            val icon = when (r.kind) { NaviTripPlan.Kind.CHARGE -> Icons.Rounded.EvStation; NaviTripPlan.Kind.OWN -> Icons.Rounded.Place; else -> Icons.Rounded.Flag }
+            val icon = when (r.kind) { NaviTripPlan.Kind.CHARGE -> Icons.Rounded.EvStation; NaviTripPlan.Kind.OWN -> Icons.Rounded.Place
+                NaviTripPlan.Kind.FERRY -> Icons.Rounded.DirectionsBoat; else -> Icons.Rounded.Flag }
             Box(Modifier.offset(cx - 14.dp, y - 14.dp).size(28.dp).clip(CircleShape).background(if (charge) Color(0xFF0E3B36) else Mate.cardSolid),
                 contentAlignment = Alignment.Center) {
                 Icon(icon, null, tint = if (charge) teal else Color.White, modifier = Modifier.size(18.dp))

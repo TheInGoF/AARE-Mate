@@ -29,4 +29,19 @@ class NaviTripPlanTest {
         assertEquals(20_000.0, rows[0].metresLeft, 1.0)
         assertEquals(1_200_000L, rows[0].arriveAtMillis)
     }
+
+    /** L-084: a ferry is a line of its own, in its place, its clock time after the charging before it; gone once crossed. */
+    @Test fun ferryInItsPlace() {
+        val steps = listOf(50_000.0 to 3_000.0, 20_000.0 to 3_600.0, 5_000.0 to 1_200.0, 25_000.0 to 1_500.0)
+        val f = NaviTripPlan.ferries(steps, listOf(false, true, true, false), listOf("A 1", "mate-test Fähre", "mate-test Fähre", "B"))
+        assertEquals(1, f.size)
+        assertEquals(50_000.0, f[0].metres, 0.1); assertEquals(25_000.0, f[0].seaM, 0.1); assertEquals(4_800.0, f[0].rideSeconds, 0.1)
+        val rows = NaviTripPlan.rows(marks, charges, own, 0.0, 0.0, 100_000.0, 9_300.0, 0L, "mate-test Ziel", 21.0, ferries = f)
+        assertEquals(listOf(NaviTripPlan.Kind.OWN, NaviTripPlan.Kind.CHARGE, NaviTripPlan.Kind.FERRY, NaviTripPlan.Kind.DESTINATION), rows.map { it.kind })
+        assertEquals("mate-test Fähre", rows[2].name)
+        assertEquals((3_000 + 25 * 60) * 1000L, rows[2].arriveAtMillis)
+        assertEquals(80.0, rows[2].ferryMinutes!!, 0.01)
+        val later = NaviTripPlan.rows(marks, charges, own, 80_000.0, 8_000.0, 100_000.0, 9_300.0, 0L, "mate-test Ziel", null, ferries = f)
+        assertEquals(listOf(NaviTripPlan.Kind.DESTINATION), later.map { it.kind })
+    }
 }

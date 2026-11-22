@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DirectionsBoat
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
@@ -48,13 +49,34 @@ import kotlin.math.roundToInt
  * with its level, each with the clock time of arrival and the way from here. Opened from the menu while guiding.
  */
 internal object NaviTripPlan {
-    enum class Kind { CHARGE, OWN, DESTINATION }
+    enum class Kind { CHARGE, OWN, DESTINATION, FERRY }
 
     /** One line: [arriveAtMillis] clock time of arrival, [metresLeft] the way from here; levels only for a charging stop. */
     class Row(val kind: Kind, val name: String, val arriveAtMillis: Long, val metresLeft: Double,
               val arrivePercent: Double? = null, val leavePercent: Double? = null, val chargeMinutes: Double? = null,
               val network: String? = null, val at: Position? = null, val charger: Charger? = null,
-              val overLimit: Boolean = false)
+              val overLimit: Boolean = false,
+              /** a ferry: the minutes over the sea (the clock time is when the car reaches its port) */
+              val ferryMinutes: Double? = null, val seaM: Double? = null)
+
+    /** A ferry on the route ([NaviFerries]): where it starts along the route (metres, seconds from the start), its ride. */
+    class Ferry(val name: String, val metres: Double, val seconds: Double, val rideSeconds: Double, val seaM: Double)
+
+    /** The ferries of a route from its steps: one per run of ferry steps, named after the first. */
+    fun ferries(steps: List<Pair<Double, Double>>, isFerry: List<Boolean>, names: List<String?>): List<Ferry> {
+        val out = ArrayList<Ferry>()
+        var m = 0.0; var t = 0.0; var i = 0
+        while (i < steps.size) {
+            if (!isFerry[i]) { m += steps[i].first; t += steps[i].second; i++; continue }
+            val m0 = m; val t0 = t; val name = names[i].orEmpty()
+            while (i < steps.size && isFerry[i]) { m += steps[i].first; t += steps[i].second; i++ }
+            out += Ferry(name, m0, t0, t - t0, m - m0)
+        }
+        return out
+    }
+
+    fun ferries(route: uniffi.ferrostar.Route): List<Ferry> =
+        ferries(route.steps.map { it.distance to it.duration }, route.steps.map { NaviFerries.isFerry(it) }, route.steps.map { it.roadName })
 
     /**
      * [marks] the stops before the destination along the guided route (NaviStops), [charges] the planned charging stops,
@@ -64,11 +86,21 @@ internal object NaviTripPlan {
      */
     fun rows(marks: List<NaviStops.Mark>, charges: List<ChargePlanner.Stop>, own: List<Pair<Position, String>>,
              drivenM: Double, drivenS: Double, routeM: Double, routeS: Double, nowMillis: Long,
-             destination: String, destinationPercent: Double?, destinationAt: Position? = null): List<Row> {
+             destination: String, destinationPercent: Double?, destinationAt: Position? = null, ferries: List<Ferry> = emptyList()): List<Row> {
         val out = ArrayList<Row>()
         var chargedS = 0.0
+        val ahead = ferries.filter { it.metres + it.seaM > drivenM + PASSED_M }.toMutableList()
+        /** the ferries before [metres] (all left with null) into the plan, in their place */
+        fun ferriesBefore(metres: Double?) {
+            while (ahead.isNotEmpty() && (metres == null || ahead[0].metres < metres)) {
+                val f = ahead.removeAt(0)
+                out += Row(Kind.FERRY, f.name, nowMillis + (((f.seconds - drivenS).coerceAtLeast(0.0) + chargedS) * 1000).toLong(),
+                    (f.metres - drivenM).coerceAtLeast(0.0), ferryMinutes = f.rideSeconds / 60, seaM = f.seaM)
+            }
+        }
         for (m in marks) {
             if (m.metres <= drivenM + PASSED_M) continue
+            ferriesBefore(m.metres)
             val arrive = nowMillis + (((m.seconds - drivenS).coerceAtLeast(0.0) + chargedS) * 1000).toLong()
             val c = charges.firstOrNull { ChargerIndex.distanceM(it.charger.at, m.at) < SAME_M }
             if (c != null) {
@@ -81,6 +113,7 @@ internal object NaviTripPlan {
                 out += Row(Kind.OWN, mine?.second.orEmpty(), arrive, m.metres - drivenM, at = mine?.first ?: m.at)
             }
         }
+        ferriesBefore(null)
         out += Row(Kind.DESTINATION, destination, nowMillis + (((routeS - drivenS).coerceAtLeast(0.0) + chargedS) * 1000).toLong(),
             (routeM - drivenM).coerceAtLeast(0.0), arrivePercent = destinationPercent, at = destinationAt)
         return out
@@ -154,7 +187,8 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                 // a charging stop: its network's logo (O210); the others in a slot of the same width, so the names line up
                 if (r.kind == NaviTripPlan.Kind.CHARGE) NetworkLogo(r.network, 32.dp)
                 else androidx.compose.foundation.layout.Box(Modifier.size(32.dp * 1.6f, 32.dp), contentAlignment = Alignment.Center) {
-                    Icon(if (r.kind == NaviTripPlan.Kind.OWN) Icons.Rounded.Flag else Icons.Rounded.Place, null, tint = Mate.accent, modifier = Modifier.size(32.dp))
+                    Icon(when (r.kind) { NaviTripPlan.Kind.OWN -> Icons.Rounded.Flag; NaviTripPlan.Kind.FERRY -> Icons.Rounded.DirectionsBoat; else -> Icons.Rounded.Place },
+                        null, tint = Mate.accent, modifier = Modifier.size(32.dp))
                 }
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
@@ -164,6 +198,7 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                         NaviTripPlan.Kind.CHARGE -> stringResource(R.string.mate_navi_plan_charge, pct(r.arrivePercent), (r.chargeMinutes ?: 0.0).roundToInt(), pct(r.leavePercent))
                         NaviTripPlan.Kind.DESTINATION -> r.arrivePercent?.let { stringResource(R.string.mate_navi_plan_destination, pct(it)) }
                         NaviTripPlan.Kind.OWN -> null
+                        NaviTripPlan.Kind.FERRY -> ferryDetail(r)
                     }
                     if (detail != null) Text(detail, style = MaterialTheme.typography.bodyMedium, color = Mate.textDim, maxLines = 1)
                 }
@@ -213,3 +248,11 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
 
 private fun pct(p: Double?) = "${(p ?: 0.0).coerceAtLeast(0.0).roundToInt()} %"
 private fun km(m: Double) = if (m < 1000) "${(m / 10).roundToInt() * 10} m" else "%.1f km".format(m / 1000)
+
+/** A ferry's line in the plan: the sea and the ride, without energy (as IDmate counts it). */
+@Composable
+internal fun ferryDetail(r: NaviTripPlan.Row): String {
+    val min = (r.ferryMinutes ?: 0.0).roundToInt()
+    val ride = if (min >= 60) "%d h %02d".format(min / 60, min % 60) else "$min min"
+    return stringResource(R.string.mate_navi_plan_ferry, ((r.seaM ?: 0.0) / 1000).roundToInt(), ride)
+}

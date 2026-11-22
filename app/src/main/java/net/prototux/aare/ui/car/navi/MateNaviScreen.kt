@@ -118,7 +118,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     remember { naviFpsSetting = net.prototux.aare.Settings(context).naviFps }
     val online = rememberOnline(context)
     // the package that covers where the car is (its last fix), the test start only without one
-    val offlineMap = remember(online) { if (online) null else (CarFixes.last.value?.let { it.longitude to it.latitude } ?: (TEST_FROM.longitude to TEST_FROM.latitude))
+    val offlineMap = remember(online) { if (online) null else (CarFixes.last.value?.let { it.longitude to it.latitude } ?: (testFrom().longitude to testFrom().latitude))
         .let { (lon, lat) -> RegionPacks.mapFor(context, lon, lat) } }
     LaunchedEffect(online, offlineMap) { Log.i(TAG, "map source: " + (offlineMap?.file?.parentFile?.name?.let { "package $it (offline)" } ?: "server")) }
     // F2: the traffic layer follows its switch in the route options
@@ -126,7 +126,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     val style = remember(night, offlineMap, trafficShown) { BaseStyle.Json(mapStyle(context, night, offlineMap)) }
     // the loaded style's own sources (the guiding veil's among them)
     val styleState = org.maplibre.compose.style.rememberStyleState()
-    val camera = rememberCameraState(CameraPosition(target = TEST_FROM, zoom = START_ZOOM))
+    val camera = rememberCameraState(CameraPosition(target = testFrom(), zoom = START_ZOOM))
     val scope = rememberCoroutineScope()
     val parts = remember { NaviServer.install(context); RouteOptions.of(net.prototux.aare.Settings(context)).let { o -> NaviKeep.parts(context, o) { sc, lv -> NaviSession(sc, NaviServer.valhalla(context), NaviServer.client(context), o, lv) } } }
     val session = parts.first
@@ -147,7 +147,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     var limits by NaviKeep.limits
     var destination by NaviKeep.destination
     // Choosing the destination (O169): no trip starts by itself; "Ziel" opens the lists, a place gives the preview, from
-    // which the guidance starts. In a test drive the simulated car sets off at TEST_FROM, otherwise from where the car is.
+    // which the guidance starts. In a test drive the simulated car sets off at TEST_FROM (or a test's own start), otherwise from where the car is.
     var panel by remember { mutableStateOf<NaviStep>(NaviStep.None) }
     // "Letzte Ziele": pins without a name get their address from the map server's search while the list is open (O172)
     LaunchedEffect(panel) {
@@ -368,7 +368,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     fun choose(place: net.prototux.aare.places.Places.Place, resumeOwn: List<Pair<Position, String>>? = null) {
         panel = NaviStep.Preview(place); preview = null; planned = null; planError = null; routeOptions = emptyList()
         // from where the car is now; a stop goes before the destination that is guided to
-        val from = if (testDrive) (if (guiding) carAt ?: TEST_FROM else TEST_FROM) else carAt ?: run {
+        val from = if (testDrive) (if (guiding) carAt ?: testFrom() else testFrom()) else carAt ?: run {
             // no position yet (no GPS fix from the car nor the phone): said, not planned from somewhere
             planError = context.getString(net.prototux.aare.R.string.mate_navi_no_position); null
         }
@@ -871,7 +871,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     var following by remember { mutableStateOf(true) }
     var returning by remember { mutableStateOf(false) }
     // where the car is: the simulation's start until a trip runs (the puck shows there while waiting too)
-    var lastPoint by remember { mutableStateOf<Position?>(if (testDrive) TEST_FROM else null) }
+    var lastPoint by remember { mutableStateOf<Position?>(if (testDrive) testFrom() else null) }
     // F1: not guiding and not testing - the map shows where the car is and follows it, as Google Maps does before a trip
     LaunchedEffect(testDrive, guiding) {
         if (testDrive || guiding) return@LaunchedEffect
@@ -1346,7 +1346,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 // once per 50 m is enough for the minutes and the kilometres
                 val rows = remember(t.progress.distanceRemaining.roundToLong() / 50, stopMarks, chargeStops, ownStops, arrivalNow?.percent?.roundToLong()) {
                     NaviTripPlan.rows(stopMarks, chargeStops, ownStops, r.distance - t.progress.distanceRemaining, routeS - t.progress.durationRemaining,
-                        r.distance, routeS, System.currentTimeMillis(), target?.name.orEmpty(), arrivalNow?.percent)
+                        r.distance, routeS, System.currentTimeMillis(), target?.name.orEmpty(), arrivalNow?.percent, ferries = NaviTripPlan.ferries(r))
                 }
                 LaunchedEffect(Unit) { Log.i(TAG, "trip plan: " + rows.joinToString { "%s %s %.1f km".format(it.kind, it.name, it.metresLeft / 1000) }) }
                 NaviTripPlanPanel(rows, onBack = { panel = NaviStep.Menu }, onClose = { panel = NaviStep.None },
@@ -1417,7 +1417,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     onKeyboard = { panel = NaviStep.Search }, onMic = { NaviSearchStart.voice = true; panel = NaviStep.Search })
             }
             is NaviStep.List -> NaviPanel(panelMod) { NaviPlaces(book, book.categories.firstOrNull { it.id == st.category.id } ?: st.category,
-                carAt ?: (if (testDrive) TEST_FROM else null), onPlace = { choose(it) },
+                carAt ?: (if (testDrive) testFrom() else null), onPlace = { choose(it) },
                 onOrder = { o -> book = net.prototux.aare.places.Places.setOrder(context, st.category.id, o) },
                 onBack = { panel = NaviStep.Lists }, onClose = { panel = NaviStep.None }) }
             is NaviStep.Options -> NaviPanel(panelMod) { NaviRouteOptions(onBack = {
@@ -1563,7 +1563,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             val drivenM = stripG.distance - trip.progress.distanceRemaining
             val rows = remember(trip.progress.distanceRemaining.roundToLong() / 100, stopMarks, chargeStops, ownStops, arrivalNow?.percent?.roundToLong()) {
                 NaviTripPlan.rows(stopMarks, chargeStops, ownStops, drivenM, routeS - trip.progress.durationRemaining,
-                    stripG.distance, routeS, System.currentTimeMillis(), target?.name.orEmpty(), arrivalNow?.percent)
+                    stripG.distance, routeS, System.currentTimeMillis(), target?.name.orEmpty(), arrivalNow?.percent, ferries = NaviTripPlan.ferries(stripG))
             }
             // each jam ahead in metres from here, its level from how much slower it is than free flow
             val stripJams = jams.map { j ->
@@ -1653,6 +1653,8 @@ private const val TAG = "MateNavi"
  * fast - about two minutes a test.
  */
 private val TEST_FROM = Position(longitude = 13.3762, latitude = 52.5096)
+/** The test trip's start: [TEST_FROM], or the place a test set (debug_navi_from, test builds only). */
+private fun testFrom(): Position = NaviDebug.from ?: TEST_FROM
 private val TEST_TO = Position(longitude = 13.3501, latitude = 52.5145)
 private const val SIM_WARP = 3
 /** After the driver moved or zoomed the map, how long until it follows the car again (wish: "nach 5-10s zum auto zurück"). */
@@ -1985,7 +1987,8 @@ internal fun planRows(r: uniffi.ferrostar.Route, own: List<Pair<Position, String
     val marks = NaviStops.marks(raw(r), r.steps.map { it.distance to it.duration },
         r.waypoints.drop(1).dropLast(1).map { Position(longitude = it.coordinate.lng, latitude = it.coordinate.lat) })
     val at = r.waypoints.lastOrNull()?.let { Position(longitude = it.coordinate.lng, latitude = it.coordinate.lat) }
-    return NaviTripPlan.rows(marks, stops, own, 0.0, 0.0, r.distance, r.steps.sumOf { it.duration }, System.currentTimeMillis(), destination, destinationPercent, at)
+    return NaviTripPlan.rows(marks, stops, own, 0.0, 0.0, r.distance, r.steps.sumOf { it.duration }, System.currentTimeMillis(), destination, destinationPercent, at,
+        ferries = NaviTripPlan.ferries(r))
 }
 
 /** What a place chosen in the lists is for: a new trip, another destination, or a stop on the way. */
@@ -2012,6 +2015,8 @@ internal object NaviDebug {
     @Volatile var fakeDelayS: Int? = null
     /** The position from the car/phone instead of the simulation (F1 tests; in the desk window the window's test place). */
     @Volatile var live: (() -> Unit)? = null
+    /** Tests: the simulated car sets off here instead of the test start (routes far from Berlin, e.g. over a ferry). */
+    @Volatile var from: Position? = null
     /** A speed in km/h the screen takes instead of the car's (tests of the limit sign and warning, O194/O195); null = real. */
     var speedKmh by androidx.compose.runtime.mutableStateOf<Double?>(null)
     /** Opens the search with this text, as if typed (F6 tests); taken once by the search panel. */

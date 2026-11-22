@@ -65,11 +65,14 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
         CourseFiltering.SNAP_TO_ROUTE,
     )
 
+    /** Valhalla's answers read for the ferries on the way (NaviFerries) before Ferrostar takes them. */
+    private val routeHttp = http.newBuilder().addInterceptor(NaviFerries.interceptor).build()
+
     private val core = FerrostarCore(
         // German instructions (specification F-06); without it Valhalla answers in English
         // with the driver's route settings, so that a new route after leaving it keeps them too (O181)
         WellKnownRouteProvider.Valhalla("$valhalla/route", "auto", options(false, 0, routeOptions)),
-        OkHttpClientProvider(http),
+        OkHttpClientProvider(routeHttp),
         positions,
         config,
         null,
@@ -220,7 +223,7 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
     /** One core per set of options (Ferrostar takes them when it is made); the guidance stays on [core]. */
     private val planners = HashMap<String, FerrostarCore>()
     private fun planner(json: String) = planners.also { if (it.size > 12 && json !in it) it.clear() }.getOrPut(json) {
-        FerrostarCore(WellKnownRouteProvider.Valhalla("$valhalla/route", "auto", json), OkHttpClientProvider(http), positions, config, null)
+        FerrostarCore(WellKnownRouteProvider.Valhalla("$valhalla/route", "auto", json), OkHttpClientProvider(routeHttp), positions, config, null)
     }
 
     /** The routes to choose from: fast (and Valhalla's alternatives), economical; same routes only once. */

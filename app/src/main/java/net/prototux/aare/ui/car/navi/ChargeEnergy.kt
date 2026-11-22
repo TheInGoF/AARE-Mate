@@ -28,8 +28,11 @@ internal object ChargeEnergy {
         /** What slow pieces took beyond driving: their minutes of heating and electronics (N-019 step 1). */
         var idle = 0.0
         var weatherPieces = 0; var heightPieces = 0
+        /** Metres on a ferry: the car rides along, no energy (IDmate's range_along_route). */
+        var ferryM = 0.0
         override fun toString() = "drive %.1f kWh, climb %+.1f, wind %+.1f, temperature %+.1f, rain %+.1f, slow %+.1f kWh".format(
-            java.util.Locale.ROOT, drive / 1000, climb / 1000, wind / 1000, climate / 1000, rain / 1000, idle / 1000)
+            java.util.Locale.ROOT, drive / 1000, climb / 1000, wind / 1000, climate / 1000, rain / 1000, idle / 1000) +
+            (if (ferryM > 0) ", %.0f km on ferries without energy".format(java.util.Locale.ROOT, ferryM / 1000) else "")
     }
 
     /** Head wind in m/s for a car going [headingDeg] in a wind from [fromDeg] of [ms] at 10 m (ground level: [GROUND]). */
@@ -79,7 +82,7 @@ internal object ChargeEnergy {
      * now (null: not learned - the forecast's rain counts then).
      */
     fun track(points: List<Position>, kmh: DoubleArray, car: EnergyModel.Car, heights: Heights? = null, weather: Weather? = null,
-              learnedRain: ((Position, Double) -> Double)? = null, parts: Parts = Parts()): ChargePlanner.Track {
+              learnedRain: ((Position, Double) -> Double)? = null, parts: Parts = Parts(), ferry: BooleanArray? = null): ChargePlanner.Track {
         val n = points.size
         val m = DoubleArray(n); val s = DoubleArray(n); val e = DoubleArray(n)
         var lastH = points.firstOrNull()?.let { heights?.at(it) }
@@ -91,6 +94,10 @@ internal object ChargeEnergy {
             val v = kmh[i].coerceIn(5.0, 200.0)
             s[i] = s[i - 1] + d / (v / 3.6)
             if (d <= 0.0) { e[i] = e[i - 1]; continue }
+            if (ferry != null && ferry[i]) {
+                // on the ferry: distance and time without energy; the sea level is no climb
+                e[i] = e[i - 1]; parts.ferryM += d; lastH = null; continue
+            }
             val h = heights?.at(points[i])
             val climb = if (h != null && lastH != null) (h - lastH).also { parts.heightPieces++ } else 0.0
             if (h != null) lastH = h

@@ -986,6 +986,7 @@
     <string name="mate_navi_plan_stop">Stop</string>
     <string name="mate_navi_plan_charge">arrive %1$s · charge %2$d min · leave %3$s</string>
     <string name="mate_navi_plan_destination">%1$s on arrival</string>
+    <string name="mate_navi_plan_ferry">Ferry · %1$d km at sea · %2$s, no energy used</string>
     <string name="mate_navi_networks_outside">Not reachable with %1$s alone – other networks planned</string>
     <string name="places_on_map">Place on the map</string>
     <string name="mapserver_title">Map server</string>

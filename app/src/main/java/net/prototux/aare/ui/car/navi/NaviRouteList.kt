@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragIndicator
+import androidx.compose.material.icons.rounded.DirectionsBoat
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material3.Icon
@@ -128,7 +129,8 @@ internal fun NaviRouteList(rows: List<NaviTripPlan.Row>, removed: List<Charger>,
                     .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (r.kind == NaviTripPlan.Kind.CHARGE) NetworkLogo(r.network, 30.dp, boltTint = Mate.warn)
                     else Box(Modifier.size(30.dp * 1.6f, 30.dp), contentAlignment = Alignment.Center) {
-                        Icon(if (r.kind == NaviTripPlan.Kind.OWN) Icons.Rounded.Place else Icons.Rounded.Flag, null, tint = Mate.accent, modifier = Modifier.size(30.dp))
+                        Icon(when (r.kind) { NaviTripPlan.Kind.OWN -> Icons.Rounded.Place; NaviTripPlan.Kind.FERRY -> Icons.Rounded.DirectionsBoat; else -> Icons.Rounded.Flag },
+                            null, tint = Mate.accent, modifier = Modifier.size(30.dp))
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
@@ -139,6 +141,7 @@ internal fun NaviRouteList(rows: List<NaviTripPlan.Row>, removed: List<Charger>,
                                 (r.chargeMinutes ?: 0.0).roundToInt().coerceAtLeast(1))
                             NaviTripPlan.Kind.DESTINATION -> r.arrivePercent?.let { stringResource(R.string.mate_navi_plan_destination, "${pct(it)} %") }
                             NaviTripPlan.Kind.OWN -> null
+                            NaviTripPlan.Kind.FERRY -> ferryDetail(r)
                         }
                         if (detail != null) Text(detail, style = MaterialTheme.typography.bodySmall,
                             color = if (r.kind == NaviTripPlan.Kind.DESTINATION && (r.arrivePercent ?: 100.0) < NaviCharge.RESERVE_PERCENT) Mate.warn else Mate.textDim, maxLines = 2)

@@ -101,6 +101,19 @@ class ChargeEnergyTest {
         assertEquals(0.0, fast.parts!!.idle, 1e-9)
     }
 
+
+    /** L-084, as IDmate: the kilometres on a ferry cost no energy (the car rides along), the time still counts. */
+    @Test fun ferryCostsNoEnergy() {
+        val ferry = BooleanArray(pts.size) { it in 101..300 }      // 20 km of the 50 on the ferry
+        val parts = ChargeEnergy.Parts()
+        val with = ChargeEnergy.track(pts, kmh, car, parts = parts, ferry = ferry)
+        val without = ChargeEnergy.track(pts, kmh, car)
+        assertEquals(without.wh.last() * 30.0 / 50.0, with.wh.last(), without.wh.last() * 0.01)
+        assertEquals(20_000.0, parts.ferryM, 150.0)
+        assertEquals(without.seconds.last(), with.seconds.last(), 0.01)
+        assertTrue(parts.toString().contains("20 km on ferries"))
+    }
+
 }
 
 /** Navi L-029 step A: the heights of the route from Valhalla's answer (org.json needs Robolectric). */

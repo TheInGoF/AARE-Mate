@@ -164,6 +164,12 @@ object CarTools {
         // test builds: a delay in seconds counted as ahead on the guided route, for the faster route ({"s":600} / {"s":null})
         "debug_navi_delay" -> if (!net.prototux.aare.BuildConfig.TEST_HOOKS) JSONObject().put("ok", false) else {
             net.prototux.aare.ui.car.navi.NaviDebug.fakeDelayS = if (args.isNull("s")) null else args.optInt("s"); JSONObject().put("ok", true) }
+        // test builds: the simulation's start ({"lat":..,"lon":..}; {} = the test start again) - routes far from Berlin
+        "debug_navi_from" -> if (!net.prototux.aare.BuildConfig.TEST_HOOKS) JSONObject().put("ok", false) else {
+            net.prototux.aare.ui.car.navi.NaviDebug.from = if (args.has("lat") && args.has("lon"))
+                org.maplibre.spatialk.geojson.Position(longitude = args.optDouble("lon"), latitude = args.optDouble("lat")) else null
+            JSONObject().put("ok", true)
+        }
         "debug_navi_speed" -> if (!net.prototux.aare.BuildConfig.TEST_HOOKS) JSONObject().put("ok", false) else {
             net.prototux.aare.ui.car.navi.NaviDebug.speedKmh = if (args.isNull("kmh")) null else args.optDouble("kmh") / 3.6
             JSONObject().put("ok", true)

@@ -48,8 +48,13 @@ internal object NaviCharge {
      * Energy in Wh for the first [untilM] metres of [steps] (the first step only from [firstLeftM] on) - the way to a
      * charging stop ahead.
      */
-    fun energyWhUntil(steps: List<RouteStep>, firstLeftM: Double?, untilM: Double, car: EnergyModel.Car): Double =
-        partsUntil(steps.map { it.distance to it.duration }, firstLeftM, untilM).sumOf { (kmh, s) -> EnergyModel.tripW(kmh, car) * s / 3600.0 }
+    fun energyWhUntil(steps: List<RouteStep>, firstLeftM: Double?, untilM: Double, car: EnergyModel.Car): Double {
+        // a ferry's step costs no energy (NaviFerries): its metres still count towards [untilM]
+        val ferry = steps.map { NaviFerries.isFerry(it) }
+        val parts = partsUntil(steps.map { it.distance to it.duration }, firstLeftM, untilM)
+        val used = steps.withIndex().filter { (_, st) -> st.distance > 0 && st.duration > 0 }.map { it.index }
+        return parts.withIndex().sumOf { (k, p) -> if (ferry[used[k]]) 0.0 else EnergyModel.tripW(p.first, car) * p.second / 3600.0 }
+    }
 
     /**
      * The pieces of the first [untilM] metres of [steps] (each its metres and seconds; the first only from [firstLeftM]
@@ -85,7 +90,7 @@ internal object NaviCharge {
 
     /** Energy in Wh for [steps] (the first one only from [firstLeftM] on). */
     fun energyWh(steps: List<RouteStep>, firstLeftM: Double?, car: EnergyModel.Car): Double = steps.withIndex().sumOf { (i, s) ->
-        if (s.distance <= 0 || s.duration <= 0) 0.0 else {
+        if (s.distance <= 0 || s.duration <= 0 || NaviFerries.isFerry(s)) 0.0 else {
             val share = if (i == 0 && firstLeftM != null) (firstLeftM / s.distance).coerceIn(0.0, 1.0) else 1.0
             val kmh = s.distance / s.duration * 3.6
             EnergyModel.tripW(kmh, car) * (s.duration * share) / 3600.0

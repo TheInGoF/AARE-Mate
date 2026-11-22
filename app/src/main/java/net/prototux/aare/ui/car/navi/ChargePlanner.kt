@@ -191,14 +191,18 @@ internal object ChargePlanner {
         val kmh = DoubleArray(pts.size)
         // the steps' ends along the route, for each piece's speed
         val stepEnd = route.steps.runningFold(0.0) { a, st -> a + st.distance }.drop(1)
+        // the steps on a ferry (Valhalla's answer, NaviFerries): the car rides along, no energy
+        val ferrySteps = NaviFerries.steps(route)
+        val ferry = ferrySteps?.let { BooleanArray(pts.size) }
         var k = 0; var m = 0.0
         for (i in 1 until pts.size) {
             m += ChargerIndex.distanceM(pts[i - 1], pts[i])
             while (k < route.steps.lastIndex && m > stepEnd[k]) k++
             val st = route.steps[k]
             kmh[i] = if (st.duration > 0) (st.distance / st.duration * 3.6).coerceIn(5.0, 200.0) else 50.0
+            if (ferry != null) ferry[i] = ferrySteps[k]
         }
-        return ChargeEnergy.track(pts, kmh, car, heights, weather, rainKwh100)
+        return ChargeEnergy.track(pts, kmh, car, heights, weather, rainKwh100, ferry = ferry)
     }
 
     private const val FULL = 100.0
