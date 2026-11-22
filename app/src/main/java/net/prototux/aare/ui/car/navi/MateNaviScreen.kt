@@ -393,10 +393,26 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         holdStart = false
         planFrom = Triple(from, Position(longitude = to.lon, latitude = to.lat), via)
         scope.launch {
+            val askedAt = android.os.SystemClock.elapsedRealtime()
             val choices = runCatching {
                 session.planChoices(from, Position(longitude = to.lon, latitude = to.lat), via, RouteOptions.of(net.prototux.aare.Settings(context)),
                     // F2: around the closed roads (with the traffic shown and the net)
-                    closuresAlong = if (trafficShown && offlineMap == null) ({ line -> NaviTraffic.closuresAlong(context, line) }) else null)
+                    closuresAlong = if (trafficShown && offlineMap == null) ({ line -> NaviTraffic.closuresAlong(context, line) }) else null,
+                    // System L-095 (22.11.2026: "dass ich die Route sage und er dann locker 30 Sekunden braucht … dass er die
+                    // Route so schnell wie möglich anzeigt, damit man losfahren kann. Und dass man sieht, es tut sich was"):
+                    // Valhalla's routes on the map and in the panel at once; the closures and then the charging stops follow
+                    onFirst = { first -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        if (panel !is NaviStep.Preview || routeOptions.isNotEmpty()) return@withContext
+                        val car0 = net.prototux.aare.host.CarDataService.car(context)
+                        val name0 = if (stop) "${place.name} → ${to.name}" else place.name
+                        routeOptions = first.map { c -> optionOf(c, car0, name0, newOwn, to.name, pendingCharge = car0 != null) }
+                        pick(0)
+                        net.prototux.aare.DiagLog.add("route: shown after %.1f s, closures and charging stops still to come".format(java.util.Locale.ROOT,
+                            (android.os.SystemClock.elapsedRealtime() - askedAt) / 1000.0), area = "NAVI")
+                        val all0 = routeOptions.flatMap { raw(it.route) }
+                        if (all0.isNotEmpty()) scope.launch { runCatching { camera.animateTo(org.maplibre.spatialk.geojson.BoundingBox(all0.minOf { it.longitude }, all0.minOf { it.latitude },
+                            all0.maxOf { it.longitude }, all0.maxOf { it.latitude }), 0.0, 0.0, PaddingValues(start = 640.dp, top = 80.dp, end = 80.dp, bottom = 160.dp)) } }
+                    } })
             }.onFailure { e ->
                     Log.w(TAG, "route: $e")
                     // said in words instead of planning for ever: token refused, server out of reach, or no way there
@@ -416,8 +432,13 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             // shown and startable as they come; the charging stops are planned behind them and fill in each route as its
             // plan is done (O182)
             val gen = ++planGen
+            val shownFirst = routeOptions.isNotEmpty()
+            val keep = chosen
             routeOptions = choices.map { c -> optionOf(c, car, name, newOwn, to.name, pendingCharge = car != null) }
-            pick(0)
+            // the routes shown first stay chosen where the driver picked one; the closures may have changed them
+            pick(if (shownFirst) keep.coerceIn(0, routeOptions.size - 1) else 0)
+            net.prototux.aare.DiagLog.add("route: routes final after %.1f s (closures looked at)".format(java.util.Locale.ROOT,
+                (android.os.SystemClock.elapsedRealtime() - askedAt) / 1000.0), area = "NAVI")
             Log.i(TAG, "routes to choose: " + routeOptions.joinToString { "%s %.1f km %.0f min".format(it.kind, it.preview.km, it.preview.minutes) } +
                 (if (car != null) " - charging stops planned behind them" else ""))
             // all routes in the picture beside the panel

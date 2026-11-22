@@ -275,10 +275,13 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
      * roads a line runs over (TomTom through the gate); found any, the choices are planned again without them.
      */
     suspend fun planChoices(from: Position, to: Position, via: List<Position>, o: RouteOptions,
-                            closuresAlong: (suspend (List<Position>) -> List<List<Position>>)? = null): List<Choice> {
+                            closuresAlong: (suspend (List<Position>) -> List<List<Position>>)? = null,
+                            /** Valhalla's routes before the closures are looked for (System L-095): to be shown at once */
+                            onFirst: (suspend (List<Choice>) -> Unit)? = null): List<Choice> {
         closures = emptyList(); closureAreas = emptyList(); closureLines = emptyList()
         var choices = planChoicesOnce(from, to, via, o)
         if (closuresAlong == null) return choices
+        onFirst?.invoke(choices)
         fun key(l: List<Position>) = l.first().let { p -> "%.5f,%.5f".format(java.util.Locale.ROOT, p.latitude, p.longitude) }
         val lines = LinkedHashMap<String, List<Position>>()
         // O216/O219: never through a closure. A route planned round one closure may run into another (17.11.: round the
