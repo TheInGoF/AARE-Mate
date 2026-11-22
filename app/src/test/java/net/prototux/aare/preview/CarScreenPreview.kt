@@ -1,5 +1,6 @@
 package net.prototux.aare.preview
 
+import net.prototux.aare.ui.car.navi.NaviTripPlanPanel
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithTag
 import net.prototux.aare.ui.car.navi.NaviPreview
@@ -237,6 +238,28 @@ class CarScreenPreview {
 
     /** Navi P-041: the incidents as signs - road works now with the worker and his heap (Zeichen 123), large and small;
      *  a lane closed as Zeichen 120 (narrows), only a closed road with the red ring. */
+    @Test fun tripPlan() { if (System.getProperty("preview") == null) return
+        net.prototux.aare.ui.car.Mate.init(androidx.test.core.app.ApplicationProvider.getApplicationContext())
+        val now = 1_795_400_000_000L
+        val tesla = net.prototux.aare.ui.car.navi.Charger(org.maplibre.spatialk.geojson.Position(longitude = 10.0, latitude = 53.0), 250, 12, "Tesla")
+        val ionity = net.prototux.aare.ui.car.navi.Charger(org.maplibre.spatialk.geojson.Position(longitude = 10.5, latitude = 54.0), 350, 6, "EnBW")
+        val K = net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.CHARGE
+        val rows = listOf(
+            net.prototux.aare.ui.car.navi.NaviTripPlan.Row(K, net.prototux.aare.ui.car.navi.NaviTripPlan.chargerName(tesla), now + 95 * 60_000L, 168_000.0, 12.0, 70.0, 22.0, tesla.network, tesla.at, tesla),
+            net.prototux.aare.ui.car.navi.NaviTripPlan.Row(K, net.prototux.aare.ui.car.navi.NaviTripPlan.chargerName(ionity), now + 225 * 60_000L, 352_000.0, 14.0, 65.0, 19.0, ionity.network, ionity.at, ionity),
+            net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.DESTINATION, "Ziel", now + 330 * 60_000L, 470_000.0, 21.0))
+        shoot("reiseplan") {
+            CompositionLocalProvider(LocalDensity provides car(1f)) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF3A4A40))) {
+                    net.prototux.aare.ui.car.navi.NaviPanel(Modifier.padding(start = 16.dp, top = 140.dp, bottom = 140.dp).fillMaxWidth(0.4f)) {
+                        NaviTripPlanPanel(rows, onBack = {}, onClose = {}, onDropCharge = {}, nowPercent = 51.0,
+                            selected = tesla.at, onPick = {})
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun speedTile() { if (System.getProperty("preview") == null) return
         net.prototux.aare.ui.car.Mate.init(androidx.test.core.app.ApplicationProvider.getApplicationContext())
         shoot("tempofeld") {

@@ -898,6 +898,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         }
     }
     var touchedAt by remember { mutableStateOf(0L) }
+    // System L-089: a stop of the trip plan shown on the map - the camera stays there while the plan is open
+    var planLook by remember { mutableStateOf<Position?>(null) }
     var returnStartedAt by remember { mutableStateOf(0L) }
     // a panel that puts its own picture on the map (the preview's routes, the last destinations' pins) holds the camera
     // while the car drives on (16.11.2026: a new preview while guiding stayed at the car); about 1 s after it closes the
@@ -920,6 +922,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 // map from ever coming back
                 if (camera.isCameraMoving && camera.moveReason == org.maplibre.compose.camera.CameraMoveReason.GESTURE) { following = false; touchedAt = now }
                 if (overview) { following = false; touchedAt = now - RESUME_FOLLOW_MS + 1000 }
+                if (planLook != null) { following = false; touchedAt = now }
                 val kmh = (NaviDebug.speedKmh ?: g.smoothSpeedMs?.let { it / (if (session.simulating) SIM_WARP else 1) })?.let { it * 3.6 }
                 g.cameraSpeedMs = kmh?.let { it / 3.6 }
                 driveZoom[0] = NaviZoom.glide(driveZoom[0], NaviZoom.target(kmh, nextTurnM), now - lastZoomAt)
@@ -1353,7 +1356,17 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                         r.distance, routeS, System.currentTimeMillis(), target?.name.orEmpty(), arrivalNow?.percent, ferries = NaviTripPlan.ferries(r))
                 }
                 LaunchedEffect(Unit) { Log.i(TAG, "trip plan: " + rows.joinToString { "%s %s %.1f km".format(it.kind, it.name, it.metresLeft / 1000) }) }
+                // the plan closed: back to the guidance at once (the trip went on meanwhile)
+                androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (planLook != null) { planLook = null; touchedAt = 0L } } }
                 NaviTripPlanPanel(rows, onBack = { panel = NaviStep.Menu }, onClose = { panel = NaviStep.None },
+                    nowPercent = net.prototux.aare.host.CarDataService.car(context)?.socPercent,
+                    selected = planLook,
+                    onPick = { row -> (row.charger?.at ?: row.at)?.let { p ->
+                        planLook = p; following = false; touchedAt = android.os.SystemClock.uptimeMillis()
+                        Log.i(TAG, "trip plan: showing ${row.kind} on the map")
+                        scope.launch { runCatching { camera.animateTo(CameraPosition(target = p, zoom = PLAN_LOOK_ZOOM, bearing = 0.0, tilt = 0.0,
+                            padding = PaddingValues(start = 640.dp, top = 80.dp, end = 80.dp, bottom = 160.dp)), kotlin.time.Duration.parse("1200ms")) } }
+                    } },
                     // O222: the own stops in the new order - planned from here into the preview
                     onReorder = { order -> target?.let { tg -> Log.i(TAG, "stops reordered: ${order.size}"); purpose = Purpose.NEW; choose(tg, order) } },
                     // L-035: the route from here into the preview, where its charging stops can be taken out, in, or planned anew
@@ -1669,6 +1682,8 @@ private fun testFrom(): Position = NaviDebug.from ?: TEST_FROM
 private val TEST_TO = Position(longitude = 13.3501, latitude = 52.5145)
 private const val SIM_WARP = 3
 /** After the driver moved or zoomed the map, how long until it follows the car again (wish: "nach 5-10s zum auto zurück"). */
+/** How close the map comes to a stop picked in the trip plan (System L-089). */
+private const val PLAN_LOOK_ZOOM = 17.0
 private const val RESUME_FOLLOW_MS = 6000L
 
 /**

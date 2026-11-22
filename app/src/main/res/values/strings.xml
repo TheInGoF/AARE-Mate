@@ -978,6 +978,8 @@
     <string name="mate_navi_menu_change">Change destination</string>
     <string name="mate_navi_menu_end">End navigation</string>
     <string name="mate_navi_plan">Trip plan</string>
+    <string name="mate_navi_plan_start">Here, now</string>
+    <string name="mate_navi_plan_leg">%1$s · %2$s driving</string>
     <string name="mate_navi_route_list">Route</string>
     <string name="mate_navi_stop_remove">Take this charging stop out</string>
     <string name="mate_navi_stop_restore">Take this charging stop in again</string>

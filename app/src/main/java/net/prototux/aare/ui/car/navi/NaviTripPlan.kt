@@ -2,6 +2,8 @@ package net.prototux.aare.ui.car.navi
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -137,26 +139,60 @@ internal object NaviTripPlan {
 internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(rows: List<NaviTripPlan.Row>, onBack: () -> Unit, onClose: () -> Unit,
                                onReorder: (List<Pair<Position, String>>) -> Unit = {}, onEdit: ((List<Pair<Position, String>>) -> Unit)? = null,
                                /** a charging stop taken out during the trip, null: all of them (19.11.2026) */
-                               onDropCharge: ((Charger?) -> Unit)? = null) {
+                               onDropCharge: ((Charger?) -> Unit)? = null,
+                               /** the battery now, for the start of the plan (System L-089) */
+                               nowPercent: Double? = null,
+                               /** the stop shown on the map now, and a stop tapped: the map flies there, the plan stays open (L-089) */
+                               selected: Position? = null, onPick: ((NaviTripPlan.Row) -> Unit)? = null) {
     PanelHeader(stringResource(R.string.mate_navi_plan), onBack, onClose)
-    Spacer(Modifier.size(16.dp))
+    Spacer(Modifier.size(12.dp))
+    // System L-089 (22.11.2026: "dass wir angezeigt bekommen, wie viele Kilometer fahren wir gerade, dann kommt ein
+    // Ladestopp, wie viele Kilometer fahren wir dazwischen … bis zum Ziel. Dass wir wirklich einen Reiseplan sehen"):
+    // a line from here through each stop to the destination, each stretch with its kilometres and driving time
+    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.foundation.layout.Box(Modifier.size(32.dp * 1.6f, 28.dp), contentAlignment = Alignment.Center) {
+            androidx.compose.foundation.layout.Box(Modifier.size(18.dp).clip(androidx.compose.foundation.shape.CircleShape).background(Mate.accent))
+        }
+        Spacer(Modifier.width(16.dp))
+        Text(stringResource(R.string.mate_navi_plan_start), style = MaterialTheme.typography.titleMedium, color = Mate.text, modifier = Modifier.weight(1f))
+        if (nowPercent != null) Text(pct(nowPercent), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Mate.text)
+    }
     var list by androidx.compose.runtime.remember(rows) { androidx.compose.runtime.mutableStateOf(rows) }
     var dragKey by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     var dragY by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val sortable = rows.count { it.kind == NaviTripPlan.Kind.OWN && it.at != null } >= 2
-    val stepPx = with(androidx.compose.ui.platform.LocalDensity.current) { (88.dp + 12.dp).toPx() }
+    val stepPx = with(androidx.compose.ui.platform.LocalDensity.current) { (88.dp + LEG_H + 4.dp).toPx() }
     // one key per row of the plan, kept while rows move (two charging stops of one network have the same name - the
     // same key brought Mate down, 17.11.2026)
     val keys = androidx.compose.runtime.remember(rows) { java.util.IdentityHashMap<NaviTripPlan.Row, String>().apply { rows.forEachIndexed { i, r -> put(r, "$i") } } }
     fun key(r: NaviTripPlan.Row) = keys[r] ?: r.hashCode().toString()
-    LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val startedAt = androidx.compose.runtime.remember(rows) { System.currentTimeMillis() }
+    LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(list, key = { key(it) }) { r ->
             val dragging = dragKey == key(r)
             val canDrag = sortable && r.kind == NaviTripPlan.Kind.OWN && r.at != null
-            Row(Modifier.then(if (dragging) Modifier else Modifier.animateItem())
-                .zIndex(if (dragging) 1f else 0f)
-                .graphicsLayer { translationY = if (dragging) dragY else 0f; val sc = if (dragging) 1.03f else 1f; scaleX = sc; scaleY = sc }
-                .fillMaxWidth().heightIn(min = 88.dp).clip(RoundedCornerShape(18.dp)).background(if (dragging) Mate.surfaceHigh else Mate.surface)
+            val place = r.charger?.at ?: r.at
+            val isSelected = selected != null && place != null && ChargerIndex.distanceM(selected, place) < 30
+            Column(Modifier.then(if (dragging) Modifier else Modifier.animateItem()).zIndex(if (dragging) 1f else 0f)
+                .graphicsLayer { translationY = if (dragging) dragY else 0f }) {
+            // the stretch before this stop: from the previous one (or from here) - its kilometres and the driving time
+            val i = list.indexOfFirst { key(it) == key(r) }
+            val prev = list.getOrNull(i - 1)
+            val legM = (r.metresLeft - (prev?.metresLeft ?: 0.0)).coerceAtLeast(0.0)
+            val leftAt = prev?.let { it.arriveAtMillis + (((it.chargeMinutes ?: 0.0) + (it.ferryMinutes ?: 0.0)) * 60_000).toLong() } ?: startedAt
+            val legMin = ((r.arriveAtMillis - leftAt) / 60_000.0).coerceAtLeast(0.0)
+            Row(Modifier.fillMaxWidth().height(LEG_H).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.foundation.layout.Box(Modifier.size(32.dp * 1.6f, LEG_H), contentAlignment = Alignment.Center) {
+                    androidx.compose.foundation.layout.Box(Modifier.size(4.dp, LEG_H).clip(RoundedCornerShape(2.dp)).background(Mate.textFaint))
+                }
+                Spacer(Modifier.width(16.dp))
+                Text(stringResource(R.string.mate_navi_plan_leg, if (legM >= 10_000) "%d km".format((legM / 1000).roundToInt()) else km(legM), duration(legMin)), style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold, color = Mate.textDim)
+            }
+            Row(Modifier.graphicsLayer { val sc = if (dragging) 1.03f else 1f; scaleX = sc; scaleY = sc }
+                .fillMaxWidth().heightIn(min = 88.dp).clip(RoundedCornerShape(18.dp)).background(if (dragging || isSelected) Mate.surfaceHigh else Mate.surface)
+                .then(if (isSelected) Modifier.border(2.dp, Mate.accent, RoundedCornerShape(18.dp)) else Modifier)
+                .then(if (onPick != null && place != null) Modifier.clickable { onPick(r) } else Modifier)
                 .then(if (!canDrag) Modifier else Modifier.pointerInput(key(r)) {
                     detectDragGesturesAfterLongPress(
                         onDragStart = { dragKey = key(r); dragY = 0f },
@@ -225,6 +261,7 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                         modifier = Modifier.size(width = 22.dp, height = 32.dp))
                 }
             }
+            }
         }
     }
     // all charging stops out at once: on to the destination on what the battery holds
@@ -247,6 +284,9 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
 }
 
 private fun pct(p: Double?) = "${(p ?: 0.0).coerceAtLeast(0.0).roundToInt()} %"
+/** The height of a stretch's line between two stops. */
+private val LEG_H = 40.dp
+private fun duration(min: Double): String { val m = min.roundToInt(); return if (m >= 60) "%d h %02d min".format(m / 60, m % 60) else "$m min" }
 private fun km(m: Double) = if (m < 1000) "${(m / 10).roundToInt() * 10} m" else "%.1f km".format(m / 1000)
 
 /** A ferry's line in the plan: the sea and the ride, without energy (as IDmate counts it). */
