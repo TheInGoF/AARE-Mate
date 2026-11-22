@@ -61,6 +61,9 @@ internal object NaviTripPlan {
               /** a ferry: the minutes over the sea (the clock time is when the car reaches its port) */
               val ferryMinutes: Double? = null, val seaM: Double? = null)
 
+    /** Another charger for a stop of the running trip (System L-092): [shiftM] before (-) or after it, the level on arrival there. */
+    class Option(val charger: Charger, val shiftM: Double, val arrivePercent: Double?)
+
     /** A ferry on the route ([NaviFerries]): where it starts along the route (metres, seconds from the start), its ride. */
     class Ferry(val name: String, val metres: Double, val seconds: Double, val rideSeconds: Double, val seaM: Double)
 
@@ -143,7 +146,11 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                                /** the battery now, for the start of the plan (System L-089) */
                                nowPercent: Double? = null,
                                /** the stop shown on the map now, and a stop tapped: the map flies there, the plan stays open (L-089) */
-                               selected: Position? = null, onPick: ((NaviTripPlan.Row) -> Unit)? = null) {
+                               selected: Position? = null, onPick: ((NaviTripPlan.Row) -> Unit)? = null,
+                               /** System L-092: other chargers for a stop, one shown on the map, one taken instead (only this stop changes) */
+                               options: ((Charger) -> List<NaviTripPlan.Option>)? = null, onShow: ((Position) -> Unit)? = null,
+                               onSwap: ((Charger, Charger) -> Unit)? = null, openAlternatives: Charger? = null) {
+    var altOpen by androidx.compose.runtime.remember(rows) { androidx.compose.runtime.mutableStateOf(openAlternatives) }
     PanelHeader(stringResource(R.string.mate_navi_plan), onBack, onClose)
     Spacer(Modifier.size(12.dp))
     // System L-089 (22.11.2026: "dass wir angezeigt bekommen, wie viele Kilometer fahren wir gerade, dann kommt ein
@@ -259,6 +266,46 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                     Spacer(Modifier.width(4.dp))
                     Icon(Icons.Rounded.DragIndicator, stringResource(R.string.mate_navi_plan_grip), tint = Mate.textDim,
                         modifier = Modifier.size(width = 22.dp, height = 32.dp))
+                }
+            }
+            // System L-092 (22.11.2026: "wenn ich auf die Ladesäule drücke … dass ich dann noch sagen kann, Alternativen anzeigen
+            // … andere aus meinem Filter zugelassene Ladesäulen in der Nähe, die ich noch erreichen kann … und dann will ich
+            // diese Alternative vielleicht auswählen"; "nur um die Alternative für diese eine Station … ohne neu zu planen")
+            val ch = r.charger
+            if (isSelected && r.kind == NaviTripPlan.Kind.CHARGE && ch != null && options != null && onSwap != null) {
+                if (altOpen !== ch) {
+                    Spacer(Modifier.size(6.dp))
+                    androidx.compose.foundation.layout.Box(Modifier.padding(start = 40.dp).fillMaxWidth().heightIn(min = 60.dp).clip(RoundedCornerShape(14.dp))
+                        .background(Mate.surface).clickable { altOpen = ch }, contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.mate_navi_plan_alternatives), style = MaterialTheme.typography.titleSmall, color = Mate.accent)
+                    }
+                } else {
+                    val opts = androidx.compose.runtime.remember(ch, rows) { options(ch) }
+                    if (opts.isEmpty()) Text(stringResource(R.string.mate_navi_alt_none_chosen), style = MaterialTheme.typography.bodyMedium,
+                        color = Mate.textDim, modifier = Modifier.padding(start = 40.dp, top = 8.dp))
+                    opts.forEach { o ->
+                        val shown = selected != null && ChargerIndex.distanceM(selected, o.charger.at) < 30
+                        Spacer(Modifier.size(6.dp))
+                        Row(Modifier.padding(start = 40.dp).fillMaxWidth().heightIn(min = 68.dp).clip(RoundedCornerShape(14.dp))
+                            .background(if (shown) Mate.surfaceHigh else Mate.surface)
+                            .then(if (shown) Modifier.border(2.dp, Mate.accent, RoundedCornerShape(14.dp)) else Modifier)
+                            .clickable { onShow?.invoke(o.charger.at) }
+                            .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            NetworkLogo(o.charger.network, 26.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(NaviTripPlan.chargerName(o.charger, stringResource(R.string.mate_navi_charger)), style = MaterialTheme.typography.titleSmall,
+                                    color = Mate.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                val kmText = String.format(java.util.Locale.getDefault(), "%.0f", Math.abs(o.shiftM) / 1000)
+                                val where = stringResource(if (o.shiftM < 0) R.string.mate_navi_alt_earlier else R.string.mate_navi_alt_later, kmText)
+                                Text(o.arrivePercent?.let { stringResource(R.string.mate_navi_alt_arrive, where, pct(it)) } ?: where,
+                                    style = MaterialTheme.typography.bodySmall, color = Mate.textDim, maxLines = 1)
+                            }
+                            Text(stringResource(R.string.mate_navi_alt_take), style = MaterialTheme.typography.titleSmall, color = Mate.onAccent,
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Mate.accent).clickable { altOpen = null; onSwap(ch, o.charger) }
+                                    .heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 14.dp))
+                        }
+                    }
                 }
             }
             }

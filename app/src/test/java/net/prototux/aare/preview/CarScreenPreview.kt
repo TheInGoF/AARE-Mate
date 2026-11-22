@@ -252,8 +252,10 @@ class CarScreenPreview {
             CompositionLocalProvider(LocalDensity provides car(1f)) {
                 Box(Modifier.fillMaxSize().background(Color(0xFF3A4A40))) {
                     net.prototux.aare.ui.car.navi.NaviPanel(Modifier.padding(start = 16.dp, top = 140.dp, bottom = 140.dp).fillMaxWidth(0.4f)) {
+                        val shell = net.prototux.aare.ui.car.navi.Charger(org.maplibre.spatialk.geojson.Position(longitude = 10.01, latitude = 52.9), 300, 8, "IONITY")
                         NaviTripPlanPanel(rows, onBack = {}, onClose = {}, onDropCharge = {}, nowPercent = 51.0,
-                            selected = tesla.at, onPick = {})
+                            selected = tesla.at, onPick = {}, openAlternatives = tesla,
+                            options = { listOf(net.prototux.aare.ui.car.navi.NaviTripPlan.Option(shell, -18_000.0, 16.0)) }, onShow = {}, onSwap = { _, _ -> })
                     }
                 }
             }

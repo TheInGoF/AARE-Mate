@@ -1121,6 +1121,9 @@
     <string name="mate_navi_alt_none_chosen">Kein anderer Schnelllader der gewählten Netze in der Nähe dieses Stopps</string>
     <string name="mate_navi_alt_earlier">%1$s km früher</string>
     <string name="mate_navi_alt_later">%1$s km später</string>
+    <string name="mate_navi_plan_alternatives">Alternativen anzeigen</string>
+    <string name="mate_navi_alt_take">Nehmen</string>
+    <string name="mate_navi_alt_arrive">%1$s · etwa %2$s bei Ankunft</string>
     <string name="mate_navi_voice">Sprechen</string>
     <string name="mate_navi_voice_listen">Sprich jetzt …</string>
     <string name="mate_navi_voice_think">Erkenne …</string>

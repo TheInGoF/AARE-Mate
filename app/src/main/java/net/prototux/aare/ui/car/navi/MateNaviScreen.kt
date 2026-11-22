@@ -684,6 +684,51 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             chargeLog("charging: new route %.1f km without the stop(s) taken out".format(java.util.Locale.ROOT, nr.distance / 1000))
         }
     }
+    /**
+     * System L-092: other chargers for one stop of the running trip - the chosen networks near it (25 km before to 10 km
+     * after), still reachable: the level on arrival there, counted from the car's level now and what the way to the stop
+     * takes per km, at least [NaviCharge.CHARGER_WARN_PERCENT]; none behind the car.
+     */
+    fun guidedOptions(ch: Charger): List<NaviTripPlan.Option> {
+        val r = guided ?: return emptyList()
+        val t = session.state.value.tripState as? TripState.Navigating ?: return emptyList()
+        val car = net.prototux.aare.host.CarDataService.car(context) ?: return emptyList()
+        val stop = chargeStops.firstOrNull { it.charger === ch } ?: return emptyList()
+        val driven = r.distance - t.progress.distanceRemaining
+        val atM = NaviKeep.rolling?.takeIf { NaviKeep.rollingRoute === r }?.alongM(ch) ?: stop.atM
+        val here = ChargePlanner.Stop(ch, atM, stop.arrivePercent, stop.leavePercent, stop.chargeMinutes)
+        val perKm = ((car.socPercent - stop.arrivePercent) / ((atM - driven) / 1000).coerceAtLeast(1.0)).coerceIn(0.05, 0.6)
+        return ChargePlanner.alternatives(guidedTrack(r, car), here, chargeStops.map { it.charger }, ChargerIndex.get(context)::near,
+            ChargePlanner.Rules.of(net.prototux.aare.Settings(context)), max = 5)
+            .filter { atM + it.shiftM > driven + 1_000 }
+            .map { a -> NaviTripPlan.Option(a.charger, a.shiftM, stop.arrivePercent - a.shiftM / 1000 * perKm) }
+            .filter { (it.arrivePercent ?: 100.0) >= NaviCharge.CHARGER_WARN_PERCENT }
+    }
+
+    /** System L-092: one stop of the running trip at another charger - the other stops stay, the route goes over the new one. */
+    fun swapGuided(old: Charger, charger: Charger) {
+        val r = guided ?: return
+        val t = session.state.value.tripState as? TripState.Navigating ?: return
+        val keep = chargeStops.map { s -> if (s.charger === old) ChargePlanner.Stop(charger, s.atM, s.arrivePercent, s.leavePercent, s.chargeMinutes, s.overLimit) else s }
+        chargeLog("charging: stop moved by the driver: ${NaviTripPlan.chargerName(old)} -> ${NaviTripPlan.chargerName(charger)} - the other stops stay")
+        val here = Position(longitude = t.userLocation.coordinates.lng, latitude = t.userLocation.coordinates.lat)
+        val end = t.remainingWaypoints.lastOrNull()?.let { Position(longitude = it.coordinate.lng, latitude = it.coordinate.lat) } ?: return
+        val ownAhead = ownStops.map { it.first }.filter { p -> t.remainingWaypoints.any { w ->
+            ChargerIndex.distanceM(Position(longitude = w.coordinate.lng, latitude = w.coordinate.lat), p) < OWN_SNAP_M } }
+        val via = NaviStops.inOrder(raw(r), ownAhead + keep.map { it.charger.at })
+        scope.launch {
+            val nr = runCatching { session.planOne(NaviSession.Kind.FAST, here, end, via, RouteOptions.of(net.prototux.aare.Settings(context))) }
+                .onFailure { e -> if (e is kotlinx.coroutines.CancellationException) throw e }.getOrNull()
+            if (nr == null) { chargeLog("charging: the route over the other charger was refused - it stays as it was"); return@launch }
+            chargeStops = keep
+            session.go(nr, simulate = testDrive)
+            show(nr); drawnLine = NaviRoute.smooth(raw(nr)); limits = null
+            scope.launch { limits = NaviLimits.load(context, raw(nr)) }
+            startRolling(nr)
+            chargeCheck = null; chargeCheckLeft = null
+            chargeLog("charging: new route %.1f km over %s".format(java.util.Locale.ROOT, nr.distance / 1000, NaviTripPlan.chargerName(charger)))
+        }
+    }
     LaunchedEffect(guided, guiding) {
         chargeCheck = null; chargeCheckLeft = null
         val r = guided ?: return@LaunchedEffect
@@ -1363,6 +1408,11 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 NaviTripPlanPanel(rows, onBack = { panel = NaviStep.Menu }, onClose = { panel = NaviStep.None },
                     nowPercent = net.prototux.aare.host.CarDataService.car(context)?.socPercent,
                     selected = planLook,
+                    options = { ch -> guidedOptions(ch) },
+                    onShow = { p -> planLook = p; following = false; touchedAt = android.os.SystemClock.uptimeMillis()
+                        scope.launch { runCatching { camera.animateTo(CameraPosition(target = p, zoom = PLAN_LOOK_ZOOM, bearing = 0.0, tilt = 0.0,
+                            padding = PaddingValues(start = 640.dp, top = 80.dp, end = 80.dp, bottom = 160.dp)), kotlin.time.Duration.parse("1200ms")) } } },
+                    onSwap = { old, c -> planLook = c.at; swapGuided(old, c) },
                     onPick = { row -> (row.charger?.at ?: row.at)?.let { p ->
                         planLook = p; following = false; touchedAt = android.os.SystemClock.uptimeMillis()
                         Log.i(TAG, "trip plan: showing ${row.kind} on the map")

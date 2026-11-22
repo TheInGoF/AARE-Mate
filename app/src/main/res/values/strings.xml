@@ -1132,6 +1132,9 @@
     <string name="mate_navi_alt_none_chosen">No other fast charger of the chosen networks near this stop</string>
     <string name="mate_navi_alt_earlier">%1$s km earlier</string>
     <string name="mate_navi_alt_later">%1$s km later</string>
+    <string name="mate_navi_plan_alternatives">Show alternatives</string>
+    <string name="mate_navi_alt_take">Take</string>
+    <string name="mate_navi_alt_arrive">%1$s · about %2$s on arrival</string>
     <string name="mate_navi_voice">Speak</string>
     <string name="mate_navi_voice_listen">Speak now …</string>
     <string name="mate_navi_voice_think">Recognising …</string>
