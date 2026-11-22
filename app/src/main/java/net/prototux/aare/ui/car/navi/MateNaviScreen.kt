@@ -968,6 +968,10 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     var touchedAt by remember { mutableStateOf(0L) }
     // System L-089: a stop of the trip plan shown on the map - the camera stays there while the plan is open
     var planLook by remember { mutableStateOf<Position?>(null) }
+    // System L-096 (22.11.2026: "wenn man neben den Routenplaner klickt, soll dieser aufbleiben, weil man hat ja auf die
+    // Karte geklickt"): a place or charger picked on the map while the trip plan or the preview is open - its card beside
+    // them, they stay open
+    var sidePick by remember { mutableStateOf<NaviStep.Pick?>(null) }
     // System L-092: the stop whose alternatives are on the map, the stations shown, the one tapped
     var altFor by remember { mutableStateOf<Charger?>(null) }
     var altMarks by remember { mutableStateOf<List<NaviTripPlan.Option>>(emptyList()) }
@@ -1154,7 +1158,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                         .minByOrNull { ChargerIndex.distanceM(it.at, pos) }
                     if (ch == null) org.maplibre.compose.util.ClickResult.Pass else {
                         Log.i(TAG, "map: charger tapped")
-                        panel = NaviStep.Pick(ch.at, ch, (panel as? NaviStep.Preview)?.place)
+                        val p = NaviStep.Pick(ch.at, ch, (panel as? NaviStep.Preview)?.place)
+                        if (panel == NaviStep.Plan || panel is NaviStep.Preview) sidePick = p else panel = p
                         org.maplibre.compose.util.ClickResult.Consume
                     }
                 } else {
@@ -1170,7 +1175,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             },
             onMapLongClick = { pos, _ ->
                 Log.i(TAG, "map held: a place picked")
-                panel = NaviStep.Pick(pos)
+                val p = NaviStep.Pick(pos, null, (panel as? NaviStep.Preview)?.place)
+                if (panel == NaviStep.Plan || panel is NaviStep.Preview) sidePick = p else panel = p
                 org.maplibre.compose.util.ClickResult.Consume
             }) {
             // Navi L-047: while guiding the other roads step back - a veil in the land's colour over the base map, under
@@ -1419,6 +1425,38 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             Purpose.STOP -> net.prototux.aare.R.string.mate_navi_destination_stop
             Purpose.CHANGE -> net.prototux.aare.R.string.mate_navi_destination_change
             else -> net.prototux.aare.R.string.mate_navi_destination })
+        // the card of a place or charger picked on the map, as a panel of its own or beside the trip plan / preview (L-096)
+        @Composable fun PickCard(pk: NaviStep.Pick, onDone: () -> Unit, onPicked: () -> Unit = {}) {
+                // the address of the place, asked from the map server's search; "Ort auf der Karte" until then; a charger by its name
+                var name by remember(pk) { mutableStateOf<String?>(pk.charger?.let { NaviTripPlan.chargerName(it, context.getString(net.prototux.aare.R.string.mate_navi_charger)) }) }
+                LaunchedEffect(pk) { if (pk.charger == null) name = NaviSearch.address(context, pk.at) }
+                val onMap = context.getString(net.prototux.aare.R.string.places_on_map)
+                fun place() = net.prototux.aare.places.Places.Place("map", "", name ?: onMap, "", pk.at.latitude, pk.at.longitude)
+                val inPreview = pk.fromPreview
+                NaviMapPick(name ?: onMap, (guiding && target != null) || inPreview != null,
+                    onGo = { onPicked(); purpose = if (guiding) Purpose.CHANGE else Purpose.NEW; choose(place()) },
+                    onStop = {
+                        onPicked()
+                        if (inPreview != null) {
+                            // System L-096: a charger (or a place) put into the route being previewed - the own stops along
+                            // the route in order, the charging planned around it
+                            val all = pendingOwn + (pk.at to (name ?: onMap))
+                            val line = routeOptions.getOrNull(chosen)?.let { raw(it.route) }
+                            val ordered = line?.let { l -> NaviStops.inOrder(l, all.map { it.first }).map { p -> all.first { it.first == p } } } ?: all
+                            purpose = Purpose.NEW; choose(inPreview, ordered)
+                        } else { purpose = Purpose.STOP; choose(place()) }
+                    },
+                    onClose = { onDone() },
+                    charger = pk.charger)
+        }
+        // L-096: the picked place beside the open trip plan or preview - both stay open
+        sidePick?.takeIf { panel == NaviStep.Plan || panel is NaviStep.Preview }?.let { sp ->
+            NaviPanel(Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 16.dp,
+                bottom = net.prototux.aare.host.templates.LocalCarBottomInset.current + 12.dp).width(480.dp)) {
+                PickCard(sp, onDone = { sidePick = null }, onPicked = { sidePick = null })
+            }
+        }
+        LaunchedEffect(panel) { if (panel != NaviStep.Plan && panel !is NaviStep.Preview) sidePick = null }
         when (val st = panel) {
             NaviStep.None -> if (trip == null && done == null) androidx.compose.foundation.layout.Column(Modifier.align(Alignment.BottomStart)
                 .padding(start = 20.dp, bottom = net.prototux.aare.host.templates.LocalCarBottomInset.current + 12.dp),
@@ -1456,28 +1494,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     onKeyboard = { book = net.prototux.aare.places.Places.load(context); purpose = Purpose.CHANGE; panel = NaviStep.Search },
                     onMic = { purpose = Purpose.CHANGE; NaviSearchStart.voice = true; panel = NaviStep.Search })
             }
-            is NaviStep.Pick -> NaviPanel(panelMod) {
-                // the address of the place, asked from the map server's search; "Ort auf der Karte" until then; a charger by its name
-                var name by remember(st) { mutableStateOf<String?>(st.charger?.let { NaviTripPlan.chargerName(it, context.getString(net.prototux.aare.R.string.mate_navi_charger)) }) }
-                LaunchedEffect(st) { if (st.charger == null) name = NaviSearch.address(context, st.at) }
-                val onMap = context.getString(net.prototux.aare.R.string.places_on_map)
-                fun place() = net.prototux.aare.places.Places.Place("map", "", name ?: onMap, "", st.at.latitude, st.at.longitude)
-                val inPreview = st.fromPreview
-                NaviMapPick(name ?: onMap, (guiding && target != null) || inPreview != null,
-                    onGo = { purpose = if (guiding) Purpose.CHANGE else Purpose.NEW; choose(place()) },
-                    onStop = {
-                        if (inPreview != null) {
-                            // System L-096: a charger (or a place) put into the route being previewed - the own stops along
-                            // the route in order, the charging planned around it
-                            val all = pendingOwn + (st.at to (name ?: onMap))
-                            val line = routeOptions.getOrNull(chosen)?.let { raw(it.route) }
-                            val ordered = line?.let { l -> NaviStops.inOrder(l, all.map { it.first }).map { p -> all.first { it.first == p } } } ?: all
-                            purpose = Purpose.NEW; choose(inPreview, ordered)
-                        } else { purpose = Purpose.STOP; choose(place()) }
-                    },
-                    onClose = { panel = inPreview?.let { NaviStep.Preview(it) } ?: NaviStep.None },
-                    charger = st.charger)
-            }
+            is NaviStep.Pick -> NaviPanel(panelMod) { PickCard(st, onDone = { panel = st.fromPreview?.let { NaviStep.Preview(it) } ?: NaviStep.None }) }
             NaviStep.Plan -> NaviPanel(panelMod) {
                 val r = guided; val t = trip
                 // the trip ended under the open plan: closed
