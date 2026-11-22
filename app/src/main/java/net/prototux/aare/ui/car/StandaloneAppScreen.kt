@@ -69,6 +69,9 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
         }
     }
 
+    // the app's picture ends above Mate's controls (22.11.2026: "dass die Bedienleiste der YouTube-App unter dem
+    // Bedienfeld unserer Mate-App ist"): its display is made the height left over, its own bar stays in sight
+    val covered = net.prototux.aare.host.templates.LocalCarBottomInset.current
     Box(modifier.background(Color.Black)) {
         if (!driving) {
             androidx.compose.ui.viewinterop.AndroidView(
@@ -94,10 +97,10 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
                         }
                     }
                 },
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(bottom = covered),
             )
             // Forward the car's touches to the launched app's display (single pointer for now).
-            Box(Modifier.fillMaxSize().pointerInput(packageName) {
+            Box(Modifier.fillMaxSize().padding(bottom = covered).pointerInput(packageName) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val t0 = down.uptimeMillis
