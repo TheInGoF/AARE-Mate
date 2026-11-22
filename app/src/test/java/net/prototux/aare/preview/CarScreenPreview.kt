@@ -193,7 +193,8 @@ class CarScreenPreview {
         } }
 
     @Test fun switcher() { if (System.getProperty("preview") == null) return
-        scene("bereiche", { screen = net.prototux.aare.ui.car.CarScreen.App("navi") }) {
+        scene("bereiche", { screen = net.prototux.aare.ui.car.CarScreen.App("navi")
+            apps.add(net.prototux.aare.ui.car.CarAppEntry("phone", "net.prototux.aare.phone", "Telefon", null, net.prototux.aare.ui.car.CarAppKind.PHONE)) }) {
             rule.onNodeWithText("Maps").performClick()
         } }
 

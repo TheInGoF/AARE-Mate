@@ -250,3 +250,25 @@ private fun contacts(context: Context): List<Callee> = runCatching {
     }
     query(starred = true).ifEmpty { query(starred = false) }
 }.getOrDefault(emptyList())
+
+
+/**
+ * The favourites for the switcher's phone half (System L-094): the starred contacts (name, number), else the people
+ * called last; at most [max].
+ */
+internal fun phoneFavourites(context: Context, max: Int = 8): List<Pair<String, String>> {
+    val starred = runCatching {
+        val out = ArrayList<Pair<String, String>>(); val seen = HashSet<String>()
+        context.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER),
+            "${ContactsContract.CommonDataKinds.Phone.STARRED} = 1", null,
+            "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} COLLATE NOCASE ASC")?.use { c ->
+            while (c.moveToNext() && out.size < max) {
+                val name = c.getString(0).orEmpty(); val number = c.getString(1)?.takeIf { it.isNotBlank() } ?: continue
+                if (seen.add(name)) out += name to number
+            }
+        }
+        out
+    }.getOrDefault(emptyList())
+    return starred.ifEmpty { recents(context).filter { it.name.isNotBlank() }.take(max).map { it.name to it.number } }
+}

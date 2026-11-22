@@ -565,6 +565,8 @@
     <string name="idmate_tab_navigation">Navigation</string>
     <string name="idmate_tab_music">Audio</string>
     <string name="idmate_tab_messages">Messages</string>
+    <string name="idmate_tab_phone">Phone</string>
+    <string name="idmate_call">Call</string>
     <string name="idmate_apps">Apps</string>
     <string name="idmate_voice">Voice</string>
     <string name="idmate_areas">Areas</string>

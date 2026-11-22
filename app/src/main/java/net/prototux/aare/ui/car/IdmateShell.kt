@@ -679,6 +679,10 @@ private class Area(
     val tapShowsList: Boolean = false,
     /** The app a long press takes in the hand, to lay it into a split (the navigation's or the music's). */
     val dragApp: CarAppEntry? = null,
+    /** A second half of the tile with its own tap (System L-094: messenger | phone); the swipe up then shows [people]. */
+    val half: Area? = null,
+    /** People to call from the swipe up of a split tile: name and the call. */
+    val people: List<Pair<String, () -> Unit>> = emptyList(),
     val open: () -> Unit,
 )
 
@@ -845,7 +849,14 @@ private fun areas(
         }
     }
     if (media != null) out += Area(Icons.Rounded.MusicNote, stringResource(R.string.idmate_tab_music), musicList.any { it.id == shown }, musicPinned, musicAll, musicNow?.icon, dragApp = musicNow ?: media) { open(musicNow ?: media) }
-    out += Area(Icons.Rounded.Chat, stringResource(R.string.idmate_tab_messages), inner == Inner.MESSAGES) { show(Inner.MESSAGES) }
+    // System L-094 (22.11.2026: "den Button Messenger teilen in Messenger und Telefon, damit ich nicht jedes Mal auf Apps
+    // gehen muss … Wenn ich dann nach oben wische … zeigt er mir meine Favoriten an. Maria, anrufen"): one tile, two halves
+    val ctx = LocalContext.current
+    val phoneApp = state.apps.firstOrNull { it.kind == CarAppKind.PHONE }
+    val people = remember(phoneApp != null) { if (phoneApp == null) emptyList() else phoneFavourites(ctx) }
+    out += Area(Icons.Rounded.Chat, stringResource(R.string.idmate_tab_messages), inner == Inner.MESSAGES,
+        half = phoneApp?.let { p -> Area(Icons.Rounded.Call, stringResource(R.string.idmate_tab_phone), shown == p.id) { show(null); open(p) } },
+        people = people.map { (name, number) -> name to { net.prototux.aare.car.Calls.place(ctx, number) } }) { show(Inner.MESSAGES) }
     // Kino (18.11.2026: "dass ich die YouTube-App dann quasi einfasse in das Mate-System"): the phone apps allowed onto the
     // car screen that are no map apps - shown only while the car stands parked for sure (ParkedGate, CarRuntime)
     val pm = LocalContext.current.packageManager
@@ -1175,7 +1186,8 @@ private fun Switcher(areas: List<Area>, inOverview: Boolean, side: Alignment, cl
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = close),
         contentAlignment = side,
     ) {
-        val tiles = areas.map { Area(it.icon, it.label, it.selected && !inOverview, it.choices, it.all, it.logo, it.tapShowsList, it.dragApp, it.open) } +
+        val tiles = areas.map { Area(it.icon, it.label, it.selected && !inOverview, it.choices, it.all, it.logo, it.tapShowsList, it.dragApp,
+            it.half?.let { h -> Area(h.icon, h.label, h.selected && !inOverview, open = h.open) }, it.people, it.open) } +
             Area(Icons.Rounded.Apps, stringResource(R.string.idmate_apps), inOverview, open = openOverview)
         // What a list of apps may take of the height: the screen less the controls, the tile and the hint. Longer lists scroll.
         val listMax = (maxHeight - ControlsHeight - ControlsMargin * 2 - 200.dp).coerceAtLeast(120.dp)
@@ -1203,12 +1215,14 @@ private fun Switcher(areas: List<Area>, inOverview: Boolean, side: Alignment, cl
                 // the apps chosen for the area in the phone app (its pins), all of them when none is chosen; the
                 // pinning itself is done there, not here.
                 val list = (tile.choices.ifEmpty { tile.all }).map { Choice(it.app, it.selected, pick = it.pick, draggable = it.draggable) }
-                val open = large == tile.label && list.isNotEmpty()
+                val split = tile.half
+                val hasList = list.isNotEmpty() || (split != null && tile.people.isNotEmpty())
+                val open = large == tile.label && hasList
                 val density = androidx.compose.ui.platform.LocalDensity.current
                 val swipe = with(density) { 36.dp.toPx() }
                 // one width, open or not: the other tiles stay where they are. Square and of a reachable size, lined up
                 // from the driver's side - not stretched over the whole width of ever wider car screens (O196)
-                Column(Modifier.width(SwitcherTile), verticalArrangement = Arrangement.spacedBy(8.dp),
+                Column(Modifier.width(if (split != null) SwitcherTile * 1.5f else SwitcherTile), verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalAlignment = if (side == Alignment.BottomEnd) Alignment.End else Alignment.Start) {
                     androidx.compose.animation.AnimatedVisibility(
                         visible = open,
@@ -1225,10 +1239,43 @@ private fun Switcher(areas: List<Area>, inOverview: Boolean, side: Alignment, cl
                         Column(
                             Modifier.fillMaxWidth().heightIn(max = listMax).verticalScroll(rememberScrollState()),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) { list.forEach { c -> ChoiceChip(c, if (c.draggable) drag else null) } }
+                        ) {
+                            list.forEach { c -> ChoiceChip(c, if (c.draggable) drag else null) }
+                            if (split != null) tile.people.forEach { (name, call) -> PersonChip(name) { large = null; close(); call() } }
+                        }
                     }
                     Box {
-                        Column(
+                        if (split != null) Column(
+                            Modifier.size(SwitcherTile * 1.5f, SwitcherTile).clip(RoundedCornerShape(18.dp)).background(if (open) PanelHigh else Panel)
+                                .then(if (!hasList) Modifier else Modifier.pointerInput(tile.label) {
+                                    var dy = 0f
+                                    detectVerticalDragGestures(
+                                        onDragStart = { dy = 0f },
+                                        onDragEnd = {
+                                            if (dy < -swipe) large = tile.label
+                                            else if (dy > swipe && large == tile.label) large = null
+                                        },
+                                    ) { change, amount -> change.consume(); dy += amount }
+                                }).padding(top = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            // one grabber over both halves: the swipe up is the tile's as a whole (the favourites)
+                            Box(Modifier.width(36.dp).height(5.dp).clip(RoundedCornerShape(3.dp))
+                                .background(if (!hasList) Color.Transparent else if (open) Teal else TextDim))
+                            Row(Modifier.fillMaxWidth().weight(1f)) {
+                                listOf(tile, split).forEachIndexed { i, part ->
+                                    if (i == 1) Box(Modifier.padding(vertical = 14.dp).width(1.dp).fillMaxHeight().background(Line))
+                                    Column(Modifier.weight(1f).fillMaxHeight().background(if (part.selected) PanelHigh else Color.Transparent)
+                                        .clickable(onClick = part.open).padding(top = 10.dp, bottom = 18.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Top) {
+                                        Icon(part.icon, null, tint = if (part.selected) Teal else Color.White, modifier = Modifier.size(34.dp))
+                                        Spacer(Modifier.height(10.dp))
+                                        Text(part.label, color = Color.White, fontSize = Mate.body, fontWeight = if (part.selected) FontWeight.SemiBold else FontWeight.Normal,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
+                                    }
+                                }
+                            }
+                        } else Column(
                             Modifier.size(SwitcherTile).dragApp(tile.dragApp, drag).clip(RoundedCornerShape(18.dp)).background(if (tile.selected || open) PanelHigh else Panel)
                                 .then(if (list.isEmpty()) Modifier else Modifier.pointerInput(tile.label) {
                                     var dy = 0f
@@ -1258,6 +1305,19 @@ private fun Switcher(areas: List<Area>, inOverview: Boolean, side: Alignment, cl
                     }
                 }
             }
+        }
+    }
+}
+
+/** A favourite of the phone half (System L-094): the name and a green call button over the whole row. */
+@Composable
+private fun PersonChip(name: String, call: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(Modifier.fillMaxWidth().height(52.dp).clip(shape).background(Panel).clickable(onClick = call).padding(start = 14.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(name, color = Color.White, fontSize = Mate.body, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Box(Modifier.size(40.dp).clip(CircleShape).background(CallGreen), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Call, stringResource(R.string.idmate_call), tint = Color.White, modifier = Modifier.size(22.dp))
         }
     }
 }

@@ -503,6 +503,8 @@
     <string name="idmate_tab_navigation">Navi</string>
     <string name="idmate_tab_music">Audio</string>
     <string name="idmate_tab_messages">Messenger</string>
+    <string name="idmate_tab_phone">Telefon</string>
+    <string name="idmate_call">Anrufen</string>
     <string name="idmate_apps">Apps</string>
     <string name="idmate_voice">Sprache</string>
     <string name="idmate_areas">Bereiche</string>
