@@ -233,9 +233,7 @@ internal object RegionPacks {
         val lon = (x + 0.5) / n * 360.0 - 180.0
         val lat = Math.toDegrees(Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / n))))
         val m = pick(cachedMaps(context), lon, lat) ?: return null
-        val reader = synchronized(readers) {
-            readers.getOrPut(m.file.absolutePath + "@" + m.file.lastModified()) { runCatching { PmTiles(m.file) }.getOrNull() ?: return m to null }
-        }
+        val reader = reader(m) ?: return m to null
         return m to runCatching { reader.tile(z, x, y) }.getOrNull()
     }
 
@@ -257,29 +255,42 @@ internal object RegionPacks {
         return null
     }
 
-    private fun reader(m: LocalMap): PmTiles? = synchronized(readers) {
-        readers.getOrPut(m.file.absolutePath + "@" + m.file.lastModified()) { runCatching { PmTiles(m.file) }.getOrNull() ?: return null }
+    // a package opened outside any lock (22.11.2026, log of 2.4.1: four tile threads waited 540 ms while one opened the
+    // packages and looked at the folder - in the guidance, where new tiles are needed all the time, the map waited); two
+    // threads opening the same package at once keep the first and close the other
+    private fun reader(m: LocalMap): PmTiles? {
+        val key = m.file.absolutePath + "@" + m.file.lastModified()
+        readers[key]?.let { return it }
+        val opened = runCatching { PmTiles(m.file) }.getOrNull() ?: return null
+        return readers.putIfAbsent(key, opened)?.also { opened.close() } ?: opened
     }
 
-    private val readers = HashMap<String, PmTiles>()
-    private var mapsKey = ""
-    private var mapsKept: List<LocalMap> = emptyList()
+    private val readers = java.util.concurrent.ConcurrentHashMap<String, PmTiles>()
+    @Volatile private var mapsKey = ""
+    @Volatile private var mapsKept: List<LocalMap> = emptyList()
+    private val looking = java.util.concurrent.locks.ReentrantLock()
 
     // the folder is looked at again at most every [MAPS_CHECK_MS] (21.11.2026: it was listed for every tile, with the
     // time of each package on the memory card, one tile after the other - the map waited)
-    private var mapsCheckedAt = 0L
+    @Volatile private var mapsCheckedAt = 0L
 
-    @Synchronized private fun cachedMaps(context: Context): List<LocalMap> {
-        val now = android.os.SystemClock.uptimeMillis()
-        if (mapsKey.isNotEmpty() && now - mapsCheckedAt < MAPS_CHECK_MS) return mapsKept
-        mapsCheckedAt = now
-        val key = root(context).listFiles().orEmpty()
-            .joinToString("|") { d -> d.path + ":" + File(d, "karte.pmtiles").lastModified() }
-        if (key != mapsKey) {
-            mapsKept = maps(context); mapsKey = key
-            synchronized(readers) { readers.values.forEach { it.close() }; readers.clear() }
-        }
-        return mapsKept
+    /** The packages there are; one thread looks at the folder, the others go on with the packages known so far. */
+    private fun cachedMaps(context: Context): List<LocalMap> {
+        if (mapsKey.isNotEmpty() && android.os.SystemClock.uptimeMillis() - mapsCheckedAt < MAPS_CHECK_MS) return mapsKept
+        // before anything is known everyone waits for the first look; later nobody waits for the next one
+        if (mapsKey.isEmpty()) looking.lock() else if (!looking.tryLock()) return mapsKept
+        try {
+            val now = android.os.SystemClock.uptimeMillis()
+            if (mapsKey.isNotEmpty() && now - mapsCheckedAt < MAPS_CHECK_MS) return mapsKept
+            val key = root(context).listFiles().orEmpty()
+                .joinToString("|") { d -> d.path + ":" + File(d, "karte.pmtiles").lastModified() }.ifEmpty { "-" }
+            if (key != mapsKey) {
+                mapsKept = maps(context); mapsKey = key
+                val old = readers.values.toList(); readers.clear(); old.forEach { it.close() }
+            }
+            mapsCheckedAt = now
+            return mapsKept
+        } finally { looking.unlock() }
     }
     private const val MAPS_CHECK_MS = 10_000L
 

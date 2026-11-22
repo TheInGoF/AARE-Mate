@@ -39,8 +39,12 @@ internal class PmTiles(private val file: File) {
         root = directory(read(header.rootOffset, header.rootLength))
     }
 
-    /** The tile z/x/y unpacked, or null when the file has none there. */
-    @Synchronized fun tile(z: Int, x: Int, y: Int): ByteArray? {
+    /**
+     * The tile z/x/y unpacked, or null when the file has none there. Safe from any thread and not one after the other
+     * (22.11.2026: the whole read was locked, the tile threads of the offline map queued on the memory card); only the
+     * cache of leaf directories is locked.
+     */
+    fun tile(z: Int, x: Int, y: Int): ByteArray? {
         if (z < header.minZoom || z > header.maxZoom) return null
         val id = tileId(z, x, y)
         var dir = root
@@ -48,7 +52,7 @@ internal class PmTiles(private val file: File) {
             val e = find(dir, id) ?: return null
             if (e.runLength > 0) return unpack(read(header.dataOffset + e.offset, e.length), header.tileCompression)
             val at = header.leafOffset + e.offset
-            dir = leaves.getOrPut(at) { directory(read(at, e.length)) }
+            dir = synchronized(leaves) { leaves[at] } ?: directory(read(at, e.length)).also { d -> synchronized(leaves) { leaves[at] = d } }
         }
         return null
     }
