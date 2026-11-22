@@ -106,7 +106,7 @@ internal object NaviTripPlan {
             if (c != null) {
                 out += Row(Kind.CHARGE, chargerName(c.charger), arrive, m.metres - drivenM, c.arrivePercent, c.leavePercent, c.chargeMinutes, c.charger.network,
                     charger = c.charger, overLimit = c.overLimit)
-                chargedS += c.chargeMinutes * 60
+                chargedS += c.stayMinutes * 60
             } else {
                 val mine = own.minByOrNull { ChargerIndex.distanceM(it.first, m.at) }?.takeIf { ChargerIndex.distanceM(it.first, m.at) < OWN_SNAP_M }
                 // the stop as the driver chose it (its place and name), for moving it in the plan

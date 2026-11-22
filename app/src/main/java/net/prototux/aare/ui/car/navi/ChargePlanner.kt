@@ -35,6 +35,7 @@ internal object ChargePlanner {
             fun of(s: net.prototux.aare.Settings) = Rules(s.chargeMinAtCharger.toDouble(), s.chargeMinAtDestination.toDouble(),
                 s.chargeMaxLevel.toDouble(), preferred = s.chargeNetworks, only = s.chargeNetworksOnly,
                 rating = { ch -> ChargerVisits.rating(s.appContext, ch) }, minMinutes = s.chargeMinMinutes.toDouble())
+                .also { stopExtraMinutes = s.chargeStopExtraMin.toDouble() }
         }
     }
 
@@ -47,10 +48,23 @@ internal object ChargePlanner {
 
     /** [overLimit]: charged above the driver's highest level, because nothing else reaches on from there (O205). */
     class Stop(val charger: Charger, val atM: Double, val arrivePercent: Double, val leavePercent: Double, val chargeMinutes: Double,
-               val overLimit: Boolean = false)
+               val overLimit: Boolean = false) {
+        /** The time the stop takes: the charging and what goes with it ([stopExtraMinutes]), for arrival times. */
+        val stayMinutes get() = chargeMinutes + stopExtraMinutes
+    }
     class Plan(val stops: List<Stop>, val arrivePercent: Double) {
         val chargeMinutes get() = stops.sumOf { it.chargeMinutes }
+        /** The time all stops take, for the arrival time. */
+        val stayMinutes get() = stops.sumOf { it.stayMinutes }
     }
+
+    /**
+     * Minutes a charging stop takes beyond the charging itself (Ingo, 22.11.2026: "Bis sich die Ladung aufgebaut hat,
+     * dauert es meistens schon eine Minute … Das Einparken, Anhalten, Anstecken kann man wahrscheinlich auch nochmal 2
+     * Minuten draufrechnen … Eventuell einstellbar in den Ladeeinstellungen"): parking, plugging in, the power coming up.
+     * The driver's value (Settings.chargeStopExtraMin), set whenever the rules are read.
+     */
+    @Volatile var stopExtraMinutes = 3.0
 
     /**
      * The stops the route needs from [startPercent], with [chargers] looking up what lies near a point: the chain of least

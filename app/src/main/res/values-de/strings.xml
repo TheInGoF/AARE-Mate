@@ -1123,6 +1123,8 @@
     <string name="routing_min_minutes">Mindestens laden je Stopp</string>
     <string name="routing_min_minutes_hint">Ein nötiger Halt lädt mindestens so lange (bis zum Höchststand) – ein Stopp für 1 Minute lohnt Anfahrt und Anstecken nicht.</string>
     <string name="routing_min_minutes_off">aus</string>
+    <string name="routing_stop_extra">Zeit je Ladestopp zusätzlich</string>
+    <string name="routing_stop_extra_hint">Anhalten, Einparken, Anstecken und bis die Ladeleistung steht – kommt zur Ladezeit in die Ankunftszeit.</string>
     <string name="routing_networks_title">Ladenetze</string>
     <string name="routing_visits_title">Besuchte Ladepunkte</string>
     <string name="transfer_title">Einstellungen übertragen</string>

@@ -147,18 +147,36 @@ internal object DashMapGeo {
         }
         fun latLon(a: JSONArray?) = a?.takeIf { it.length() >= 2 }?.let { doubleArrayOf(it.getDouble(1), it.getDouble(0)) }
         val sea = ArrayList<List<DoubleArray>>(); val from = JSONArray(); val to = JSONArray(); val own = ArrayList<List<DoubleArray>>()
+        val kept = ArrayList<Pair<DoubleArray, DoubleArray>>()
+        var dropped = false
         for (i in 0 until list.length()) {
             val f = list.optJSONObject(i) ?: continue
-            f.optJSONArray("line")?.let { l -> (0 until l.length()).mapNotNull { latLon(l.optJSONArray(it)) } }?.takeIf { it.size >= 2 }?.let { sea += it }
-            latLon(f.optJSONArray("from"))?.let { from.put(point(it[0], it[1], JSONObject())) }
-            latLon(f.optJSONArray("to"))?.let { to.put(point(it[0], it[1], JSONObject().put("name", f.optString("name")))) }
-            own += outlineOf(f.optJSONObject("area"))
+            val line = f.optJSONArray("line")?.let { l -> (0 until l.length()).mapNotNull { latLon(l.optJSONArray(it)) } } ?: emptyList()
+            val a = latLon(f.optJSONArray("from")) ?: line.firstOrNull(); val b = latLon(f.optJSONArray("to")) ?: line.lastOrNull()
+            if (a == null || b == null) continue
+            // only real crossings (22.11.2026: "nur reale Verbindungen … keine Hin- und Herrouten"): no round trip that
+            // comes back where it left (OSM maps some ferries as one way out and back, Læsøfærgen), no pair twice
+            if (roundTrip(a, b, line) || kept.any { (x, y) -> (km(x, a) < SAME_PORT_KM && km(y, b) < SAME_PORT_KM) ||
+                    (km(x, b) < SAME_PORT_KM && km(y, a) < SAME_PORT_KM) }) { dropped = true; continue }
+            kept += a to b
+            if (line.size >= 2) sea += line
+            from.put(point(a[0], a[1], JSONObject()))
+            to.put(point(b[0], b[1], JSONObject().put("name", f.optString("name"))))
+            // the area behind it only where it lies at its port of arrival (an area that lands elsewhere is no way on
+            // over this ferry - seen when the routing knew no roads there and the area fell back to the coast left)
+            // and no part of it back at the port it left (22.11.2026: "Rostock nach Gedser und … zurück": IDmate's area
+            // behind Gedser started on the ferry line itself and reached back to Rostock, IDmate I-073)
+            val all = outlineOf(f.optJSONObject("area"))
+            val area = all.filterNot { r -> near(a, r) }
+            if (area.size < all.size) dropped = true
+            if (area.any { r -> near(b, r) }) own += area else if (area.isNotEmpty()) dropped = true
         }
-        val rings = outlineOf(answer.optJSONObject("union")).ifEmpty { own }
+        // IDmate's common outline of all areas - unless one was left out here, then each area's own
+        val rings = (if (dropped) emptyList() else outlineOf(answer.optJSONObject("union"))).ifEmpty { own }
         val ports = (0 until to.length()).map { to.getJSONObject(it) } + (0 until from.length()).map { from.getJSONObject(it) }
         val portPts = ports.map { p -> p.getJSONObject("geometry").getJSONArray("coordinates").let { doubleArrayOf(it.getDouble(0), it.getDouble(1)) } }
         Ferries(lineCollection(rings), rings, lineCollection(sea),
-            collection(from), collection(to), box(rings + sea + listOf(portPts)), list.length())
+            collection(from), collection(to), box(rings + sea + listOf(portPts)), kept.size)
     }.getOrNull()
 
     /** Out of reach slightly dimmed: the world with the reachable rings cut out (IDmate: a tint, the areas cut out of it). */
@@ -190,6 +208,26 @@ internal object DashMapGeo {
         return some(a).any { inside(it, b) } || some(b).any { inside(it, a) }
     }
     private const val SAMPLES = 200
+    /** Ports this close are the same port; an area this close to its port of arrival lies there. */
+    private const val SAME_PORT_KM = 10.0
+    private const val AREA_NEAR_KM = 15.0
+
+    /** Km between two [lon, lat] points (flat, enough for ports). */
+    private fun km(a: DoubleArray, b: DoubleArray): Double {
+        val k = Math.cos(Math.toRadians((a[1] + b[1]) / 2))
+        return Math.hypot((a[0] - b[0]) * k, a[1] - b[1]) * 111.2
+    }
+
+    /** A port inside [ring] or close to its edge. */
+    private fun near(p: DoubleArray, ring: List<DoubleArray>) = inside(p, ring) || ring.any { km(it, p) < AREA_NEAR_KM }
+
+    /** A crossing out and back: its ends close together, or its far point much further out than its end. */
+    fun roundTrip(a: DoubleArray, b: DoubleArray, line: List<DoubleArray>): Boolean {
+        val end = km(a, b)
+        if (end < SAME_PORT_KM) return true
+        val far = line.maxOfOrNull { km(a, it) } ?: return false
+        return far > 0 && end < 0.6 * far
+    }
 
     private fun inside(p: DoubleArray, ring: List<DoubleArray>): Boolean {
         var c = false; var j = ring.size - 1

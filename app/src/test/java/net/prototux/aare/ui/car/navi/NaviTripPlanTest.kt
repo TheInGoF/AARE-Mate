@@ -18,8 +18,8 @@ class NaviTripPlanTest {
         assertEquals("mate-test Bäcker", rows[0].name)
         assertEquals("mate-test Lader GmbH · 300 kW", rows[1].name)
         assertEquals(2_400_000L, rows[1].arriveAtMillis)
-        // the destination after 6000 s driving and 25 min charging
-        assertEquals((6_000 + 25 * 60) * 1000L, rows[2].arriveAtMillis)
+        // the destination after 6000 s driving, 25 min charging and the minutes that go with a stop (22.11.2026)
+        assertEquals((6_000 + (25 + ChargePlanner.stopExtraMinutes.toInt()) * 60) * 1000L, rows[2].arriveAtMillis)
         assertEquals(21.0, rows[2].arrivePercent!!, 0.01)
     }
 
@@ -39,7 +39,7 @@ class NaviTripPlanTest {
         val rows = NaviTripPlan.rows(marks, charges, own, 0.0, 0.0, 100_000.0, 9_300.0, 0L, "mate-test Ziel", 21.0, ferries = f)
         assertEquals(listOf(NaviTripPlan.Kind.OWN, NaviTripPlan.Kind.CHARGE, NaviTripPlan.Kind.FERRY, NaviTripPlan.Kind.DESTINATION), rows.map { it.kind })
         assertEquals("mate-test Fähre", rows[2].name)
-        assertEquals((3_000 + 25 * 60) * 1000L, rows[2].arriveAtMillis)
+        assertEquals((3_000 + (25 + ChargePlanner.stopExtraMinutes.toInt()) * 60) * 1000L, rows[2].arriveAtMillis)
         assertEquals(80.0, rows[2].ferryMinutes!!, 0.01)
         val later = NaviTripPlan.rows(marks, charges, own, 80_000.0, 8_000.0, 100_000.0, 9_300.0, 0L, "mate-test Ziel", null, ferries = f)
         assertEquals(listOf(NaviTripPlan.Kind.DESTINATION), later.map { it.kind })

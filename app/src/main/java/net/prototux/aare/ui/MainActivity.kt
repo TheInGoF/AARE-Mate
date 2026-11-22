@@ -331,6 +331,10 @@ private fun Home() {
                                 var minMin by remember { mutableStateOf(settings.chargeMinMinutes.toString()) }
                                 Choices(stringResource(R.string.routing_min_minutes), listOf(0, 5, 10, 15, 20).map { "$it" to if (it == 0) offLabel else "$it min" }, minMin) { minMin = it; settings.chargeMinMinutes = it.toInt() }
                                 Text(stringResource(R.string.routing_min_minutes_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(Modifier.height(12.dp))
+                                var extra by remember { mutableStateOf(settings.chargeStopExtraMin.toString()) }
+                                Choices(stringResource(R.string.routing_stop_extra), listOf(0, 2, 3, 5, 8).map { "$it" to "+$it min" }, extra) { extra = it; settings.chargeStopExtraMin = it.toInt() }
+                                Text(stringResource(R.string.routing_stop_extra_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } }
                             // O226: the chargers charged at, to rate - the planner prefers the well rated among the allowed ones
                             // (first on the page while charges wait to be looked at: the badge led here, Navi L-005)

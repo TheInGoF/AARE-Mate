@@ -97,7 +97,8 @@ class DashMapGeoTest {
             parts.forEach { p -> put(JSONArray().apply { p.forEach { put(JSONArray().put(it[0]).put(it[1])) } }) } }))
 
     @Test fun ferriesWithTheirUnionSeaAndPorts() {
-        val area = JSONObject().put("type", "FeatureCollection").put("features", JSONArray().put(lineFeature(square(11.4, 54.6, 0.3))))
+        // the area behind the port of arrival, away from the port it left
+        val area = JSONObject().put("type", "FeatureCollection").put("features", JSONArray().put(lineFeature(square(11.6, 54.8, 0.2))))
         val ferry = JSONObject().put("from", JSONArray().put(54.50).put(11.22)).put("to", JSONArray().put(54.65).put(11.35))
             .put("name", "mate-test-Faehre").put("line", JSONArray().put(JSONArray().put(54.50).put(11.22)).put(JSONArray().put(54.65).put(11.35)))
             .put("area", area)
@@ -110,9 +111,34 @@ class DashMapGeoTest {
         assertEquals("[lat, lon] turned into [lon, lat]", 11.22, sea.getJSONArray(0).getDouble(0), 1e-9)
         val to = JSONObject(f.portsTo).getJSONArray("features").getJSONObject(0).getJSONObject("geometry").getJSONArray("coordinates")
         assertEquals(11.35, to.getDouble(0), 1e-9); assertEquals(54.65, to.getDouble(1), 1e-9)
-        assertTrue(f.box!![0] <= 11.1 && f.box!![2] >= 11.7)
+        assertTrue(f.box!![0] <= 11.22 && f.box!![2] >= 11.7)
         assertNull("still searching", DashMapGeo.ferries(JSONObject().put("status", "running")))
         assertEquals("none found", 0, DashMapGeo.ferries(JSONObject().put("status", "ok").put("ferries", JSONArray()))!!.count)
+    }
+
+    private fun ferry(from: DoubleArray, to: DoubleArray, line: List<DoubleArray>, area: JSONObject?) = JSONObject()
+        .put("from", JSONArray().put(from[1]).put(from[0])).put("to", JSONArray().put(to[1]).put(to[0])).put("name", "mate-test-Faehre")
+        .put("line", JSONArray().apply { line.forEach { put(JSONArray().put(it[1]).put(it[0])) } }).put("area", area)
+
+    /** 22.11.2026: "nur reale Verbindungen … keine Hin- und Herrouten" - round trips, a pair twice, an area away from its port. */
+    @Test fun onlyRealCrossings() {
+        val rostock = doubleArrayOf(12.10, 54.15); val gedser = doubleArrayOf(11.93, 54.57); val mid = doubleArrayOf(12.0, 54.36)
+        val atGedser = JSONObject().put("type", "FeatureCollection").put("features", JSONArray().put(lineFeature(square(11.8, 54.75, 0.3))))
+        val atRostock = JSONObject().put("type", "FeatureCollection").put("features", JSONArray().put(lineFeature(square(12.3, 53.9, 0.3))))
+        val loop = ferry(rostock, doubleArrayOf(12.11, 54.16), listOf(rostock, gedser, doubleArrayOf(12.11, 54.16)), null)
+        val there = ferry(rostock, gedser, listOf(rostock, mid, gedser), atGedser)
+        val back = ferry(gedser, rostock, listOf(gedser, mid, rostock), null)
+        val wrongArea = ferry(rostock, doubleArrayOf(13.15, 55.37), listOf(rostock, doubleArrayOf(13.15, 55.37)), atRostock)
+        val f = DashMapGeo.ferries(JSONObject().put("status", "ok").put("ferries", JSONArray().put(loop).put(there).put(back).put(wrongArea)))!!
+        assertEquals("Rostock-Gedser once and the one to Trelleborg", 2, f.count)
+        assertEquals("only the area at Gedser", 1, f.rings.size)
+        assertTrue(f.rings[0].all { it[1] > 54.4 })
+        // the area behind Gedser with a part back around Rostock (IDmate I-073): that part goes
+        val both = JSONObject().put("type", "FeatureCollection").put("features", JSONArray().put(lineFeature(square(11.8, 54.75, 0.3), square(12.1, 54.0, 0.3))))
+        val g = DashMapGeo.ferries(JSONObject().put("status", "ok").put("ferries", JSONArray().put(ferry(rostock, gedser, listOf(rostock, mid, gedser), both))).put("union", both))!!
+        assertEquals("only the part in Denmark", 1, g.rings.size)
+        assertTrue(g.rings[0].all { it[1] > 54.4 })
+        assertTrue(DashMapGeo.roundTrip(rostock, doubleArrayOf(12.3, 54.2), listOf(rostock, gedser, doubleArrayOf(12.3, 54.2))))
     }
 
     /** IDmate's shade.setFerry: the ferries' areas cut out of the same shade, unless one touches a ring already cut. */

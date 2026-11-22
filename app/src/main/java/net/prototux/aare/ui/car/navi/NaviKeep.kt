@@ -498,7 +498,7 @@ internal object NaviKeep {
                 if (t != null) session.route.value?.let { r ->
                     noteProgress(r, r.distance, t.progress.distanceRemaining)
                     runCatching { noteEta(t, t.progress.durationRemaining, trafficDelayS(r.distance - t.progress.distanceRemaining),
-                        stillToCharge(t).sumOf { it.chargeMinutes } * 60) }
+                        stillToCharge(t).sumOf { it.stayMinutes } * 60) }
                 }
                 // a waypoint passed: a planned charging stop reached is said and shown; driven 300 m on, it goes
                 if (t != null) {
@@ -559,7 +559,7 @@ internal object NaviKeep {
                 // against flicker) still gets there at a red light
                 if ((key == lastHeadUp && nowMs - lastHeadUpMs < 2000) || (key.first == lastHeadUp?.first && nowMs - lastHeadUpMs < 1000)) return@collect
                 lastHeadUp = key; lastHeadUpMs = nowMs
-                val charging = stillToCharge(t).sumOf { it.chargeMinutes } * 60 +
+                val charging = stillToCharge(t).sumOf { it.stayMinutes } * 60 +
                     (session.route.value?.let { r -> trafficDelayS(r.distance - t.progress.distanceRemaining) } ?: 0.0)
                 val trip = runCatching {
                     NaviHeadUp.trip(t, target.value?.name.orEmpty(), charging, System.currentTimeMillis()) { app.getString(net.prototux.aare.R.string.mate_navi_exit, it) }

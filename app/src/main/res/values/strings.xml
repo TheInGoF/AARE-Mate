@@ -1134,6 +1134,8 @@
     <string name="routing_min_minutes">Charge at least per stop</string>
     <string name="routing_min_minutes_hint">A needed stop charges at least this long (up to the highest level) – a 1 minute stop is not worth the way there and plugging in.</string>
     <string name="routing_min_minutes_off">off</string>
+    <string name="routing_stop_extra">Extra time per charging stop</string>
+    <string name="routing_stop_extra_hint">Pulling in, parking, plugging in and until the power is up – added to the charging time in the arrival time.</string>
     <string name="routing_networks_title">Charging networks</string>
     <string name="routing_visits_title">Chargers visited</string>
     <string name="transfer_title">Transfer settings</string>

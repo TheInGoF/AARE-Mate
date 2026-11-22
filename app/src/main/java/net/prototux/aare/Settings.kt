@@ -115,6 +115,10 @@ class Settings(context: Context) {
     var chargeMinMinutes: Int
         get() = prefs.getInt("charge_min_minutes", 10)
         set(v) = prefs.edit { putInt("charge_min_minutes", v) }
+    /** Minutes a charging stop takes beyond the charging (parking, plugging in, the power coming up), for arrival times. */
+    var chargeStopExtraMin: Int
+        get() = prefs.getInt("charge_stop_extra_min", 3)
+        set(v) = prefs.edit { putInt("charge_stop_extra_min", v) }
     var chargeMaxLevel: Int
         get() = prefs.getInt("charge_max_level", 80)
         set(v) = prefs.edit { putInt("charge_max_level", v) }

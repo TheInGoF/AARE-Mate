@@ -308,7 +308,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val wh = car?.let { NaviCharge.energyWh(r.steps, null, it) }
         val plan = c.charging
         val pct = plan?.arrivePercent ?: if (car != null && wh != null) car.socPercent - wh / car.capacityWh * 100 else null
-        return RouteOption(c.kind, r, Preview(name, r.distance / 1000, r.steps.sumOf { it.duration } / 60.0 + (plan?.chargeMinutes ?: 0.0),
+        return RouteOption(c.kind, r, Preview(name, r.distance / 1000, r.steps.sumOf { it.duration } / 60.0 + (plan?.stayMinutes ?: 0.0),
             wh?.let { it / 1000 }, pct, pct != null && pct < NaviCharge.RESERVE_PERCENT, plan?.stops.orEmpty(),
             planRows(r, own, plan?.stops.orEmpty(), destination, pct), pending = pendingCharge))
     }
@@ -470,7 +470,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             }
             val wh = NaviCharge.energyWh(r.steps, null, car)
             val prev = o.preview
-            val updated = RouteOption(o.kind, r, Preview(prev.name, r.distance / 1000, r.steps.sumOf { it.duration } / 60.0 + plan.chargeMinutes,
+            val updated = RouteOption(o.kind, r, Preview(prev.name, r.distance / 1000, r.steps.sumOf { it.duration } / 60.0 + plan.stayMinutes,
                 wh / 1000, plan.arrivePercent, plan.arrivePercent < NaviCharge.RESERVE_PERCENT, plan.stops,
                 planRows(r, pendingOwn, plan.stops, pending?.name.orEmpty(), plan.arrivePercent), removed))
             if (panel !is NaviStep.Preview) return@launch
@@ -1449,7 +1449,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         // the charging still ahead counts into the arrival, as the preview and Google show it (it said 3 h 28 min where the
         // preview said 3 h 56 min with two stops, 16.11.2026)
         // with the stop the car stands at now (it charges there before going on)
-        val chargingAheadS = if (trip == null) 0.0 else NaviKeep.stillToCharge(trip).sumOf { it.chargeMinutes } * 60 +
+        val chargingAheadS = if (trip == null) 0.0 else NaviKeep.stillToCharge(trip).sumOf { it.stayMinutes } * 60 +
             // F2: and what the incidents ahead cost (Valhalla's times know no traffic), as Google's arrival does
             (guided?.let { g -> NaviKeep.trafficDelayS(g.distance - trip.progress.distanceRemaining) } ?: 0.0)
         // O237: inside a jam, the time to its end and how far it still goes
@@ -1593,7 +1593,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         if (atStop != null && panel == NaviStep.None && trip != null) NaviAtCharger(atStop,
             // after this stop: the driving and the later stops' charging
             target?.name?.let { context.getString(net.prototux.aare.R.string.mate_navi_at_charger_after,
-                minutesText(trip.progress.durationRemaining / 60.0 + NaviKeep.stillToCharge(trip).filter { it !== atStop }.sumOf { it.chargeMinutes }), it) },
+                minutesText(trip.progress.durationRemaining / 60.0 + NaviKeep.stillToCharge(trip).filter { it !== atStop }.sumOf { it.stayMinutes }), it) },
             hintMod) { NaviKeep.atCharger.value = null }
         // F2: a faster route round a jam, top right, before all other hints (O218)
         val fasterNow = NaviKeep.faster.value?.takeIf { atStop == null && panel == NaviStep.None && trip != null }
