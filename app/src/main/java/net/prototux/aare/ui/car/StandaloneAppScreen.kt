@@ -63,8 +63,17 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
             launcher.connected
         }
         runtime.screenBack = back
+        // the tablet kept awake while the cinema shows an app (22.11.2026: "Wenn das Tablet ausgeht, bricht auch die
+        // Verbindung zur YouTube-App ab"): its screen going dark puts every display to sleep, the app's own too - dimmed,
+        // not off; only while parked, the cinema's condition anyway
+        @Suppress("DEPRECATION")
+        val awake = (context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager)
+            .newWakeLock(android.os.PowerManager.SCREEN_DIM_WAKE_LOCK or android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP, "mate:cinema")
+            .apply { setReferenceCounted(false); runCatching { acquire(4 * 3600_000L) } }
+        net.prototux.aare.DiagLog.add("cinema: $packageName - the tablet kept awake while it shows", area = "CAR")
         onDispose {
             if (runtime.screenBack === back) runtime.screenBack = null
+            runCatching { if (awake.isHeld) awake.release() }
             launcher.release()
         }
     }
