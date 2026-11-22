@@ -17,13 +17,17 @@ internal object NaviPreheat {
     const val CLOSE_C = 3.0
     /** Chargers from this power on are fast ones, worth a warm battery. */
     const val FAST_KW = 100
-    /** Before anything is learned: degrees per minute, and the heater's power. */
-    const val START_RATE_K_MIN = 0.8
+    /**
+     * Before anything is learned: degrees per minute, and the heater's power. 0.25 K/min, not 0.8 (22.11.2026: the hint
+     * came 6-7 min before the charger - "was bei dem VW leider wahrscheinlich nicht ausreichen wird. Die Temperatur der
+     * Batterie hat sich noch nicht um 1 Grad weiter erhöht"): the MEB's heater takes about half an hour for 10 K.
+     */
+    const val START_RATE_K_MIN = 0.25
     const val HEATER_KW = 5.0
     /** A little more than the warming takes, so the battery is warm on arrival and not only then. */
-    const val MARGIN_MIN = 3.0
+    const val MARGIN_MIN = 8.0
     /** Rates outside this are no warming (a reading jumped, the car stood in the sun). */
-    const val MIN_RATE = 0.2
+    const val MIN_RATE = 0.08
     const val MAX_RATE = 3.0
 
     /** The hint: start now, it takes [minutes] and about [kwh] (from [fromC] to [TARGET_C]). */
@@ -110,9 +114,10 @@ internal object NaviPreheat {
         }
 
         companion object {
-            const val RISE_C = 4.0
-            const val WINDOW_MIN = 20
-            const val MIN_SPAN_MIN = 3.0
+            // a slow heater as the MEB's: 2 °C within 40 min count (readings come from the stick every few seconds now)
+            const val RISE_C = 2.0
+            const val WINDOW_MIN = 40
+            const val MIN_SPAN_MIN = 5.0
         }
     }
 }

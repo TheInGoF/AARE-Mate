@@ -10,12 +10,12 @@ class NaviPreheatTest {
     private val none = NaviPreheat.Rates()
 
     @Test fun onlyWhenNearEnoughAndCold() {
-        // 5 °C battery, 0.8 K/min: 25 min to 25 °C - said from 28 min before the charger on
-        assertNull(NaviPreheat.advice(5.0, 0.0, 300, 40.0, none))
-        val a = NaviPreheat.advice(5.0, 0.0, 300, 27.0, none)
+        // 15 °C battery, 0.25 K/min (MEB): 40 min to 25 °C - said from 48 min before the charger on
+        assertNull(NaviPreheat.advice(15.0, 0.0, 300, 50.0, none))
+        val a = NaviPreheat.advice(15.0, 0.0, 300, 47.0, none)
         assertNotNull(a)
-        assertEquals(25.0, a!!.minutes, 1e-9)
-        assertEquals(25.0 / 60 * NaviPreheat.HEATER_KW, a.kwh, 1e-9)
+        assertEquals(40.0, a!!.minutes, 1e-9)
+        assertEquals(40.0 / 60 * NaviPreheat.HEATER_KW, a.kwh, 1e-9)
         // warm enough, a slow charger, no reading: nothing
         assertNull(NaviPreheat.advice(23.0, 0.0, 300, 5.0, none))
         assertNull(NaviPreheat.advice(5.0, 0.0, 50, 5.0, none))
@@ -40,12 +40,12 @@ class NaviPreheatTest {
         val w = NaviPreheat.Watch()
         val t0 = 1_000_000L
         assertNull(w.reading(5.0, t0))
-        assertNull(w.reading(6.0, t0 + 2 * 60_000))
-        // 4 °C in 5 min: 0.8 K/min
-        assertEquals(0.8, w.reading(9.0, t0 + 5 * 60_000)!!, 1e-9)
+        assertNull(w.reading(6.0, t0 + 4 * 60_000))
+        // 2.5 °C in 10 min: 0.25 K/min, as the MEB heats
+        assertEquals(0.25, w.reading(7.5, t0 + 10 * 60_000)!!, 1e-9)
         // falling readings start anew, nothing seen
-        assertNull(w.reading(7.0, t0 + 8 * 60_000))
-        assertNull(w.reading(7.5, t0 + 12 * 60_000))
+        assertNull(w.reading(6.5, t0 + 12 * 60_000))
+        assertNull(w.reading(7.0, t0 + 16 * 60_000))
     }
 
     /** Review 21.11.2026: a warming while charging is the charge, not the heater - after reset() nothing of it counts. */

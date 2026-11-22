@@ -837,7 +837,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         if (c === preheatLeft || !preheatSaid.add(c)) return@LaunchedEffect
         net.prototux.aare.DiagLog.add("battery warm: start now - %.0f °C, %.0f min to %.0f °C, about %.1f kWh, %d kW charger".format(java.util.Locale.ROOT,
             a.fromC, a.minutes, NaviPreheat.TARGET_C, a.kwh, c.kw), area = "CHARGE")
-        speaker.warn(context.getString(net.prototux.aare.R.string.mate_navi_preheat_say))
+        // a tone is enough, no words (22.11.2026: "Dafür muss er aber nicht unbedingt eine Navi-Ansage machen … sondern ein
+        // Hinweiston würde reichen"); the hint itself blinks three times (NaviPreheatHint)
+        if (voiceMode != NaviSpeaker.Mode.MUTE && !NaviKeep.away) NaviSpeedAlert.play(NaviSpeedAlert.Companion.Tone.DOUBLE, 0.8f, 1)
     }
     // "Fortsetzen": an own stop reached is dropped from what is kept, so going on does not lead back to it (put back
     // 17.11.2026 - it went missing when the car's displays moved to NaviKeep)

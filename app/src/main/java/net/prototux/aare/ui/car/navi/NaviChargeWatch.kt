@@ -94,7 +94,16 @@ internal fun NaviChargeHint(result: NaviChargeWatch.Result, modifier: androidx.c
 @androidx.compose.runtime.Composable
 internal fun NaviPreheatHint(advice: NaviPreheat.Advice, modifier: androidx.compose.ui.Modifier, onDismiss: () -> Unit) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
-    androidx.compose.foundation.layout.Row(modifier.floatEdge(shape).clip(shape).background(Mate.cardSolid)
+    // three blinks as it comes (22.11.2026: "wenn das Batterie-Pop-Up vielleicht 3-mal blinken würde")
+    val flash = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        repeat(3) {
+            flash.animateTo(1f, androidx.compose.animation.core.tween(250))
+            flash.animateTo(0f, androidx.compose.animation.core.tween(400))
+        }
+    }
+    androidx.compose.foundation.layout.Row(modifier.floatEdge(shape).clip(shape)
+        .background(androidx.compose.ui.graphics.lerp(Mate.cardSolid, Mate.accent, 0.55f * flash.value))
         .padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Thermostat, null,
             tint = Mate.accent, modifier = androidx.compose.ui.Modifier.size(28.dp))
