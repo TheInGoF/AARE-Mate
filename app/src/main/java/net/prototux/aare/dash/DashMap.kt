@@ -260,8 +260,12 @@ private fun DashMap(go: (String) -> Unit) {
             val a = area
             // out of reach dimmed by 10 % (21.11.2026: "normalerweise alles außerhalb der reichweite mit 10% ausgegraut"),
             // around the road area or, until there is one, around the circle
-            val shade = remember(a?.shade, a == null, car, rangeKm?.toInt()) {
-                a?.shade ?: run { val p = car; val km = rangeKm; if (p == null || km == null) DashMapGeo.EMPTY else DashMapGeo.circleShade(p.latitude, p.longitude, km) }
+            // the ferries' areas behind long crossings are reachable too: cut out of the same shade (IDmate's shade.setFerry)
+            val fe = ferries
+            val shade = remember(a, fe, car, rangeKm?.toInt()) {
+                val base = a?.rings ?: run { val p = car; val km = rangeKm
+                    if (p == null || km == null || km <= 0) emptyList() else listOf(DashMapGeo.circleRing(p.latitude, p.longitude, km)) }
+                if (base.isEmpty() && fe == null) DashMapGeo.EMPTY else DashMapGeo.shadeOf(base, fe?.rings ?: emptyList())
             }
             FillLayer(id = "dash-shade", source = rememberGeoJsonSource(remember(shade) { GeoJsonData.JsonString(shade) }),
                 color = const(Color.Black), opacity = const(if (night) 0.25f else 0.10f))
@@ -283,12 +287,9 @@ private fun DashMap(go: (String) -> Unit) {
             }
             LineLayer(id = "dash-range-circle", source = rememberGeoJsonSource(remember(circle) { GeoJsonData.JsonString(circle) }),
                 color = const(if (night) MAP_BLUE_NIGHT else MAP_BLUE), width = const(2.dp), opacity = const(0.8f))
-            // long ferries (IDmate's button "Fähren"): purple with a white edge, the areas behind them lightly filled
-            val fe = ferries
+            // long ferries (IDmate's button "Fähren"): purple with a white edge, no fill (their areas are cut out of the shade)
             val ferryCol = if (night) FERRY_PURPLE_NIGHT else FERRY_PURPLE
             val ferryHalo = if (night) Color(0xFF0D1117) else Color.White
-            FillLayer(id = "dash-ferry-fill", source = rememberGeoJsonSource(remember(fe?.fill) { GeoJsonData.JsonString(fe?.fill ?: DashMapGeo.EMPTY) }),
-                color = const(ferryCol), opacity = const(if (night) 0.16f else 0.12f))
             val sea = rememberGeoJsonSource(remember(fe?.sea) { GeoJsonData.JsonString(fe?.sea ?: DashMapGeo.EMPTY) })
             LineLayer(id = "dash-ferry-sea-halo", source = sea, color = const(ferryHalo), width = const(4.5.dp), opacity = const(0.9f), cap = const(LineCap.Round), join = const(LineJoin.Round))
             LineLayer(id = "dash-ferry-sea", source = sea, color = const(ferryCol), width = const(2.dp), opacity = const(0.95f), dasharray = const(listOf(3, 2.5)))

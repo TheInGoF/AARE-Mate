@@ -10,8 +10,11 @@ import org.json.JSONObject
  * (templates/index.html: smoothRing, smoothArea, showWindArea, the shade out of reach, windIcon, drawRain).
  */
 internal object DashMapGeo {
-    /** The lines of the range area and the rings out of which the shade is cut; [outer]/[inner] GeoJSON of lines. */
-    class Area(val outer: String, val inner: String, val shade: String, val box: DoubleArray?)
+    /**
+     * The lines of the range area and the rings out of which the shade is cut; [outer]/[inner] GeoJSON of lines, [rings]
+     * the reachable rings themselves (the ferries' areas are cut out of the same shade, [shadeOf]).
+     */
+    class Area(val outer: String, val inner: String, val shade: String, val box: DoubleArray?, val rings: List<List<DoubleArray>> = emptyList())
 
     const val EMPTY = """{"type":"FeatureCollection","features":[]}"""
 
@@ -116,16 +119,16 @@ internal object DashMapGeo {
             }
         }
         if (outerLines.isEmpty() && innerLines.isEmpty()) return null
-        Area(lineCollection(outerLines), lineCollection(innerLines), shadeOf(shade), box(shade.ifEmpty { outerLines + innerLines }))
+        Area(lineCollection(outerLines), lineCollection(innerLines), shadeOf(shade), box(shade.ifEmpty { outerLines + innerLines }), shade)
     }.getOrNull()
 
     /**
      * IDmate's long ferries (/api/ferries with status "ok", ferries.py): what the car reaches beyond a long crossing, as
-     * IDmate's page draws it (drawFerries) - the outline of all areas behind the ferries ("union", else each one's), a
-     * light fill instead of IDmate's cut out of the shade (MapLibre cannot cut overlapping rings out of one area), the
-     * crossings over the sea and the ports (the far one larger). [from]/[to]/[line] come as [lat, lon].
+     * IDmate's page draws it (drawFerries) - the outline of all areas behind the ferries ("union", else each one's), no
+     * fill: [rings] are cut out of the shade like the range area (shade.setFerry), the crossings over the sea and the
+     * ports (the far one larger). [from]/[to]/[line] come as [lat, lon].
      */
-    class Ferries(val outline: String, val fill: String, val sea: String, val portsFrom: String, val portsTo: String, val box: DoubleArray?, val count: Int)
+    class Ferries(val outline: String, val rings: List<List<DoubleArray>>, val sea: String, val portsFrom: String, val portsTo: String, val box: DoubleArray?, val count: Int)
 
     fun ferries(answer: JSONObject?): Ferries? = runCatching {
         if (answer?.optString("status") != "ok") return null
@@ -152,12 +155,9 @@ internal object DashMapGeo {
             own += outlineOf(f.optJSONObject("area"))
         }
         val rings = outlineOf(answer.optJSONObject("union")).ifEmpty { own }
-        val fill = JSONArray()
-        rings.forEach { r -> fill.put(JSONObject().put("type", "Feature").put("properties", JSONObject())
-            .put("geometry", JSONObject().put("type", "Polygon").put("coordinates", JSONArray().put(ring(r))))) }
         val ports = (0 until to.length()).map { to.getJSONObject(it) } + (0 until from.length()).map { from.getJSONObject(it) }
         val portPts = ports.map { p -> p.getJSONObject("geometry").getJSONArray("coordinates").let { doubleArrayOf(it.getDouble(0), it.getDouble(1)) } }
-        Ferries(lineCollection(rings), JSONObject().put("type", "FeatureCollection").put("features", fill).toString(), lineCollection(sea),
+        Ferries(lineCollection(rings), rings, lineCollection(sea),
             collection(from), collection(to), box(rings + sea + listOf(portPts)), list.length())
     }.getOrNull()
 
@@ -169,6 +169,36 @@ internal object DashMapGeo {
         rings.forEach { coords.put(ring(it)) }
         return JSONObject().put("type", "Feature").put("properties", JSONObject())
             .put("geometry", JSONObject().put("type", "Polygon").put("coordinates", coords)).toString()
+    }
+
+    /**
+     * The shade with the range's [rings] and the ferries' [more] cut out, as IDmate's canvas cuts every reachable area out
+     * of its tint. MapLibre cannot cut holes that overlap, so a ferry ring touching one already cut stays out (where it
+     * overlaps it is cut anyway; the rest of it then stays dimmed - rare, the areas lie beyond the sea).
+     */
+    fun shadeOf(rings: List<List<DoubleArray>>, more: List<List<DoubleArray>>): String {
+        val cut = ArrayList(rings)
+        for (r in more) if (r.size > 3 && cut.none { overlap(it, r) }) cut += r
+        return shadeOf(cut)
+    }
+
+    /** Do two rings overlap: their boxes, then points of each (up to [SAMPLES]) inside the other. */
+    fun overlap(a: List<DoubleArray>, b: List<DoubleArray>): Boolean {
+        val ba = box(listOf(a)) ?: return false; val bb = box(listOf(b)) ?: return false
+        if (ba[2] < bb[0] || bb[2] < ba[0] || ba[3] < bb[1] || bb[3] < ba[1]) return false
+        fun some(r: List<DoubleArray>) = r.filterIndexed { i, _ -> i % maxOf(1, r.size / SAMPLES) == 0 }
+        return some(a).any { inside(it, b) } || some(b).any { inside(it, a) }
+    }
+    private const val SAMPLES = 200
+
+    private fun inside(p: DoubleArray, ring: List<DoubleArray>): Boolean {
+        var c = false; var j = ring.size - 1
+        for (i in ring.indices) {
+            val a = ring[i]; val b = ring[j]
+            if ((a[1] > p[1]) != (b[1] > p[1]) && p[0] < a[0] + (p[1] - a[1]) * (b[0] - a[0]) / (b[1] - a[1])) c = !c
+            j = i
+        }
+        return c
     }
 
     /**
@@ -239,7 +269,7 @@ internal object DashMapGeo {
     /** The circle's dimmed land out of reach, as with the road area. */
     fun circleShade(lat: Double, lon: Double, km: Double): String = if (km <= 0) EMPTY else shadeOf(listOf(circleRing(lat, lon, km)))
 
-    private fun circleRing(lat: Double, lon: Double, km: Double): List<DoubleArray> {
+    fun circleRing(lat: Double, lon: Double, km: Double): List<DoubleArray> {
         val dLat = km / 111.2; val dLon = km / (111.2 * Math.cos(Math.toRadians(lat)))
         return (0..96).map { i -> val a = 2 * Math.PI * i / 96; doubleArrayOf(lon + dLon * Math.cos(a), lat + dLat * Math.sin(a)) }
     }

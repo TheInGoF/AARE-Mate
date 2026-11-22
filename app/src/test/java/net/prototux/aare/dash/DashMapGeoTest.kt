@@ -105,7 +105,7 @@ class DashMapGeoTest {
         val f = DashMapGeo.ferries(answer)!!
         assertEquals(1, f.count)
         assertEquals("the union only, not each area again", 1, JSONObject(f.outline).getJSONArray("features").length())
-        assertEquals(1, JSONObject(f.fill).getJSONArray("features").length())
+        assertEquals("the area behind the ferry, for the shade", 1, f.rings.size)
         val sea = JSONObject(f.sea).getJSONArray("features").getJSONObject(0).getJSONObject("geometry").getJSONArray("coordinates")
         assertEquals("[lat, lon] turned into [lon, lat]", 11.22, sea.getJSONArray(0).getDouble(0), 1e-9)
         val to = JSONObject(f.portsTo).getJSONArray("features").getJSONObject(0).getJSONObject("geometry").getJSONArray("coordinates")
@@ -113,6 +113,17 @@ class DashMapGeoTest {
         assertTrue(f.box!![0] <= 11.1 && f.box!![2] >= 11.7)
         assertNull("still searching", DashMapGeo.ferries(JSONObject().put("status", "running")))
         assertEquals("none found", 0, DashMapGeo.ferries(JSONObject().put("status", "ok").put("ferries", JSONArray()))!!.count)
+    }
+
+    /** IDmate's shade.setFerry: the ferries' areas cut out of the same shade, unless one touches a ring already cut. */
+    @Test fun ferryAreasAreCutOutOfTheShade() {
+        val range = DashMapGeo.smoothRing(square(10.7, 53.9, 0.5), 2)
+        val far = DashMapGeo.smoothRing(square(13.1, 55.6, 0.4), 2)
+        val touching = DashMapGeo.smoothRing(square(11.0, 53.9, 0.5), 2)
+        fun holes(s: String) = JSONObject(s).getJSONObject("geometry").getJSONArray("coordinates").length()
+        assertEquals("the world, the range and the area beyond the sea", 3, holes(DashMapGeo.shadeOf(listOf(range), listOf(far))))
+        assertEquals("overlapping holes break the fill: left out", 2, holes(DashMapGeo.shadeOf(listOf(range), listOf(touching))))
+        assertEquals("ferries without a range area still cut", 2, holes(DashMapGeo.shadeOf(emptyList(), listOf(far))))
     }
 
     /** I-070: a river IDmate's outline cuts (the Elbe at Hamburg) comes as an open line - drawn as IDmate draws it, not shaded. */
