@@ -123,6 +123,8 @@ private val MAP_BLUE = Color(0xFF0D5FD6)
  * buttons angezeigt wird und die buttons nicht teile des umkreises auch bei fähren verdeckt").
  */
 private val FIT_PADDING = androidx.compose.foundation.layout.PaddingValues(start = 12.dp + 44.dp + 20.dp, top = 32.dp, end = 32.dp, bottom = 32.dp)
+/** Following the car: it sits in the middle of the free map right of the buttons, not under their side. */
+private val FOLLOW_PADDING = androidx.compose.foundation.layout.PaddingValues(start = 12.dp + 44.dp + 20.dp)
 private val CAR_TEAL = Color(0xFF00B3A4)
 /** IDmate's rain blues: lighter alone, deeper and more opaque beside the wind arrows (rainStyle). */
 private val RAIN_COLS = listOf(Color(0xFF9ECAE1), Color(0xFF4292C6), Color(0xFF08519C))
@@ -223,10 +225,10 @@ private fun DashMap(go: (String) -> Unit) {
         val c = car ?: return
         followZoom = zoom
         follow = true
-        scope.launch { runCatching { camera.animateTo(CameraPosition(target = c, zoom = zoom), 900.milliseconds) } }
+        scope.launch { runCatching { camera.animateTo(CameraPosition(target = c, zoom = zoom, padding = FOLLOW_PADDING), 900.milliseconds) } }
     }
     fun zoomBy(d: Int) {
-        if (follow) { followZoom = (followZoom + d).coerceIn(3.0, 18.0); car?.let { c -> scope.launch { runCatching { camera.animateTo(CameraPosition(target = c, zoom = followZoom), 300.milliseconds) } } } }
+        if (follow) { followZoom = (followZoom + d).coerceIn(3.0, 18.0); car?.let { c -> scope.launch { runCatching { camera.animateTo(CameraPosition(target = c, zoom = followZoom, padding = FOLLOW_PADDING), 300.milliseconds) } } } }
         else scope.launch { runCatching { camera.animateTo(camera.position.copy(zoom = (camera.position.zoom + d).coerceIn(3.0, 18.0)), 300.milliseconds) } }
     }
     // after the first time: straight to the car, following it
@@ -257,7 +259,7 @@ private fun DashMap(go: (String) -> Unit) {
         }
         if (ferryNote != null) { delay(6_000); ferryNote = null; DashMapCache.ferriesOff() }
     }
-    LaunchedEffect(car) { if (follow && introDone) car?.let { c -> runCatching { camera.animateTo(CameraPosition(target = c, zoom = followZoom), 900.milliseconds) } } }
+    LaunchedEffect(car) { if (follow && introDone) car?.let { c -> runCatching { camera.animateTo(CameraPosition(target = c, zoom = followZoom, padding = FOLLOW_PADDING), 900.milliseconds) } } }
 
     var picked by remember { mutableStateOf<Position?>(null) }
     val windImages = remember(density) { List(4) { arrow(it, density) } }
