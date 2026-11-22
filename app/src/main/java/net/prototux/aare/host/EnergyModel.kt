@@ -188,62 +188,141 @@ internal object EnergyModel {
     }
 
     /**
-     * The model as the bytes of sensor 23. The charging times (section 8) are computed from the charging curve;
-     * [knownChargeTimes] is that section of another car, taken as it is in their place (a file on the device).
+     * The model as the bytes of sensor 23, laid out as Google's vehicle energy model v1.2 (VehicleEnergyModel:
+     * 1 vehicle info, 2 road load force, 3 drivetrain losses, 4 max regeneration, 5 battery losses, 7 auxiliary
+     * drain by temperature, 8 charging curves). Until 22.11.2026 sections 1.2, 2, 3, 4 and 5 were filled with
+     * other meanings (a reserve, Wh/km and two numbers of a Ford sample, power by speed): Google's server then
+     * took about twice the drag and extra losses and planned too many, too long stops (System I-079).
+     *
+     * The road load is fitted so that Google's sum - wheels, drivetrain and battery losses, auxiliary drain -
+     * meets [powerW] at each speed (IDmate's curve when there is one, else the physics). [knownChargeTimes] is
+     * the charging curves section of another car, taken as it is in place of the computed one (a file).
      */
     fun build(car: Car, knownChargeTimes: ByteArray? = null): ByteArray {
         val levelWh = (car.capacityWh * car.socPercent / 100.0).roundToInt().coerceIn(0, car.capacityWh)
+        val road = roadLoad(car)
         return Pb().apply {
-            msg(1) {                                            // battery
-                msg(2) { int(1, (car.capacityWh * 0.03).roundToInt()) }    // kept in reserve
-                msg(3) { int(1, levelWh) }                      // level now
+            msg(1) {                                            // vehicle info
+                msg(2) { int(1, car.massKg.roundToInt()) }      // gross mass in kg
+                msg(3) { int(1, levelWh) }                      // battery level now
                 msg(4) { int(1, car.capacityWh) }               // usable capacity
+                int(5, 2)                                       // HVAC on
                 float(6, AIR_DENSITY.toFloat())
                 float(7, car.outsideCelsius)
+                int(9, if (car.gtx) 250_000 else 210_000)       // peak motor power
+                int(10, if (car.capacityWh > 80_000) 200_000 else 175_000)  // maximum charging rate
+                int(11, 1)                                      // heat pump
             }
-            msg(2) {                                            // consumption in short
-                msg(1) { float(1, (powerW(MIX_KMH, car) / MIX_KMH).toFloat()) }   // Wh/km
-                msg(2) { float(1, 2.8f) }
-                msg(3) { float(1, 0.75f) }
+            msg(2) {                                            // road load force in N: c0 + c1 v + c2 v^2 (v in m/s)
+                msg(1) { float(1, road[0].toFloat()) }
+                msg(2) { float(1, road[1].toFloat()) }
+                msg(3) { float(1, road[2].toFloat()) }
             }
-            msg(3) {                                            // power in W by speed in m/h
-                msg(7) {
-                    for (kmh in 0..200 step 4) msg(2) {
-                        if (kmh > 0) sint(1, kmh * 1000)
-                        msg(2) { int(1, powerW(kmh.toDouble(), car).roundToInt()) }
-                    }
+            msg(3) {                                            // drivetrain losses by speed and power at the wheels
+                for (kmh in LOSS_SPEEDS) msg(7) {
+                    float(1, (kmh / 3.6).toFloat())
+                    for (w in LOSS_POWERS) msg(2) { sint(1, w); msg(2) { int(1, drivetrainLossW(w.toDouble()).roundToInt()) } }
                 }
             }
-            msg(4) {                                            // charging curve: W by level in Wh, empty to full
-                for (percent in 0..100 step 5) msg(1) {
+            msg(4) {                                            // regeneration the battery takes, by level
+                for (percent in 0..100 step 10) msg(1) {
                     val wh = (car.capacityWh * percent / 100.0).roundToInt()
                     if (wh > 0) int(1, wh)
-                    int(2, dcCurveW(wh.toDouble(), car).roundToInt())
+                    int(2, (if (percent >= 95) 20_000 else if (percent >= 90) 60_000 else MAX_REGEN_W).toInt())
                 }
             }
-            msg(5) {                                            // getting up to speed: by speed in m/h
-                for (kmh in 5..150 step 5) msg(4) {
-                    val v = kmh / 3.6
-                    sint(1, kmh * 1000)
-                    msg(2) { int(1, (car.massKg / 1000.0 * v * v).roundToInt()) }
-                }
+            msg(5) {                                            // battery losses by power at the terminals
+                for (w in LOSS_POWERS) msg(4) { sint(1, w); msg(2) { int(1, batteryLossW(w.toDouble()).roundToInt()) } }
             }
-            // heating and cooling in W by outside temperature - nothing on top of IDmate's curve, which holds it
+            // auxiliary drain by outside temperature: the electronics, and heating and cooling unless IDmate's curve
+            // (which holds the heating of now) is in the road load
             for ((t, w) in CLIMATE) {
-                msg(7) { float(1, t); msg(2) {}; msg(3) {}; msg(4) { int(1, if (car.curve != null) 0 else w) } }
+                val total = (BASE_W + if (car.curve != null) 0.0 else w.toDouble()).roundToInt()
+                msg(7) { float(1, t); msg(2) { int(1, if (car.curve != null) 0 else w) }; msg(4) { int(1, total) } }
             }
-            // How long charging takes (section 8.1), a table for each charger power. Google's server computes
-            // with tables of our own as long as they are whole and in its reading; a known car's tables changed by
-            // a second made it plan stops of "10 min" (that file is taken as it is or not at all).
+            // charging curves (8.1): for each charger power, ascending, points of (energy to full, time to full),
+            // ascending in energy - the order the v1.2 description asks for
             if (knownChargeTimes != null) bytes(knownChargeTimes) else msg(8) {
-                for (w in CHARGERS) msg(1) {
+                for (w in CHARGERS.sorted()) msg(1) {
                     int(1, w)
-                    for ((wh, seconds) in chargeTimes(w, car)) msg(2) { int(1, wh); int(2, seconds) }
+                    for ((wh, seconds) in chargeTimes(w, car).sortedBy { it.first }) msg(2) { int(1, wh); int(2, seconds) }
                 }
             }
-            msg(9) { msg(2) {} }
         }.bytes()
     }
+
+    /** Power at the battery for driving at [kmh] as Google sums it up from [build]'s sections, in W (for tests). */
+    fun googlePowerW(kmh: Double, car: Car): Double {
+        val v = kmh / 3.6
+        val r = roadLoad(car)
+        val wheels = maxOf(0.0, (r[0] + r[1] * v + r[2] * v * v) * v)
+        val terminals = wheels + drivetrainLossW(wheels)
+        val aux = BASE_W + if (car.curve != null) 0.0 else climateW(car.outsideCelsius)
+        return terminals + batteryLossW(terminals) + aux
+    }
+
+    /**
+     * Road load coefficients (N, N per m/s, N per (m/s)^2) whose power at the wheels plus the losses meets
+     * [powerW] from 20 to 160 km/h: least squares on the force, falling back to no linear part if a
+     * coefficient would come out negative.
+     */
+    internal fun roadLoad(car: Car): DoubleArray {
+        val aux = BASE_W                                            // [powerW] holds the electronics
+        val pts = (20..160 step 5).map { kmh ->
+            val v = kmh / 3.6
+            val terminals = wheelsFromBattery(powerW(kmh.toDouble(), car) - aux)
+            v to maxOf(0.0, terminals) / v
+        }
+        fun fit(withLinear: Boolean): DoubleArray {
+            // normal equations for F = c0 + c1 v + c2 v^2 (or without c1)
+            val cols = if (withLinear) 3 else 2
+            val ata = Array(cols) { DoubleArray(cols) }
+            val atb = DoubleArray(cols)
+            for ((v, f) in pts) {
+                val row = if (withLinear) doubleArrayOf(1.0, v, v * v) else doubleArrayOf(1.0, v * v)
+                for (i in 0 until cols) { atb[i] += row[i] * f; for (j in 0 until cols) ata[i][j] += row[i] * row[j] }
+            }
+            val x = solve(ata, atb)
+            return if (withLinear) x else doubleArrayOf(x[0], 0.0, x[1])
+        }
+        val full = fit(true)
+        return if (full.all { it >= 0 }) full else fit(false).map { maxOf(0.0, it) }.toDoubleArray()
+    }
+
+    /** Power at the wheels for [batteryW] at the terminals of the battery... inverted from the loss models. */
+    private fun wheelsFromBattery(driveW: Double): Double {
+        // driveW = wheels + drivetrainLoss(wheels) + batteryLoss(terminals); solved by a few fixed-point steps
+        var wheels = driveW
+        repeat(20) {
+            val terminals = wheels + drivetrainLossW(wheels)
+            wheels -= (terminals + batteryLossW(terminals) - driveW) * 0.8
+        }
+        return wheels
+    }
+
+    private fun solve(a: Array<DoubleArray>, b: DoubleArray): DoubleArray {
+        val n = b.size
+        val m = Array(n) { i -> a[i].copyOf() + b[i] }
+        for (c in 0 until n) {
+            val p = (c until n).maxByOrNull { kotlin.math.abs(m[it][c]) }!!
+            val t = m[c]; m[c] = m[p]; m[p] = t
+            for (r in 0 until n) if (r != c) {
+                val f = m[r][c] / m[c][c]
+                for (k in c..n) m[r][k] -= f * m[c][k]
+            }
+        }
+        return DoubleArray(n) { m[it][n] / m[it][it] }
+    }
+
+    /** Loss from the battery terminals to the wheels at [wheelsW] (negative = regenerating): motor and inverter. */
+    internal fun drivetrainLossW(wheelsW: Double): Double = 250.0 + 0.07 * kotlin.math.abs(wheelsW)
+
+    /** Loss inside the battery at [terminalsW]: internal resistance, about 2.5 % at 100 kW. */
+    internal fun batteryLossW(terminalsW: Double): Double = 2.5e-7 * terminalsW * terminalsW
+
+    private val LOSS_SPEEDS = listOf(0, 30, 60, 90, 120, 150, 180)
+    private val LOSS_POWERS = listOf(-100_000, -50_000, -20_000, 0, 10_000, 20_000, 40_000, 60_000, 80_000, 120_000, 160_000, 200_000)
+    private const val MAX_REGEN_W = 100_000.0
 
     /**
      * A model from a file instead (`files/ev_model.bin`: one a real car sent, the whole sensor message or the
