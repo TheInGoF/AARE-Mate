@@ -182,7 +182,10 @@ private fun DashMap(go: (String) -> Unit) {
     // the base map: the region package around the car (the device's own map), the server's only without one
     val pack = remember(car?.let { (it.longitude * 10).toInt() to (it.latitude * 10).toInt() }) {
         val p = car ?: NOWHERE
-        RegionPacks.mapFor(context, p.longitude, p.latitude)
+        // System I-087 (22.11.2026: "Die Karte wird nur teilweise geladen, aber bleibt hauptsächlich grau"): only a package
+        // that holds the car's place - the largest one was taken when none did (Sachsen for a car in Brandenburg), and the
+        // map stayed grey outside the packages; then the map server, as Mate Navi does with the net
+        RegionPacks.mapFor(context, p.longitude, p.latitude)?.takeIf { car != null && it.covers(p.longitude, p.latitude) }
     }
     LaunchedEffect(pack?.id) { net.prototux.aare.DiagLog.add("dashboard map: base map " + (pack?.let { "package ${it.id} on the device" } ?: "from the map server (no package here)")) }
     val style = remember(night, pack?.file) { BaseStyle.Json(mapStyle(context, night, pack)) }
