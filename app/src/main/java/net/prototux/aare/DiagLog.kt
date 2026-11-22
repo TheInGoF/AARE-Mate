@@ -138,6 +138,7 @@ object DiagLog {
         text.startsWith("memory") || text.startsWith("last end of Mate") -> "MEM"
         text.startsWith("power") -> "POWER"
         text.startsWith("dashboard") -> "DASH"
+        text.startsWith("maps") -> "MAPS"
         text.startsWith("car bluetooth") || text.startsWith("car call") || text.startsWith("call") || text.startsWith("ringtone") -> "PHONE"
         text.startsWith("wireless") || text.startsWith("car Wi-Fi") || text.startsWith("car internet") || text.startsWith("internet") -> "NET"
         text.startsWith("charging") || text.startsWith("charge ") -> "CHARGE"

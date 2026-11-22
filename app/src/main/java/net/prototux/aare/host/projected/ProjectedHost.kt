@@ -385,7 +385,7 @@ class ProjectedHost(
             true
         } catch (t: Throwable) {
             Log.e(TAG, "$name failed", t)
-            error("$name failed: ${t.message ?: t.javaClass.simpleName}")
+            error("$name failed: ${t.javaClass.simpleName}${t.message?.let { ": $it" }.orEmpty()}")
             false
         } finally {
             data.recycle()
@@ -395,17 +395,27 @@ class ProjectedHost(
 
     private fun status(text: String) {
         Log.i(TAG, text)
+        // the steps up to the first picture into Mate's own log (System I-077: Maps stayed black and the exported log
+        // said nothing, everything went to logcat only); taps, keys and day/night stay out, they come too often
+        if (QUIET.none { text.startsWith(it) }) net.prototux.aare.DiagLog.add("maps: $text")
         listener.onStatus(text)
     }
 
     private fun error(message: String) {
         Log.w(TAG, message)
+        net.prototux.aare.DiagLog.error("maps: $message")
+        // Maps checks the host inside its own process: only a host the system lets through (a ROM's car host list or
+        // the Xposed module, both by package name) passes - since 2.1.1 Mate is app.idmate.mate, no longer net.prototux.aare
+        if ("CAPTURE_VIDEO_OUTPUT" in message || "SecurityException" in message || "ermission" in message)
+            net.prototux.aare.DiagLog.error("maps: refused Mate (${context.packageName}) as its host - the system lets another package through, not this one")
         listener.onError(message)
     }
 
     companion object {
         private const val TAG = "ProjectedHost"
         private const val FOCUS_SECOND_FLAG = 0
+        /** Steps that come with every tap, key or change of light: logcat only. */
+        private val QUIET = listOf("onMotionEvent", "onKeyEvent", "onConfigurationChanged", "onInputFocusChange", "car connected")
 
         /** The host whose app is on the car screen, and a task waiting for the app to come up. */
         @Volatile var live: ProjectedHost? = null
