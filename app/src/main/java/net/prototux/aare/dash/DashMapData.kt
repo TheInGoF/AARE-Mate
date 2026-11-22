@@ -50,7 +50,7 @@ internal class DashMapData(context: Context) {
             http.newCall(Request.Builder().url(link.url.trimEnd('/') + "/display").header("Authorization", "Bearer " + link.token).build()).execute().use { r ->
                 // the page's own flags: whether IDmate can search long ferries (its map button "Fähren")
                 ferriesOffered = r.isSuccessful && mapBoot(runCatching { r.body.string() }.getOrDefault(""))?.optBoolean("ferries") == true
-                Log.i(TAG, "dashboard map: display session HTTP ${r.code}, landed on ${r.request.url.encodedPath}, cookies ${jar.loadForRequest(r.request.url).size}, ferries ${if (ferriesOffered) "offered" else "not offered"}")
+                net.prototux.aare.DiagLog.add("dashboard map: display session HTTP ${r.code}, landed on ${r.request.url.encodedPath}, cookies ${jar.loadForRequest(r.request.url).size}, ferries ${if (ferriesOffered) "offered" else "not offered"}")
                 r.isSuccessful.also { ok -> if (ok) opened = link.url + link.token.hashCode() else Log.w(TAG, "dashboard map: display session refused (HTTP ${r.code})") }
             }
         }.onFailure { Log.w(TAG, "dashboard map: no display session: ${it.javaClass.simpleName}") }.getOrDefault(false)
@@ -65,14 +65,14 @@ internal class DashMapData(context: Context) {
             val text = runCatching {
                 http.newCall(Request.Builder().url(base + path).header("Accept", "application/json").build()).execute().use { r ->
                     val body = r.body.string()
-                    if (!r.isSuccessful || !body.trimStart().startsWith("{") && !body.trimStart().startsWith("[")) Log.i(TAG, "dashboard map: $path HTTP ${r.code} at ${r.request.url.encodedPath}: ${body.take(60).replace(Regex("\\s+"), " ")}")
+                    if (!r.isSuccessful || !body.trimStart().startsWith("{") && !body.trimStart().startsWith("[")) net.prototux.aare.DiagLog.add("dashboard map: $path HTTP ${r.code} at ${r.request.url.encodedPath}: ${body.take(60).replace(Regex("\\s+"), " ")}")
                     // an ended session lands on the login page (HTML) or gets 401/403
                     if (r.code == 401 || r.code == 403 || !body.trimStart().let { it.startsWith("{") || it.startsWith("[") }) null
                     else if (r.isSuccessful) body else null
                 }
             }.getOrNull()
             if (text != null) return text
-            Log.i(TAG, "dashboard map: $path not answered" + if (attempt == 0) ", a new session" else "")
+            net.prototux.aare.DiagLog.add("dashboard map: $path not answered" + if (attempt == 0) ", a new session" else "")
             if (attempt == 0) opened = null
         }
         return null

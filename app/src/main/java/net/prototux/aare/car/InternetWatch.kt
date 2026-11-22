@@ -16,7 +16,7 @@ import net.prototux.aare.R
  * to the kept log, to read after a drive which network carried what.
  */
 class InternetWatch(private val context: Context, private val notice: (title: String, text: String) -> Unit) {
-    private enum class State { ONLINE, PORTAL, WIFI_NO_INTERNET, OFFLINE }
+    private enum class State { ONLINE, PORTAL, WIFI_NO_INTERNET, WIFI_STUCK, OFFLINE }
 
     private val cm = context.getSystemService(ConnectivityManager::class.java)
     private val main = Handler(Looper.getMainLooper())
@@ -32,6 +32,7 @@ class InternetWatch(private val context: Context, private val notice: (title: St
                 caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"
                 else -> "other"
             }
+            lastKind = kind; lastNetwork = network
             change(when {
                 caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL) -> State.PORTAL
                 caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) -> State.ONLINE
@@ -42,13 +43,43 @@ class InternetWatch(private val context: Context, private val notice: (title: St
         override fun onLost(network: Network) = main.post { change(State.OFFLINE, "none") }.let {}
     }
 
+    @Volatile private var lastKind = "none"
+    @Volatile private var lastNetwork: Network? = null
+    @Volatile private var running = false
+
+    /**
+     * Android's word is not enough (22.11.2026, Shizuku: "Dadurch war er im Hintergrund noch mit dem Fahrzeug-WLAN
+     * verbunden ... Und dadurch hat er YouTube nicht geladen"): the car's Wi-Fi counted as one with internet while nothing
+     * came through it. While the internet goes over Wi-Fi, a small request every minute; two failed in a row and the
+     * driver is told to take the tablet off that Wi-Fi (Shizuku, once started, stays).
+     */
+    private val probe = Thread {
+        var failed = 0
+        while (running) {
+            runCatching { Thread.sleep(PROBE_MS) }
+            if (!running) break
+            val n = lastNetwork
+            if ((seen != State.ONLINE && seen != State.WIFI_STUCK) || lastKind != "wifi" || n == null) { failed = 0; continue }
+            val ok = runCatching {
+                val c = n.openConnection(java.net.URL("https://connectivitycheck.gstatic.com/generate_204")) as java.net.HttpURLConnection
+                c.connectTimeout = 6_000; c.readTimeout = 6_000; c.instanceFollowRedirects = false
+                try { c.responseCode == 204 } finally { c.disconnect() }
+            }.getOrDefault(false)
+            failed = if (ok) 0 else failed + 1
+            main.post { if (ok && seen == State.WIFI_STUCK) change(State.ONLINE, "wifi") else if (failed >= 2) change(State.WIFI_STUCK, "wifi") }
+        }
+    }.apply { isDaemon = true; name = "internet-probe" }
+
     fun start() {
+        running = true
+        runCatching { probe.start() }
         runCatching { cm.registerDefaultNetworkCallback(callback) }
         // No network at all calls nothing back: say so once the callbacks had their time.
         main.postDelayed({ if (seen == null) change(State.OFFLINE, "none") }, 3_000)
     }
 
     fun stop() {
+        running = false
         runCatching { cm.unregisterNetworkCallback(callback) }
         main.removeCallbacksAndMessages(null)
     }
@@ -72,6 +103,7 @@ class InternetWatch(private val context: Context, private val notice: (title: St
             State.ONLINE -> if (was == State.ONLINE) return else R.string.internet_notice_back
             State.PORTAL -> R.string.internet_notice_portal
             State.WIFI_NO_INTERNET -> R.string.internet_notice_wifi
+            State.WIFI_STUCK -> R.string.internet_notice_wifi_stuck
             State.OFFLINE -> R.string.internet_notice_offline
         }
         notice(context.getString(R.string.internet_notice_title), context.getString(text))
@@ -79,5 +111,6 @@ class InternetWatch(private val context: Context, private val notice: (title: St
 
     private companion object {
         const val SETTLE_MS = 20_000L
+        const val PROBE_MS = 60_000L
     }
 }

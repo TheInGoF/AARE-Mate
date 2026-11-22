@@ -170,6 +170,8 @@ private fun DashMap(go: (String) -> Unit) {
             val lat = DashData.number(context, "lat", Long.MAX_VALUE); val lon = DashData.number(context, "lon", Long.MAX_VALUE)
             if (lat != null && lon != null && (lat != 0.0 || lon != 0.0)) {
                 val p = Position(longitude = lon, latitude = lat)
+                // System I-087: the exported log said nothing of the dashboard's map - where its car comes from, once
+                if (car == null) net.prototux.aare.DiagLog.add("dashboard map: car's place known (from " + (DashData.sourceOf(context, "lat") ?: "?") + ")")
                 if (car?.let { it.latitude != lat || it.longitude != lon } != false) car = p
             }
             heading = DashData.number(context, "heading", 10 * 60_000L)
@@ -182,7 +184,7 @@ private fun DashMap(go: (String) -> Unit) {
         val p = car ?: NOWHERE
         RegionPacks.mapFor(context, p.longitude, p.latitude)
     }
-    LaunchedEffect(pack?.id) { Log.i(TAG, "dashboard map: base map " + (pack?.let { "package ${it.id} on the device" } ?: "from the map server (no package here)")) }
+    LaunchedEffect(pack?.id) { net.prototux.aare.DiagLog.add("dashboard map: base map " + (pack?.let { "package ${it.id} on the device" } ?: "from the map server (no package here)")) }
     val style = remember(night, pack?.file) { BaseStyle.Json(mapStyle(context, night, pack)) }
 
     // IDmate's data from the store kept while the car is connected (DashMapCache): the last ones at once, a round now

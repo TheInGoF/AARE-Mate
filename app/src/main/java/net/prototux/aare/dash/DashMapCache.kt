@@ -73,14 +73,14 @@ internal object DashMapCache {
         ferryJob = scope.launch {
             val d = client(app)
             val started = d.startFerries()
-            Log.i(TAG, "dashboard map: ferry search $started")
+            net.prototux.aare.DiagLog.add("dashboard map: ferry search $started")
             val end = when (started) {
                 "running", "ok", FERRY_FORBIDDEN -> {
                     var answer = d.ferries()
                     val until = System.currentTimeMillis() + 3 * 60_000L
                     while (isActive && answer?.optString("status") == "running" && System.currentTimeMillis() < until) { delay(3_000); answer = d.ferries() }
                     val f = DashMapGeo.ferries(answer)
-                    Log.i(TAG, "dashboard map: ferries " + (f?.let { "${it.count} long crossings" } ?: "not answered (${answer?.optString("status")})"))
+                    net.prototux.aare.DiagLog.add("dashboard map: ferries " + (f?.let { "${it.count} long crossings" } ?: "not answered (${answer?.optString("status")})"))
                     when {
                         f != null && f.count > 0 -> { _ferries.value = f; FERRY_SHOWN }
                         f != null -> FERRY_NONE
@@ -154,7 +154,7 @@ internal object DashMapCache {
             if (Math.abs(f - 1) < 0.01 || cLat == null || cLon == null) null
             else { ring -> DashMapGeo.stretch(ring, doubleArrayOf(cLon, cLat), f) }
         stretchUsed = if (scale == null) 1.0 else f
-        if (scale != null) Log.i(TAG, "dashboard map: range area stretched to the car's range (x%.3f)".format(java.util.Locale.ROOT, f))
+        if (scale != null) net.prototux.aare.DiagLog.add("dashboard map: range area stretched to the car's range (x%.3f)".format(java.util.Locale.ROOT, f))
         val wind = windRaw?.let { w -> RangeWind.mean((0 until w.length()).mapNotNull { i -> w.optJSONObject(i)?.let { p ->
             val kmh = p.optDouble("kmh", Double.NaN); val dir = p.optDouble("dir", Double.NaN)
             if (kmh.isNaN() || dir.isNaN()) null else kmh to dir } }) }
@@ -173,8 +173,8 @@ internal object DashMapCache {
             RangeWind.deform(ring, c, wind, car)
         })
         // only when Mate did put it in: IDmate's outline (kind "line", nearly always) has the wind already
-        if (made != null && center == null) Log.i(TAG, "dashboard map: range as IDmate drew it (its outline has the wind in it)")
-        if (made != null && center != null) Log.i(TAG, "dashboard map: range with the wind from %.0f° at %.0f km/h put in by Mate (%.2f..%.2f of the range)".format(
+        if (made != null && center == null) net.prototux.aare.DiagLog.add("dashboard map: range as IDmate drew it (its outline has the wind in it)")
+        if (made != null && center != null) net.prototux.aare.DiagLog.add("dashboard map: range with the wind from %.0f° at %.0f km/h put in by Mate (%.2f..%.2f of the range)".format(
             java.util.Locale.ROOT, wind.fromDeg, wind.ms * 3.6, RangeWind.factor(wind.fromDeg, wind, car), RangeWind.factor((wind.fromDeg + 180) % 360, wind, car)))
         return made
     }
@@ -194,7 +194,7 @@ internal object DashMapCache {
                     val raw = got.optJSONObject("geojson")
                     areaKm = got.optJSONArray("kms")?.let { k -> (0 until k.length()).maxOfOrNull { k.optDouble(it, 0.0) } }?.takeIf { it > 0 }
                     val made = raw?.let { makeArea(context, it) }
-                    Log.i(TAG, "dashboard map: range area " + (if (made != null) "taken (${got.optJSONArray("kms")} km)" else "not readable"))
+                    net.prototux.aare.DiagLog.add("dashboard map: range area " + (if (made != null) "taken (${got.optJSONArray("kms")} km)" else "not readable"))
                     if (made != null) { _area.value = made; areaTs = ts; areaRaw = raw }
                 }
             }

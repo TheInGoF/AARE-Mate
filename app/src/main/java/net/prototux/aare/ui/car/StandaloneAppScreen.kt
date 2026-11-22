@@ -92,14 +92,14 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
                                 // connect() blocks (binds Shizuku / spawns su), so do it off the main thread.
                                 Thread {
                                     if (launcher.connect()) {
-                                        val id = launcher.start(surface, w, h, runtime.appDensityDpi, packageName)
+                                        val id = launcher.start(surface, w, h, cinemaDpi(runtime.appDensityDpi), packageName)
                                         started = id >= 0
                                         net.prototux.aare.DiagLog.add("cinema: $packageName - " + (if (id >= 0) launcher.report() else "not started: " + launcher.report().ifEmpty { "no display" }), area = "CAR")
                                     }
                                 }.apply { isDaemon = true }.start()
                             }
                             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
-                                launcher.resize(Surface(st), w, h, runtime.appDensityDpi)
+                                launcher.resize(Surface(st), w, h, cinemaDpi(runtime.appDensityDpi))
                             }
                             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean = true
                             override fun onSurfaceTextureUpdated(st: SurfaceTexture) = Unit
@@ -158,3 +158,11 @@ private fun CinemaKey(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
         androidx.compose.material3.Icon(icon, label, tint = Color.White, modifier = Modifier.size(32.dp))
     }
 }
+
+
+/**
+ * The cinema's apps larger than the car's own (22.11.2026: "dass die Bedienung sehr schwierig ist in dem Kinomodus … ob
+ * wir die Auflösung dafür ändern müssen"): at the car's 183 dpi YouTube saw a 1678 dp wide tablet and drew everything
+ * small; 1.4 times the density gives it about 1200 dp - its phone-and-tablet layout with larger controls.
+ */
+private fun cinemaDpi(appDpi: Int): Int = (appDpi * 1.4f).toInt()
