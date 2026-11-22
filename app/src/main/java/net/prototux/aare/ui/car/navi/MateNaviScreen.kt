@@ -1635,7 +1635,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         // the trip's figures give way to a panel: a preview shows its own, and the menu is what the tile opens
         // the licence asks for OpenStreetMap to be named (ODbL), not the library: small, at the free bottom right - at
         // the top right while the title strip takes the bottom edge
-        Text(OSM_CREDIT, color = Mate.textFaint, style = MaterialTheme.typography.labelSmall,
+        // TomTom's traffic named as its terms ask, while it is drawn (22.11.2026: "die copyrights erwähnungen … fehlen")
+        Text(if (trafficShown) "$OSM_CREDIT · $TOMTOM_CREDIT" else OSM_CREDIT, color = Mate.textFaint, style = MaterialTheme.typography.labelSmall,
             modifier = if (strip) Modifier.align(Alignment.TopEnd).padding(end = 16.dp, top = 12.dp)
                 else Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 12.dp))
         // a quarter of the screen: the route strip over the map
@@ -1762,6 +1763,7 @@ private fun mapFps() = if (naviFpsSetting == "video") net.prototux.aare.car.proj
 private var naviFpsSetting = "30"
 
 internal const val OSM_CREDIT = "© OpenStreetMap"
+internal const val TOMTOM_CREDIT = "Verkehr © TomTom"
 
 /** The tiles of the test server; later the tile server's address from the settings. */
 

@@ -116,6 +116,13 @@ object DashMapView {
 
 private const val TAG = "IDmateStage"
 private val MAP_BLUE = Color(0xFF0D5FD6)
+
+/**
+ * The margin when the range (and the ferries) are fitted into view: on the left past the column of buttons - 12 dp from
+ * the edge, 44 dp wide - so they never cover the outline (22.11.2026: "achte drauf das der umkreis im dashboard neben den
+ * buttons angezeigt wird und die buttons nicht teile des umkreises auch bei fähren verdeckt").
+ */
+private val FIT_PADDING = androidx.compose.foundation.layout.PaddingValues(start = 12.dp + 44.dp + 20.dp, top = 32.dp, end = 32.dp, bottom = 32.dp)
 private val CAR_TEAL = Color(0xFF00B3A4)
 /** IDmate's rain blues: lighter alone, deeper and more opaque beside the wind arrows (rainStyle). */
 private val RAIN_COLS = listOf(Color(0xFF9ECAE1), Color(0xFF4292C6), Color(0xFF08519C))
@@ -132,6 +139,12 @@ private val FERRY_PURPLE = Color(0xFF7A3FD6)
 private val FERRY_PURPLE_NIGHT = Color(0xFFB392F0)
 private val WIND_COLS = listOf(0xFF57606A.toInt(), 0xFF0969DA.toInt(), 0xFFBC4C00.toInt(), 0xFFCF222E.toInt())
 private val WIND_SIZE = listOf(17, 21, 25, 25)
+/**
+ * IDmate's arrow sizes are pixels of its page; Mate's map draws at Mate's density (208 dpi against the screen's 160), so
+ * they came a third larger than on IDmate's page (22.11.2026: "überleg ob die wind pfeile nicht zu groß dargestellt
+ * werden"): drawn at 160/208 of it, as large as IDmate shows them.
+ */
+private const val WIND_SCALE = 160f / 208f
 private const val NEAR_ZOOM = 13.0
 /** The map draws the symbols at half the size the legend shows (its own pixel ratio): twice, as the legend's arrows. */
 private const val ICON_SCALE = 2f
@@ -204,7 +217,7 @@ private fun DashMap(go: (String) -> Unit) {
     fun overview() {
         val box = rangeBox() ?: return
         follow = false
-        scope.launch { runCatching { camera.animateTo(BoundingBox(box[0], box[1], box[2], box[3]), 0.0, 0.0, androidx.compose.foundation.layout.PaddingValues(32.dp)) } }
+        scope.launch { runCatching { camera.animateTo(BoundingBox(box[0], box[1], box[2], box[3]), 0.0, 0.0, FIT_PADDING) } }
     }
     fun toCar(zoom: Double = maxOf(camera.position.zoom, NEAR_ZOOM)) {
         val c = car ?: return
@@ -230,7 +243,7 @@ private fun DashMap(go: (String) -> Unit) {
         val r = rangeBox()
         val b = if (r == null) f else doubleArrayOf(minOf(r[0], f[0]), minOf(r[1], f[1]), maxOf(r[2], f[2]), maxOf(r[3], f[3]))
         follow = false
-        runCatching { camera.animateTo(BoundingBox(b[0], b[1], b[2], b[3]), 0.0, 0.0, androidx.compose.foundation.layout.PaddingValues(32.dp)) }
+        runCatching { camera.animateTo(BoundingBox(b[0], b[1], b[2], b[3]), 0.0, 0.0, FIT_PADDING) }
     }
     // nothing to show: a word why, then the button is off again (IDmate's toasts)
     var ferryNote by remember { mutableStateOf<Int?>(null) }
@@ -334,7 +347,7 @@ private fun DashMap(go: (String) -> Unit) {
         Column(Modifier.align(Alignment.TopEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
             if (windOn && windSeen) Legend(stringResource(R.string.dash_map_wind)) {
                 listOf("< 15 km/h", "15–30 km/h", "30–45 km/h", "> 45 km/h").forEachIndexed { k, label ->
-                    LegendRow({ androidx.compose.foundation.Image(windImages[k], null, Modifier.size(20.dp)) }, label)
+                    LegendRow({ androidx.compose.foundation.Image(windImages[k], null, Modifier.size(16.dp)) }, label)
                 }
             }
             if (rainOn) Legend(stringResource(R.string.dash_map_rain)) {
@@ -347,8 +360,18 @@ private fun DashMap(go: (String) -> Unit) {
             }
         }
         // the map data's credit, as on Mate Navi's map (ODbL)
-        Text(net.prototux.aare.ui.car.navi.OSM_CREDIT, color = Color(0xFF57606A), fontSize = 11.sp,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp))
+        // every source on the map named while it is shown, as their terms ask (22.11.2026: "die copyrights erwähnungen für
+        // wetterdienst etc fehlen"): OpenStreetMap (ODbL), the wind of Open-Meteo (CC BY 4.0), the radar of the Deutscher
+        // Wetterdienst (GeoNutzV: "Quelle: Deutscher Wetterdienst") and RainViewer
+        val credit = buildString {
+            append(net.prototux.aare.ui.car.navi.OSM_CREDIT)
+            if (windOn && windSeen) append(" · Wind: Open-Meteo")
+            if (rainOn) append(" · Radar: ").append(rainSrc ?: SOURCES.values.joinToString(", "))
+        }
+        // on a light plate (night: a dark one), readable over the busy map
+        Text(credit, color = if (night) Color(0xFFB1BAC4) else Color(0xFF57606A), fontSize = 11.sp,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 6.dp).clip(RoundedCornerShape(4.dp))
+                .background(if (night) Color(0xB30D1117) else Color(0xB3FFFFFF)).padding(horizontal = 5.dp, vertical = 1.dp))
         ferryNote?.let { id ->
             Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).clip(RoundedCornerShape(14.dp)).background(Mate.cardSolid)
                 .border(1.5.dp, Mate.floatEdge, RoundedCornerShape(14.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
@@ -419,7 +442,7 @@ private fun LegendRow(mark: @Composable () -> Unit, label: String) {
 
 /** IDmate's wind arrow (windIcon): pointing up, the class's colour with a white edge; turned by the layer. */
 private fun arrow(cls: Int, density: Float): ImageBitmap {
-    val sz = (WIND_SIZE[cls] * density).toInt().coerceAtLeast(8)
+    val sz = (WIND_SIZE[cls] * density * WIND_SCALE).toInt().coerceAtLeast(8)
     val b = Bitmap.createBitmap(sz, sz, Bitmap.Config.ARGB_8888)
     val c = Canvas(b); val s = sz / 22f
     c.scale(s, s); c.translate(1f, 1f)
