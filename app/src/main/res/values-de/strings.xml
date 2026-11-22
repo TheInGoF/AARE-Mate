@@ -958,6 +958,8 @@
     <string name="mate_navi_destination">Ziel</string>
     <string name="mate_navi_pick_go">Dahin navigieren</string>
     <string name="mate_navi_pick_stop">Als Zwischenziel</string>
+    <string name="mate_navi_pick_charge_here">Hier laden (fester Ladestopp)</string>
+    <string name="mate_navi_pick_charger_info">%1$d kW · %2$d Ladepunkte</string>
     <string name="mate_navi_home">Zuhause</string>
     <string name="mate_navi_resume">Fortsetzen</string>
     <string name="mate_navi_resume_forget">Fortsetzen verwerfen</string>

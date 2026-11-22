@@ -1146,7 +1146,18 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             // O217: "lange auf das gewünschte Ziel in der Map drücken" - a pin there and the choice, as Google offers it
             // L-092: a station of the alternatives tapped on the map - the nearest within a finger's width
             onMapClick = { pos, _ ->
-                if (altMarks.isEmpty()) org.maplibre.compose.util.ClickResult.Pass else {
+                if (altMarks.isEmpty()) {
+                    // System L-096 (22.11.2026: "auf der Map direkt anklicken kann und sagen kann, ich möchte über diese Station
+                    // fahren … als festen Ladepunkt"): a charger tapped where the map shows them (zoom 10 and nearer)
+                    val mPerPx = 156_543.0 * Math.cos(Math.toRadians(pos.latitude)) / Math.pow(2.0, camera.position.zoom) / altDensity
+                    val ch = if (camera.position.zoom < 10.0) null else ChargerIndex.get(context).near(pos, 40 * mPerPx, NaviChargers.MIN_KW)
+                        .minByOrNull { ChargerIndex.distanceM(it.at, pos) }
+                    if (ch == null) org.maplibre.compose.util.ClickResult.Pass else {
+                        Log.i(TAG, "map: charger tapped")
+                        panel = NaviStep.Pick(ch.at, ch, (panel as? NaviStep.Preview)?.place)
+                        org.maplibre.compose.util.ClickResult.Consume
+                    }
+                } else {
                     val mPerPx = 156_543.0 * Math.cos(Math.toRadians(pos.latitude)) / Math.pow(2.0, camera.position.zoom) / altDensity
                     val hit = altMarks.minByOrNull { ChargerIndex.distanceM(it.charger.at, pos) }
                         ?.takeIf { ChargerIndex.distanceM(it.charger.at, pos) < 36 * mPerPx }
@@ -1446,15 +1457,26 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     onMic = { purpose = Purpose.CHANGE; NaviSearchStart.voice = true; panel = NaviStep.Search })
             }
             is NaviStep.Pick -> NaviPanel(panelMod) {
-                // the address of the place, asked from the map server's search; "Ort auf der Karte" until then
-                var name by remember(st) { mutableStateOf<String?>(null) }
-                LaunchedEffect(st) { name = NaviSearch.address(context, st.at) }
+                // the address of the place, asked from the map server's search; "Ort auf der Karte" until then; a charger by its name
+                var name by remember(st) { mutableStateOf<String?>(st.charger?.let { NaviTripPlan.chargerName(it, context.getString(net.prototux.aare.R.string.mate_navi_charger)) }) }
+                LaunchedEffect(st) { if (st.charger == null) name = NaviSearch.address(context, st.at) }
                 val onMap = context.getString(net.prototux.aare.R.string.places_on_map)
                 fun place() = net.prototux.aare.places.Places.Place("map", "", name ?: onMap, "", st.at.latitude, st.at.longitude)
-                NaviMapPick(name ?: onMap, guiding && target != null,
+                val inPreview = st.fromPreview
+                NaviMapPick(name ?: onMap, (guiding && target != null) || inPreview != null,
                     onGo = { purpose = if (guiding) Purpose.CHANGE else Purpose.NEW; choose(place()) },
-                    onStop = { purpose = Purpose.STOP; choose(place()) },
-                    onClose = { panel = NaviStep.None })
+                    onStop = {
+                        if (inPreview != null) {
+                            // System L-096: a charger (or a place) put into the route being previewed - the own stops along
+                            // the route in order, the charging planned around it
+                            val all = pendingOwn + (st.at to (name ?: onMap))
+                            val line = routeOptions.getOrNull(chosen)?.let { raw(it.route) }
+                            val ordered = line?.let { l -> NaviStops.inOrder(l, all.map { it.first }).map { p -> all.first { it.first == p } } } ?: all
+                            purpose = Purpose.NEW; choose(inPreview, ordered)
+                        } else { purpose = Purpose.STOP; choose(place()) }
+                    },
+                    onClose = { panel = inPreview?.let { NaviStep.Preview(it) } ?: NaviStep.None },
+                    charger = st.charger)
             }
             NaviStep.Plan -> NaviPanel(panelMod) {
                 val r = guided; val t = trip
@@ -2126,7 +2148,7 @@ internal sealed interface NaviStep {
     data object Lists : NaviStep
     data object Menu : NaviStep
     /** O217: a place held on the map - navigate there, or (while guiding) stop there on the way. */
-    data class Pick(val at: Position) : NaviStep
+    data class Pick(val at: Position, val charger: Charger? = null, val fromPreview: net.prototux.aare.places.Places.Place? = null) : NaviStep
     /** O209: the stops ahead and the destination, from the menu while guiding. */
     data object Plan : NaviStep
     data object Recent : NaviStep

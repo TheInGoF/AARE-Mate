@@ -969,6 +969,8 @@
     <string name="mate_navi_destination">Destination</string>
     <string name="mate_navi_pick_go">Navigate there</string>
     <string name="mate_navi_pick_stop">As a stop on the way</string>
+    <string name="mate_navi_pick_charge_here">Charge here (fixed charging stop)</string>
+    <string name="mate_navi_pick_charger_info">%1$d kW · %2$d points</string>
     <string name="mate_navi_home">Home</string>
     <string name="mate_navi_resume">Continue</string>
     <string name="mate_navi_resume_forget">Forget the trip</string>

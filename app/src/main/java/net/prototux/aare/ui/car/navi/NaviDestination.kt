@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.NearMe
 import androidx.compose.material.icons.rounded.SortByAlpha
 import androidx.compose.material.icons.rounded.AddLocationAlt
+import androidx.compose.material.icons.rounded.EvStation
 import androidx.compose.runtime.remember
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Home
@@ -376,12 +377,20 @@ internal fun NaviResumeButton(name: String, modifier: Modifier, onGo: () -> Unit
  * Zwischenziel"): its address, "Dahin navigieren", and while guiding "Als Zwischenziel".
  */
 @Composable
-internal fun NaviMapPick(name: String, guiding: Boolean, onGo: () -> Unit, onStop: () -> Unit, onClose: () -> Unit) {
+internal fun NaviMapPick(name: String, guiding: Boolean, onGo: () -> Unit, onStop: () -> Unit, onClose: () -> Unit,
+                         /** a charger tapped on the map (System L-096): the stop is "Hier laden", planned as a charging stop */
+                         charger: Charger? = null) {
     PanelHeader(name, null, onClose)
     Spacer(Modifier.size(16.dp))
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (charger != null) Row(verticalAlignment = Alignment.CenterVertically) {
+            NetworkLogo(charger.network, 30.dp)
+            Spacer(Modifier.width(12.dp))
+            Text(stringResource(R.string.mate_navi_pick_charger_info, charger.kw, charger.points), style = MaterialTheme.typography.bodyMedium, color = Mate.textDim)
+        }
+        if (guiding) MenuRow(if (charger != null) Icons.Rounded.EvStation else Icons.Rounded.AddLocationAlt,
+            stringResource(if (charger != null) R.string.mate_navi_pick_charge_here else R.string.mate_navi_pick_stop), Mate.text, onStop)
         MenuRow(Icons.Rounded.Navigation, stringResource(R.string.mate_navi_pick_go), Mate.text, onGo)
-        if (guiding) MenuRow(Icons.Rounded.AddLocationAlt, stringResource(R.string.mate_navi_pick_stop), Mate.text, onStop)
     }
 }
 
