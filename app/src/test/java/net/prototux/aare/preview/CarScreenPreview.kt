@@ -237,6 +237,19 @@ class CarScreenPreview {
 
     /** Navi P-041: the incidents as signs - road works now with the worker and his heap (Zeichen 123), large and small;
      *  a lane closed as Zeichen 120 (narrows), only a closed road with the red ring. */
+    @Test fun speedTile() { if (System.getProperty("preview") == null) return
+        net.prototux.aare.ui.car.Mate.init(androidx.test.core.app.ApplicationProvider.getApplicationContext())
+        shoot("tempofeld") {
+            CompositionLocalProvider(LocalDensity provides car(1f)) {
+                Column(Modifier.fillMaxSize().background(Color(0xFF3A4A40)).padding(top = 160.dp, start = 60.dp), verticalArrangement = Arrangement.spacedBy(30.dp)) {
+                    net.prototux.aare.ui.car.navi.NaviSpeed(118.0, 120, Modifier, net.prototux.aare.ui.car.navi.NaviSpeedSource.From.GPS)
+                    net.prototux.aare.ui.car.navi.NaviSpeed(123.0, 120, Modifier, net.prototux.aare.ui.car.navi.NaviSpeedSource.From.CAR)
+                    net.prototux.aare.ui.car.navi.NaviSpeed(48.0, 50, Modifier, null)
+                }
+            }
+        }
+    }
+
     @Test fun trafficSigns() { if (System.getProperty("preview") == null) return
         net.prototux.aare.ui.car.Mate.init(androidx.test.core.app.ApplicationProvider.getApplicationContext())
         shoot("verkehrszeichen") {

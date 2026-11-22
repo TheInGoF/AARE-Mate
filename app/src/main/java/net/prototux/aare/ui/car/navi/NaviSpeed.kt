@@ -16,6 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Traffic
+import androidx.compose.material.icons.rounded.SatelliteAlt
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -43,17 +45,20 @@ import kotlin.math.roundToInt
  * a placeholder for now - the sign stays grey with a dash until the route brings limits.
  */
 @Composable
-internal fun NaviSpeed(kmh: Double?, limitKmh: Int?, modifier: Modifier, clock: () -> Long = { 0L }) {
+internal fun NaviSpeed(kmh: Double?, limitKmh: Int?, modifier: Modifier, from: NaviSpeedSource.From? = null, clock: () -> Long = { 0L }) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         val over = kmh != null && limitKmh != null && limitKmh > 0 && kmh > limitKmh + 3
-        Column(
-            Modifier.widthIn(min = 96.dp).floatEdge(RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp))
-                .background(Mate.cardSolid).padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(kmh?.roundToInt()?.toString() ?: "–", style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold, color = if (over) Mate.warn else Mate.text)
-            Text("km/h", style = MaterialTheme.typography.labelSmall, color = Mate.textDim)
+        Box(Modifier.widthIn(min = 96.dp).floatEdge(RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp)).background(Mate.cardSolid)) {
+            Column(Modifier.align(Alignment.Center).padding(horizontal = 16.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(kmh?.roundToInt()?.toString() ?: "–", style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.SemiBold, color = if (over) Mate.warn else Mate.text)
+                Text("km/h", style = MaterialTheme.typography.labelSmall, color = Mate.textDim)
+            }
+            // where the speed comes from (System L-088): a small satellite for the GPS, a small speedometer for the car's
+            if (from != null) androidx.compose.material3.Icon(
+                if (from == NaviSpeedSource.From.GPS) androidx.compose.material.icons.Icons.Rounded.SatelliteAlt else androidx.compose.material.icons.Icons.Rounded.Speed,
+                androidx.compose.ui.res.stringResource(if (from == NaviSpeedSource.From.GPS) net.prototux.aare.R.string.mate_navi_speed_gps else net.prototux.aare.R.string.mate_navi_speed_car),
+                tint = Mate.textDim, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 6.dp, bottom = 5.dp).size(17.dp))
         }
         // no limit known here: no sign at all rather than a grey placeholder (16.11.2026: "wenn er wirklich mal keine
         // tempo daten hat dann kann das schild auch ausgeblendet werden"); "unlimited" keeps its own sign

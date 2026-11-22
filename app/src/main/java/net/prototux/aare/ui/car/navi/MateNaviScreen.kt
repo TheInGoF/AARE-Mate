@@ -1467,7 +1467,13 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             // while the simulation drives, its own speed: the desk window's car stands at 0 and the tile said 0 on the move
             // (16.11.2026: "bleiben hängen weil wir aktuell keine geschwindigkeit simmulieren?")
             val simSpeed = if (session.simulating) glide?.smoothSpeedMs?.let { it / SIM_WARP } else null
-            val kmh = (NaviDebug.speedKmh ?: simSpeed ?: carSpeed ?: trip.userLocation.speed?.value ?: glide?.smoothSpeedMs?.let { it / SIM_WARP })?.let { it * 3.6 }
+            // the GPS's speed while the car's fix is good (enough satellites), the speedometer's in a tunnel (System L-088)
+            val fix = CarFixes.last.value
+            val sats = carState.satellites
+            val picked = NaviSpeedSource.pick(CarFixes.gpsSpeedMs(), CarFixes.ageMs(), sats?.value?.inUse,
+                sats?.let { System.currentTimeMillis() - it.atMillis } ?: Long.MAX_VALUE, fix?.takeIf { it.hasAccuracy() }?.accuracy, carSpeed)
+            val speedFrom = if (NaviDebug.speedKmh != null || simSpeed != null) null else picked?.second
+            val kmh = (NaviDebug.speedKmh ?: simSpeed ?: picked?.first ?: trip.userLocation.speed?.value ?: glide?.smoothSpeedMs?.let { it / SIM_WARP })?.let { it * 3.6 }
             // the battery on arrival above it (O170): once per position is enough
             // with the charge of the planned stops not reached yet: a charger still among the waypoints ahead (also after a
             // new route) - before, the tile showed 0 % and the plus pole on a route that charges twice (16.11.2026)
@@ -1550,7 +1556,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                         // Felder. Dann sieht das aufgeräumter aus"); a tap on the bar opens the guidance menu as before
                         // a combustion car: no battery tile (18.11.2026)
                         if (!net.prototux.aare.Settings(context).combustion) NaviChargeTile(tileArrival, Modifier)
-                        NaviSpeed(kmh, limit, Modifier) { beat }
+                        NaviSpeed(kmh, limit, Modifier, speedFrom) { beat }
                         NaviEta(trip.progress.distanceRemaining, trip.progress.durationRemaining + chargingAheadS, Modifier,
                             ahead, aheadCharger, jamLeft) { panel = NaviStep.Menu }
                     }

@@ -24,8 +24,24 @@ internal object CarFixes {
     val last: StateFlow<Location?> get() = _last
     @Volatile private var atMs = 0L
 
+    @Volatile private var prev: Location? = null
+    @Volatile private var prevAtMs = 0L
+
     /** A fix from the car (any thread). */
-    fun push(l: Location) { atMs = SystemClock.elapsedRealtime(); _last.value = Location(l) }
+    fun push(l: Location) { prev = _last.value; prevAtMs = atMs; atMs = SystemClock.elapsedRealtime(); _last.value = Location(l) }
+
+    /**
+     * The GPS speed of the last fix in m/s: the car's own when it sends one, else the way between the last two fixes over
+     * their time (0.3-5 s apart); null without.
+     */
+    fun gpsSpeedMs(): Double? {
+        val l = _last.value ?: return null
+        if (l.hasSpeed()) return l.speed.toDouble()
+        val p = prev ?: return null
+        val dt = (atMs - prevAtMs) / 1000.0
+        if (dt < 0.3 || dt > 5.0) return null
+        return p.distanceTo(l) / dt
+    }
 
     /** Milliseconds since the car's last fix; very large when it never sent one. */
     fun ageMs(): Long = if (atMs == 0L) Long.MAX_VALUE else SystemClock.elapsedRealtime() - atMs
