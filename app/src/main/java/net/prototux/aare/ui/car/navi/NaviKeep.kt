@@ -266,6 +266,33 @@ internal object NaviKeep {
     class NextTurn(val type: Int, val angle: Int, val distance: androidx.car.app.model.Distance)
     val nextTurn = mutableStateOf<NextTurn?>(null)
 
+    /** Jams of [placed] (delay of a minute or more, along the route) into the session's known jams, newest kept. */
+    private fun keepJams(session: NaviSession, all: List<Position>, placed: List<NaviTraffic.Ahead>) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val fresh = placed.filter { it.along && (it.incident.delayS ?: 0) >= JAM_MIN_S }.map { a ->
+            NaviTraffic.KnownJam(a.incident.start, pointAlong(all, a.alongM + 60.0), a.incident.delayS ?: 0, now)
+        }
+        if (fresh.isEmpty()) return
+        val key = { j: NaviTraffic.KnownJam -> "%.4f,%.4f".format(java.util.Locale.ROOT, j.start.latitude, j.start.longitude) }
+        session.knownJams = (fresh + session.knownJams).distinctBy(key).take(JAM_MAX)
+        android.util.Log.i("MateNavi", "known jams: ${session.knownJams.size} (${fresh.size} from this look)")
+    }
+
+    /** The point [m] metres along [line] (its end beyond). */
+    private fun pointAlong(line: List<Position>, m: Double): Position {
+        var acc = 0.0
+        for (k in 1 until line.size) {
+            val d = ChargerIndex.distanceM(line[k - 1], line[k])
+            if (acc + d >= m) { val f = if (d > 0) (m - acc) / d else 0.0
+                return Position(longitude = line[k - 1].longitude + f * (line[k].longitude - line[k - 1].longitude),
+                    latitude = line[k - 1].latitude + f * (line[k].latitude - line[k - 1].latitude)) }
+            acc += d
+        }
+        return line.last()
+    }
+    private const val JAM_MIN_S = 60
+    private const val JAM_MAX = 40
+
     private var watching: Job? = null
     private var rerouteWatch: Job? = null
     private var preparedFor: List<String> = emptyList()
@@ -288,7 +315,7 @@ internal object NaviKeep {
             kotlinx.coroutines.delay(1000)
             val t = session.state.value.tripState as? TripState.Navigating
             val r = session.route.value
-            if (!guiding.value || t == null || r == null) { forRoute = null; trafficAhead.value = emptyList(); saidTraffic.clear(); faster.value = null; continue }
+            if (!guiding.value || t == null || r == null) { forRoute = null; trafficAhead.value = emptyList(); saidTraffic.clear(); faster.value = null; if (!guiding.value) session.knownJams = emptyList(); continue }
             if (r !== forRoute) {
                 forRoute = r; trafficAt = 0L; trafficFullAt = 0L; faster.value = null; fasterCheckedAt = 0L
                 val st = net.prototux.aare.Settings(app)
@@ -334,6 +361,9 @@ internal object NaviKeep {
                         val placed = NaviTraffic.besideRamps(found.map { it.shifted(startM(all, start)) }, rampsAt(r))
                         // a near look keeps what the last whole look found further on
                         trafficAhead.value = if (full) placed else (placed + trafficAhead.value.filter { it.alongM > nearEnd }).sortedBy { it.alongM }
+                        // the jams with their direction, kept for the trip: a new route after leaving this one is chosen
+                        // round them (I-080) - also once the car has left this route and its incidents are asked no more
+                        keepJams(session, all, placed)
                         android.util.Log.i("MateNavi", "incidents on the route: ${found.size}, delay ahead %.0f s".format(trafficDelayS(driven)))
                     }
                     // the flow on the next 30 km: the route coloured as the roads (17.11.2026)

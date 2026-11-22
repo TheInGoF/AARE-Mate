@@ -280,6 +280,8 @@ internal object NaviTraffic {
 
     private const val CHUNK_M = 60_000.0
     private const val ON_ROUTE_M = 25.0
+    /** A known jam lies on a route this close to one of its stretches (I-080). */
+    private const val JAM_ON_ROUTE_M = 40.0
     private const val SAME_WAY_DEG = 40.0
     private const val END_M = 40.0
     private const val STEP_M = 300.0
@@ -294,6 +296,31 @@ internal object NaviTraffic {
     private const val FREE_ENDS_M = 400.0   // a start or destination in a closed block cannot be helped
     private const val CLEAR_END_M = 15.0
     private const val MAX_VERTICES = 96
+
+    /**
+     * A jam met on this trip (System I-080): where it starts, a point a little further on its road (its direction) and
+     * what it costs. Kept while the trip lasts, so a new route after leaving the guided one still knows it.
+     */
+    class KnownJam(val start: org.maplibre.spatialk.geojson.Position, val ahead: org.maplibre.spatialk.geojson.Position,
+                   val delayS: Int, val seenAtMs: Long)
+
+    /** The delay of the [jams] that lie on [route] in its driving direction (start within [ON_ROUTE_M], same way). */
+    fun knownDelayS(route: List<org.maplibre.spatialk.geojson.Position>, jams: List<KnownJam>): Int = jams.sumOf { j ->
+        // the nearest stretch of the line, not point: a motorway's points lie far apart on straight parts
+        var best = -1; var bestD = JAM_ON_ROUTE_M
+        for (k in 0 until route.size - 1) { val d = segmentDistM(j.start, route, k); if (d < bestD) { bestD = d; best = k } }
+        if (best >= 0 && sameWay(j.start, j.ahead, route, best)) j.delayS else 0
+    }
+
+    /**
+     * Which of the new [routes] (its duration in seconds and line) to guide after leaving the route: the least of
+     * duration plus the known jams on it - Valhalla alone knows no traffic and led back into the jam the driver had
+     * just left (22.11.2026: "Penetrantes zurück führen auf seine Wunsch Route. Weil er denkt die ist schneller.").
+     */
+    fun pickRoute(routes: List<Pair<Double, List<org.maplibre.spatialk.geojson.Position>>>, jams: List<KnownJam>): Int {
+        if (routes.size < 2 || jams.isEmpty()) return 0
+        return routes.indices.minByOrNull { routes[it].first + knownDelayS(routes[it].second, jams) } ?: 0
+    }
 
     /** One of TomTom's incidents: [kind] its icon category, [delayS] what it costs (null: unknown), [text] its words. */
     class Incident(val kind: Int, val start: org.maplibre.spatialk.geojson.Position, val delayS: Int?, val text: String,

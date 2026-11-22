@@ -71,7 +71,8 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
     private val core = FerrostarCore(
         // German instructions (specification F-06); without it Valhalla answers in English
         // with the driver's route settings, so that a new route after leaving it keeps them too (O181)
-        WellKnownRouteProvider.Valhalla("$valhalla/route", "auto", options(false, 0, routeOptions)),
+        // up to three routes on a new route after leaving the guided one: the one with the least known jam is taken (I-080)
+        WellKnownRouteProvider.Valhalla("$valhalla/route", "auto", options(false, REROUTE_ALTERNATES, routeOptions)),
         OkHttpClientProvider(routeHttp),
         positions,
         config,
@@ -89,6 +90,9 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
     /** Whether Mate Navi's position comes from the simulation (tests) rather than the car or the phone. */
     var simulating = live == null; private set
     private var wasOff = false
+    /** Jams met on this trip with their place and direction (NaviKeep), for choosing a new route (I-080). */
+    @Volatile var knownJams: List<NaviTraffic.KnownJam> = emptyList()
+
     /** Off the route and no new one yet (Google's "Route wird neu berechnet"): the hint over the map. */
     val offRoute = kotlinx.coroutines.flow.MutableStateFlow(false)
     private var lastOff = 0L
@@ -100,7 +104,17 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
         core.minimumMovementBeforeRecalculation = 20.0
         // the new route goes to the guidance and, in a simulated drive, to the simulated car (it drives the new one on)
         core.alternativeRouteProcessor = com.stadiamaps.ferrostar.core.AlternativeRouteProcessor { c, routes ->
-            val r = routes.firstOrNull() ?: return@AlternativeRouteProcessor
+            // the least of time plus the jams known on this trip (Valhalla knows no traffic and led back into the jam the
+            // driver had just left, I-080)
+            val jams = knownJams.filter { android.os.SystemClock.elapsedRealtime() - it.seenAtMs < JAM_KEEP_MS }
+            val pick = NaviTraffic.pickRoute(routes.map { r -> r.steps.sumOf { it.duration } to r.geometry.map { Position(longitude = it.lng, latitude = it.lat) } }, jams)
+            if (routes.size > 1 && jams.isNotEmpty()) {
+                val desc = routes.mapIndexed { i, r -> "%.0f min + %d s jam".format(r.steps.sumOf { it.duration } / 60,
+                    NaviTraffic.knownDelayS(r.geometry.map { Position(longitude = it.lng, latitude = it.lat) }, jams)) + if (i == pick) " (taken)" else "" }
+                android.util.Log.i(TAG, "reroute: ${routes.size} routes, ${jams.size} known jam(s): ${desc.joinToString("; ")}")
+                if (pick != 0) net.prototux.aare.DiagLog.add("reroute: not Valhalla's first route but number ${pick + 1}, round a known jam (${desc.joinToString("; ")})")
+            }
+            val r = routes.getOrNull(pick) ?: return@AlternativeRouteProcessor
             c.replaceRoute(r, config)
             if (simulating) simulated.setRoute(r, LocationBias.None)
             reroutes++
@@ -397,6 +411,10 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
     companion object {
         private const val TAG = "MateNavi"
         const val DEVIATION_M = 30.0
+        /** Alternatives asked with a new route after leaving the guided one (I-080). */
+        private const val REROUTE_ALTERNATES = 2
+        /** How long a jam once seen counts when choosing a new route. */
+        private const val JAM_KEEP_MS = 30 * 60_000L
     }
 }
 
