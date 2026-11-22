@@ -1134,6 +1134,8 @@
     <string name="mate_navi_alt_later">%1$s km later</string>
     <string name="mate_navi_plan_alternatives">Show alternatives</string>
     <string name="mate_navi_alt_take">Take</string>
+    <string name="mate_navi_alt_hide">Hide</string>
+    <plurals name="mate_navi_alt_on_map"><item quantity="one">%1$d station on the map - tap it</item><item quantity="other">%1$d stations on the map - zoom in and tap one</item></plurals>
     <string name="mate_navi_alt_arrive">%1$s · about %2$s on arrival</string>
     <string name="mate_navi_voice">Speak</string>
     <string name="mate_navi_voice_listen">Speak now …</string>

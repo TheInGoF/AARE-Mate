@@ -1123,6 +1123,8 @@
     <string name="mate_navi_alt_later">%1$s km später</string>
     <string name="mate_navi_plan_alternatives">Alternativen anzeigen</string>
     <string name="mate_navi_alt_take">Nehmen</string>
+    <string name="mate_navi_alt_hide">Ausblenden</string>
+    <plurals name="mate_navi_alt_on_map"><item quantity="one">%1$d Station auf der Karte – antippen</item><item quantity="other">%1$d Stationen auf der Karte – hineinzoomen und eine antippen</item></plurals>
     <string name="mate_navi_alt_arrive">%1$s · etwa %2$s bei Ankunft</string>
     <string name="mate_navi_voice">Sprechen</string>
     <string name="mate_navi_voice_listen">Sprich jetzt …</string>

@@ -148,9 +148,10 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                                /** the stop shown on the map now, and a stop tapped: the map flies there, the plan stays open (L-089) */
                                selected: Position? = null, onPick: ((NaviTripPlan.Row) -> Unit)? = null,
                                /** System L-092: other chargers for a stop, one shown on the map, one taken instead (only this stop changes) */
-                               options: ((Charger) -> List<NaviTripPlan.Option>)? = null, onShow: ((Position) -> Unit)? = null,
-                               onSwap: ((Charger, Charger) -> Unit)? = null, openAlternatives: Charger? = null) {
-    var altOpen by androidx.compose.runtime.remember(rows) { androidx.compose.runtime.mutableStateOf(openAlternatives) }
+                               /** the stop whose alternatives are on the map now, how many, the one tapped on the map */
+                               altFor: Charger? = null, altCount: Int = 0, altPicked: NaviTripPlan.Option? = null,
+                               onAlternatives: ((Charger) -> Unit)? = null, onAltClose: () -> Unit = {},
+                               onSwap: ((Charger, Charger) -> Unit)? = null) {
     PanelHeader(stringResource(R.string.mate_navi_plan), onBack, onClose)
     Spacer(Modifier.size(12.dp))
     // System L-089 (22.11.2026: "dass wir angezeigt bekommen, wie viele Kilometer fahren wir gerade, dann kommt ein
@@ -272,24 +273,29 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
             // … andere aus meinem Filter zugelassene Ladesäulen in der Nähe, die ich noch erreichen kann … und dann will ich
             // diese Alternative vielleicht auswählen"; "nur um die Alternative für diese eine Station … ohne neu zu planen")
             val ch = r.charger
-            if (isSelected && r.kind == NaviTripPlan.Kind.CHARGE && ch != null && options != null && onSwap != null) {
-                if (altOpen !== ch) {
-                    Spacer(Modifier.size(6.dp))
+            // L-092, second form (22.11.2026: "nur einblenden, wenn ich sage, ich möchte eine Alternative … einfach einen Knopf
+            // Alternativen anzeigen. Und dann öffnet er auf der Map alle Stationen, die in der Nähe sind, so dass ich dann da
+            // reinzoomen könnte und sagen kann, ja, die passt mir eher"): the button, then the stations on the map, one tapped
+            // there comes here with "Nehmen"
+            if (r.kind == NaviTripPlan.Kind.CHARGE && ch != null && onAlternatives != null && onSwap != null && (isSelected || altFor === ch)) {
+                Spacer(Modifier.size(6.dp))
+                if (altFor !== ch) {
                     androidx.compose.foundation.layout.Box(Modifier.padding(start = 40.dp).fillMaxWidth().heightIn(min = 60.dp).clip(RoundedCornerShape(14.dp))
-                        .background(Mate.surface).clickable { altOpen = ch }, contentAlignment = Alignment.Center) {
+                        .background(Mate.surface).clickable { onAlternatives(ch) }, contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.mate_navi_plan_alternatives), style = MaterialTheme.typography.titleSmall, color = Mate.accent)
                     }
                 } else {
-                    val opts = androidx.compose.runtime.remember(ch, rows) { options(ch) }
-                    if (opts.isEmpty()) Text(stringResource(R.string.mate_navi_alt_none_chosen), style = MaterialTheme.typography.bodyMedium,
-                        color = Mate.textDim, modifier = Modifier.padding(start = 40.dp, top = 8.dp))
-                    opts.forEach { o ->
-                        val shown = selected != null && ChargerIndex.distanceM(selected, o.charger.at) < 30
+                    Row(Modifier.padding(start = 40.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (altCount == 0) stringResource(R.string.mate_navi_alt_none_chosen)
+                            else androidx.compose.ui.res.pluralStringResource(R.plurals.mate_navi_alt_on_map, altCount, altCount),
+                            style = MaterialTheme.typography.bodyMedium, color = Mate.textDim, modifier = Modifier.weight(1f))
+                        Text(stringResource(R.string.mate_navi_alt_hide), style = MaterialTheme.typography.titleSmall, color = Mate.accent,
+                            modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { onAltClose() }.heightIn(min = 52.dp).padding(horizontal = 12.dp, vertical = 14.dp))
+                    }
+                    altPicked?.let { o ->
                         Spacer(Modifier.size(6.dp))
                         Row(Modifier.padding(start = 40.dp).fillMaxWidth().heightIn(min = 68.dp).clip(RoundedCornerShape(14.dp))
-                            .background(if (shown) Mate.surfaceHigh else Mate.surface)
-                            .then(if (shown) Modifier.border(2.dp, Mate.accent, RoundedCornerShape(14.dp)) else Modifier)
-                            .clickable { onShow?.invoke(o.charger.at) }
+                            .background(Mate.surfaceHigh).border(2.dp, Mate.accent, RoundedCornerShape(14.dp))
                             .padding(start = 12.dp, end = 6.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             NetworkLogo(o.charger.network, 26.dp)
                             Spacer(Modifier.width(12.dp))
@@ -302,7 +308,7 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                                     style = MaterialTheme.typography.bodySmall, color = Mate.textDim, maxLines = 1)
                             }
                             Text(stringResource(R.string.mate_navi_alt_take), style = MaterialTheme.typography.titleSmall, color = Mate.onAccent,
-                                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Mate.accent).clickable { altOpen = null; onSwap(ch, o.charger) }
+                                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(Mate.accent).clickable { onSwap(ch, o.charger) }
                                     .heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 14.dp))
                         }
                     }

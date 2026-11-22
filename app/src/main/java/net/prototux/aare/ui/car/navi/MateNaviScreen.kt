@@ -699,7 +699,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val here = ChargePlanner.Stop(ch, atM, stop.arrivePercent, stop.leavePercent, stop.chargeMinutes)
         val perKm = ((car.socPercent - stop.arrivePercent) / ((atM - driven) / 1000).coerceAtLeast(1.0)).coerceIn(0.05, 0.6)
         return ChargePlanner.alternatives(guidedTrack(r, car), here, chargeStops.map { it.charger }, ChargerIndex.get(context)::near,
-            ChargePlanner.Rules.of(net.prototux.aare.Settings(context)), max = 5)
+            ChargePlanner.Rules.of(net.prototux.aare.Settings(context)), max = 60)
             .filter { atM + it.shiftM > driven + 1_000 }
             .map { a -> NaviTripPlan.Option(a.charger, a.shiftM, stop.arrivePercent - a.shiftM / 1000 * perKm) }
             .filter { (it.arrivePercent ?: 100.0) >= NaviCharge.CHARGER_WARN_PERCENT }
@@ -947,6 +947,10 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     var touchedAt by remember { mutableStateOf(0L) }
     // System L-089: a stop of the trip plan shown on the map - the camera stays there while the plan is open
     var planLook by remember { mutableStateOf<Position?>(null) }
+    // System L-092: the stop whose alternatives are on the map, the stations shown, the one tapped
+    var altFor by remember { mutableStateOf<Charger?>(null) }
+    var altMarks by remember { mutableStateOf<List<NaviTripPlan.Option>>(emptyList()) }
+    var altPicked by remember { mutableStateOf<NaviTripPlan.Option?>(null) }
     var returnStartedAt by remember { mutableStateOf(0L) }
     // a panel that puts its own picture on the map (the preview's routes, the last destinations' pins) holds the camera
     // while the car drives on (16.11.2026: a new preview while guiding stayed at the car); about 1 s after it closes the
@@ -1116,8 +1120,22 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             }
         }
     }) {
+        val altDensity = androidx.compose.ui.platform.LocalDensity.current.density
         MaplibreMap(modifier = Modifier.fillMaxSize(), baseStyle = style, cameraState = camera, styleState = styleState, options = options,
             // O217: "lange auf das gewünschte Ziel in der Map drücken" - a pin there and the choice, as Google offers it
+            // L-092: a station of the alternatives tapped on the map - the nearest within a finger's width
+            onMapClick = { pos, _ ->
+                if (altMarks.isEmpty()) org.maplibre.compose.util.ClickResult.Pass else {
+                    val mPerPx = 156_543.0 * Math.cos(Math.toRadians(pos.latitude)) / Math.pow(2.0, camera.position.zoom) / altDensity
+                    val hit = altMarks.minByOrNull { ChargerIndex.distanceM(it.charger.at, pos) }
+                        ?.takeIf { ChargerIndex.distanceM(it.charger.at, pos) < 36 * mPerPx }
+                    if (hit == null) org.maplibre.compose.util.ClickResult.Pass else {
+                        altPicked = hit; planLook = hit.charger.at; following = false; touchedAt = android.os.SystemClock.uptimeMillis()
+                        Log.i(TAG, "trip plan: alternative tapped on the map")
+                        org.maplibre.compose.util.ClickResult.Consume
+                    }
+                }
+            },
             onMapLongClick = { pos, _ ->
                 Log.i(TAG, "map held: a place picked")
                 panel = NaviStep.Pick(pos)
@@ -1246,6 +1264,27 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     iconImage = org.maplibre.compose.expressions.dsl.image(stopImage),
                     iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport),
                     iconAllowOverlap = const(true), iconIgnorePlacement = const(true))
+            }
+            // L-092: the alternatives of a stop, all of them, the tapped one as a planned stop
+            if (altMarks.isNotEmpty()) {
+                val altJson = remember(altMarks, altPicked) { org.json.JSONObject().put("type", "FeatureCollection").put("features",
+                    org.json.JSONArray().apply { altMarks.forEach { o -> put(org.json.JSONObject().put("type", "Feature")
+                        .put("properties", org.json.JSONObject().put("picked", o === altPicked))
+                        .put("geometry", org.json.JSONObject().put("type", "Point").put("coordinates", org.json.JSONArray().put(o.charger.at.longitude).put(o.charger.at.latitude)))) } }).toString() }
+                val altSource = rememberGeoJsonSource(remember(altJson) { GeoJsonData.JsonString(altJson) })
+                val altImage = remember { NaviChargers.image(STOP_PX, stop = false) }
+                val altPickedImage = remember { NaviChargers.image(STOP_PX, stop = true) }
+                org.maplibre.compose.layers.SymbolLayer(id = "alt-chargers", source = altSource,
+                    iconImage = org.maplibre.compose.expressions.dsl.image(altImage),
+                    iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport),
+                    iconAllowOverlap = const(true), iconIgnorePlacement = const(true))
+                altPicked?.let { o ->
+                    val one = remember(o) { GeoJsonData.JsonString(NaviPins.geoJson(listOf(o.charger.at))) }
+                    org.maplibre.compose.layers.SymbolLayer(id = "alt-picked", source = rememberGeoJsonSource(one),
+                        iconImage = org.maplibre.compose.expressions.dsl.image(altPickedImage),
+                        iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport),
+                        iconAllowOverlap = const(true), iconIgnorePlacement = const(true))
+                }
             }
             // O217: the pin of the place held on the map
             (panel as? NaviStep.Pick)?.let { pick ->
@@ -1404,15 +1443,24 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 }
                 LaunchedEffect(Unit) { Log.i(TAG, "trip plan: " + rows.joinToString { "%s %s %.1f km".format(it.kind, it.name, it.metresLeft / 1000) }) }
                 // the plan closed: back to the guidance at once (the trip went on meanwhile)
-                androidx.compose.runtime.DisposableEffect(Unit) { onDispose { if (planLook != null) { planLook = null; touchedAt = 0L } } }
+                androidx.compose.runtime.DisposableEffect(Unit) { onDispose {
+                    altFor = null; altMarks = emptyList(); altPicked = null
+                    if (planLook != null) { planLook = null; touchedAt = 0L } } }
                 NaviTripPlanPanel(rows, onBack = { panel = NaviStep.Menu }, onClose = { panel = NaviStep.None },
                     nowPercent = net.prototux.aare.host.CarDataService.car(context)?.socPercent,
                     selected = planLook,
-                    options = { ch -> guidedOptions(ch) },
-                    onShow = { p -> planLook = p; following = false; touchedAt = android.os.SystemClock.uptimeMillis()
-                        scope.launch { runCatching { camera.animateTo(CameraPosition(target = p, zoom = PLAN_LOOK_ZOOM, bearing = 0.0, tilt = 0.0,
-                            padding = PaddingValues(start = 640.dp, top = 80.dp, end = 80.dp, bottom = 160.dp)), kotlin.time.Duration.parse("1200ms")) } } },
-                    onSwap = { old, c -> planLook = c.at; swapGuided(old, c) },
+                    altFor = altFor, altCount = altMarks.size, altPicked = altPicked,
+                    onAlternatives = { ch ->
+                        val opts = guidedOptions(ch)
+                        altFor = ch; altMarks = opts; altPicked = null
+                        Log.i(TAG, "trip plan: ${opts.size} alternative(s) on the map")
+                        val pts: List<Position> = opts.map { it.charger.at }.toMutableList().apply { add(ch.at) }
+                        planLook = ch.at; following = false; touchedAt = android.os.SystemClock.uptimeMillis()
+                        if (pts.size > 1) scope.launch { runCatching { camera.animateTo(org.maplibre.spatialk.geojson.BoundingBox(pts.minOf { it.longitude }, pts.minOf { it.latitude },
+                            pts.maxOf { it.longitude }, pts.maxOf { it.latitude }), 0.0, 0.0, PaddingValues(start = 680.dp, top = 100.dp, end = 100.dp, bottom = 180.dp)) } }
+                    },
+                    onAltClose = { altFor = null; altMarks = emptyList(); altPicked = null },
+                    onSwap = { old, c -> planLook = c.at; altFor = null; altMarks = emptyList(); altPicked = null; swapGuided(old, c) },
                     onPick = { row -> (row.charger?.at ?: row.at)?.let { p ->
                         planLook = p; following = false; touchedAt = android.os.SystemClock.uptimeMillis()
                         Log.i(TAG, "trip plan: showing ${row.kind} on the map")
