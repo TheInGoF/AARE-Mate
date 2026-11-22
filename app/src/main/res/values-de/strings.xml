@@ -669,8 +669,12 @@
     <string name="dash_map">Karte nur über HTTPS</string>
     <string name="dash_no_pos">Keine Position</string>
     <string name="stick_title">Telemetrie-Stick</string>
-    <string name="stick_hint">Live-Daten direkt vom Stick über Bluetooth. Am Stick: Einstellungen → BLE / ABRP → Live-Daten über Bluetooth, danach neu starten. Android fragt nach dem Kopplungscode, der dort steht.</string>
+    <string name="stick_hint">Live-Daten direkt vom Stick über Bluetooth. Am Stick: Einstellungen → BLE / ABRP → Live-Daten über Bluetooth, danach neu starten. Dann am Stick „Gerät koppeln“ drücken und hier „Stick suchen“: Android fragt nach dem Code, der am Stick steht – er muss innerhalb von 30 Sekunden eingegeben sein.</string>
     <string name="stick_search">Stick suchen</string>
+    <string name="stick_pair_now">Koppeln: jetzt den Code vom Stick eingeben – Bluetooth lässt dafür 30 Sekunden</string>
+    <string name="stick_paired">Mit dem Stick gekoppelt</string>
+    <string name="stick_pair_failed">Kopplung abgebrochen (Code nicht innerhalb von 30 Sekunden oder falsch eingegeben). Am Stick erneut „Gerät koppeln“ drücken, Code bereithalten, dann hier „Stick suchen“.</string>
+    <string name="stick_not_paired">Noch nicht gekoppelt: am Stick „Gerät koppeln“ drücken, dann hier „Stick suchen“.</string>
     <string name="stick_off">Stick nicht benutzen</string>
     <string name="dbg_src_car">Nur Fahrzeug</string>
     <string name="stick_state_off">Wird nicht benutzt</string>

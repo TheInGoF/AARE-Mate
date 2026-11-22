@@ -75,6 +75,7 @@ final class Hub {
     }
 
     synchronized void stickEnabled(boolean on) {
+        if (on) StickLink.pairNow();
         prefs().edit().putBoolean("stick", on).apply();
         if (!on) StickLink.forget(mCtx);
         restart();

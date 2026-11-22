@@ -88,14 +88,82 @@ final class StickLink {
         c.getSharedPreferences("dash_stick", Context.MODE_PRIVATE).edit().clear().apply();
     }
 
+    private String mLogged;
+
+    /* every new state of the stick into the kept diagnosis log too (22.11.2026: the log said nothing of the pairing) */
+    private void log(String text) {
+        if (text.equals(mLogged)) return;
+        mLogged = text;
+        net.prototux.aare.DiagLog.INSTANCE.add("stick: " + text, null, "DASH");
+    }
+
     private void state(String text) {
+        log(text);
         mTelemetry.note(SRC, text);
         mChanged.run();
     }
 
     private void fail(String text) {
+        log(text);
         mTelemetry.error(SRC, text);
         mChanged.run();
+    }
+
+    /*
+     * Pairing (22.11.2026: "Bluetooth Verbindungscode wurde einmal abgefragt und wurde aber bevor ich fertig eingegeben
+     * habe ausgeblendet. Danach wurde kein Code mehr gefragt und verbunden hat er nicht"): Bluetooth gives the code 30 s,
+     * then the pairing fails and the stick's window is used up. Before, Mate subscribed at once and waited for good on a
+     * connection the stick sends nothing on. Now: pairing first and its end awaited; a failed one is told and Mate waits
+     * for the driver ("Stick suchen" again, after "Geraet koppeln" on the stick) instead of trying on its own - outside the
+     * stick's window every try would only ask for a code nobody knows.
+     */
+    private static long sPairAskedAt;
+    private boolean mBonding;
+    private android.content.BroadcastReceiver mBondWatch;
+
+    /** The driver asked for the stick ("Stick suchen"): pairing may be started for the next few minutes. */
+    static void pairNow() { sPairAskedAt = android.os.SystemClock.elapsedRealtime(); }
+
+    private static boolean pairAllowed() { return android.os.SystemClock.elapsedRealtime() - sPairAskedAt < 5 * 60_000L; }
+
+    private void watchBond(BluetoothGatt g) {
+        unwatchBond();
+        mBondWatch = new android.content.BroadcastReceiver() {
+            @Override public void onReceive(Context c, android.content.Intent i) {
+                BluetoothDevice d = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                if (d == null || g != mGatt || !d.getAddress().equals(g.getDevice().getAddress())) return;
+                int s = i.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE);
+                if (s == BluetoothDevice.BOND_BONDED) {
+                    mBonding = false; unwatchBond();
+                    state(mCtx.getString(R.string.stick_paired));
+                    subscribe(g);
+                } else if (s == BluetoothDevice.BOND_NONE) {
+                    mBonding = false; unwatchBond();
+                    sPairAskedAt = 0;
+                    fail(mCtx.getString(R.string.stick_pair_failed));
+                    close();                                    /* no try of its own: the driver starts it again */
+                }
+            }
+        };
+        android.content.IntentFilter f = new android.content.IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+        /* sent by the Bluetooth process, not by Android itself: exported, or it would not arrive (Android 13+) */
+        if (android.os.Build.VERSION.SDK_INT >= 33) mCtx.registerReceiver(mBondWatch, f, Context.RECEIVER_EXPORTED);
+        else mCtx.registerReceiver(mBondWatch, f);
+    }
+
+    private void unwatchBond() {
+        if (mBondWatch != null) { try { mCtx.unregisterReceiver(mBondWatch); } catch (RuntimeException ignored) { } }
+        mBondWatch = null;
+    }
+
+    private void subscribe(BluetoothGatt g) {
+        BluetoothGattService s = g.getService(SERVICE);
+        BluetoothGattCharacteristic c = s == null ? null : s.getCharacteristic(TELEGRAM);
+        if (c == null) { again("Geraet bietet keine Live-Daten an"); return; }
+        g.setCharacteristicNotification(c, true);
+        BluetoothGattDescriptor d = c.getDescriptor(CCCD);
+        if (d == null) { again("Merkmal ohne Abo-Schalter"); return; }
+        g.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
     }
 
     void start() {
@@ -109,6 +177,8 @@ final class StickLink {
     void stop() {
         mMain.post(() -> {
             mRunning = false;
+            mBonding = false;
+            unwatchBond();
             mMain.removeCallbacks(mRetry);
             mMain.removeCallbacks(mScanEnd);
             stopScan();
@@ -212,6 +282,9 @@ final class StickLink {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     state("verbunden, handle Nachrichtengroesse aus …");
                     if (!g.requestMtu(MTU)) g.discoverServices();
+                } else if (mBonding) {
+                    /* the pairing goes on without the connection; its end decides (watchBond) */
+                    log("Verbindung waehrend der Kopplung getrennt (Status " + status + ")");
                 } else {
                     again("Verbindung getrennt (Status " + status + ")");
                 }
@@ -236,17 +309,26 @@ final class StickLink {
                     again("Geraet bietet keine Live-Daten an");
                     return;
                 }
-                if (g.getDevice().getBondState() == BluetoothDevice.BOND_NONE) {
-                    state("koppeln: Code aus den Einstellungen des Sticks eingeben");
-                    g.getDevice().createBond();                 /* der Stick sendet erst nach der Kopplung */
-                }
-                g.setCharacteristicNotification(c, true);
-                BluetoothGattDescriptor d = c.getDescriptor(CCCD);
-                if (d == null) {
-                    again("Merkmal ohne Abo-Schalter");
+                int bond = g.getDevice().getBondState();
+                if (bond != BluetoothDevice.BOND_BONDED) {
+                    /* der Stick sendet erst nach der Kopplung - erst koppeln, dann abonnieren */
+                    if (!pairAllowed()) {
+                        fail(mCtx.getString(R.string.stick_not_paired));
+                        close();
+                        mRunning = false;                       /* waits for "Stick suchen" */
+                        return;
+                    }
+                    mBonding = true;
+                    watchBond(g);
+                    state(mCtx.getString(R.string.stick_pair_now));
+                    if (bond == BluetoothDevice.BOND_NONE && !g.getDevice().createBond()) {
+                        mBonding = false; unwatchBond();
+                        fail(mCtx.getString(R.string.stick_pair_failed));
+                        close();
+                    }
                     return;
                 }
-                g.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                subscribe(g);
             });
         }
 
