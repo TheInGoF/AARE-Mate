@@ -137,7 +137,9 @@ final class StickLink {
                     mBonding = false; unwatchBond();
                     state(mCtx.getString(R.string.stick_paired));
                     subscribe(g);
-                } else if (s == BluetoothDevice.BOND_NONE) {
+                } else if (s == BluetoothDevice.BOND_NONE
+                        && i.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, -1) == BluetoothDevice.BOND_BONDING) {
+                    /* only a pairing that was under way and ended without a key (an old one dropped is no failure) */
                     mBonding = false; unwatchBond();
                     sPairAskedAt = 0;
                     fail(mCtx.getString(R.string.stick_pair_failed));
@@ -156,7 +158,45 @@ final class StickLink {
         mBondWatch = null;
     }
 
+    /*
+     * A pairing only one side kept (22.11.2026: "fragt auf dem Tab keinen neuen Code ab, ich bekomme vom Tab keine neue
+     * Verbindung"): Android holds the stick as paired, the stick has no key for it (its window was used up) - Android then
+     * asks no code and the stick sends nothing. Such a pairing is dropped and made anew; removeBond is hidden (system API).
+     */
+    static boolean removeBond(BluetoothDevice d) {
+        try {
+            net.prototux.aare.HiddenApi.INSTANCE.exempt("Landroid/bluetooth/BluetoothDevice;");
+            Object r = BluetoothDevice.class.getMethod("removeBond").invoke(d);
+            return Boolean.TRUE.equals(r);
+        } catch (Exception | LinkageError e) {
+            Log.w(TAG, "removeBond: " + e);
+            return false;
+        }
+    }
+
+    private boolean mGotData;
+    /** Subscribed, yet nothing came: the pairing does not hold on the stick's side. */
+    private final Runnable mNoData = this::noData;
+
+    private void noData() {
+        BluetoothGatt g = mGatt;
+        if (g == null || mGotData || !mRunning) return;
+        if (!pairAllowed()) { fail(mCtx.getString(R.string.stick_no_data)); return; }
+        log("subscribed, but no data in 20 s - the old pairing is dropped and made anew");
+        BluetoothDevice dev = g.getDevice();
+        if (!removeBond(dev)) { fail(mCtx.getString(R.string.stick_unpair_by_hand)); return; }
+        /* once the old pairing is gone (BOND_NONE), a new one is asked for: the code dialog comes again */
+        mMain.postDelayed(() -> {
+            if (g != mGatt) return;
+            mBonding = true;
+            watchBond(g);
+            state(mCtx.getString(R.string.stick_pair_now));
+            if (!dev.createBond()) { mBonding = false; unwatchBond(); fail(mCtx.getString(R.string.stick_pair_failed)); close(); }
+        }, 1500);
+    }
+
     private void subscribe(BluetoothGatt g) {
+        mGotData = false;
         BluetoothGattService s = g.getService(SERVICE);
         BluetoothGattCharacteristic c = s == null ? null : s.getCharacteristic(TELEGRAM);
         if (c == null) { again("Geraet bietet keine Live-Daten an"); return; }
@@ -179,6 +219,7 @@ final class StickLink {
             mRunning = false;
             mBonding = false;
             unwatchBond();
+            mMain.removeCallbacks(mNoData);
             mMain.removeCallbacks(mRetry);
             mMain.removeCallbacks(mScanEnd);
             stopScan();
@@ -335,13 +376,17 @@ final class StickLink {
         @Override public void onDescriptorWrite(BluetoothGatt g, BluetoothGattDescriptor d, int status) {
             mMain.post(() -> {
                 if (g != mGatt) return;
-                if (status == BluetoothGatt.GATT_SUCCESS)
+                if (status == BluetoothGatt.GATT_SUCCESS) {
                     state("abonniert (MTU " + mMtu + ", " + bond(g.getDevice().getBondState()) + ")");
+                    mMain.removeCallbacks(mNoData);
+                    mMain.postDelayed(mNoData, 20_000);
+                }
                 else again("Abonnieren abgelehnt (Status " + status + ")");
             });
         }
 
         @Override public void onCharacteristicChanged(BluetoothGatt g, BluetoothGattCharacteristic c, byte[] value) {
+            if (!mGotData) { mGotData = true; mMain.post(() -> log("first data from the stick")); }
             String json = Cbor.toJson(value);
             if (json == null || !mTelemetry.accept(json)) mTelemetry.error(SRC, "unlesbares Telegramm (" + value.length + " B)");
             mChanged.run();

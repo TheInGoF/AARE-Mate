@@ -733,6 +733,8 @@
     <string name="stick_title">Telemetry stick</string>
     <string name="stick_hint">Live data straight from the stick over Bluetooth. On the stick: Config → BLE / ABRP → Live data over Bluetooth, then restart it. Then press "Gerät koppeln" on the stick and "Stick suchen" here: Android asks for the code shown on the stick - it must be entered within 30 seconds.</string>
     <string name="stick_search">Find stick</string>
+    <string name="stick_no_data">Connected, but the stick sends nothing: press "Gerät koppeln" on the stick, then "Stick suchen" here.</string>
+    <string name="stick_unpair_by_hand">The old pairing could not be dropped: remove the stick under Android settings → Bluetooth (unpair), then "Gerät koppeln" on the stick and "Stick suchen" here.</string>
     <string name="stick_pair_now">Pairing: enter the code shown on the stick now - Bluetooth allows 30 seconds</string>
     <string name="stick_paired">Paired with the stick</string>
     <string name="stick_pair_failed">Pairing broke off (the code was not entered within 30 seconds, or a wrong one). Press "Gerät koppeln" on the stick again, have the code ready, then "Stick suchen" here.</string>
