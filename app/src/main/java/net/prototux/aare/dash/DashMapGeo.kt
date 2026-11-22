@@ -77,7 +77,12 @@ internal object DashMapGeo {
      * the outer line, only the outer ring - holes drew a tangle inside) or, with wind, one outline of several contours
      * (a feature of kind "line"). Null when it holds nothing to draw.
      */
-    fun area(geojson: JSONObject, deform: ((List<DoubleArray>) -> List<DoubleArray>)? = null): Area? = runCatching {
+    /** [ring] stretched by [factor] from [center] (lon, lat): IDmate's area brought to the car's own range (System L-087). */
+    fun stretch(ring: List<DoubleArray>, center: DoubleArray, factor: Double): List<DoubleArray> =
+        ring.map { p -> doubleArrayOf(center[0] + (p[0] - center[0]) * factor, center[1] + (p[1] - center[1]) * factor) }
+
+    fun area(geojson: JSONObject, deform: ((List<DoubleArray>) -> List<DoubleArray>)? = null,
+             scale: ((List<DoubleArray>) -> List<DoubleArray>)? = null): Area? = runCatching {
         val features = geojson.optJSONArray("features") ?: return null
         val list = (0 until features.length()).mapNotNull { features.optJSONObject(it) }
         val outerLines = ArrayList<List<DoubleArray>>(); val innerLines = ArrayList<List<DoubleArray>>()
@@ -93,7 +98,7 @@ internal object DashMapGeo {
             }
             for (p in parts) {
                 val closed = p.size > 3 && same(p.first(), p.last())
-                val s = if (closed) smoothRing(p, 2) else smoothLine(p, 2)
+                val s = (if (closed) smoothRing(p, 2) else smoothLine(p, 2)).let { r -> scale?.invoke(r) ?: r }
                 outerLines += s
                 if (closed) shade += s
             }
@@ -110,7 +115,7 @@ internal object DashMapGeo {
                 for (poly in polys) {
                     if (poly.length() == 0) continue
                     // without the wind in it (IDmate's plain contours): the wind put in by Mate (RangeWind)
-                    val ring = smoothRing(points(poly.getJSONArray(0)), 2).let { r -> deform?.invoke(r) ?: r }
+                    val ring = smoothRing(points(poly.getJSONArray(0)), 2).let { r -> deform?.invoke(r) ?: r }.let { r -> scale?.invoke(r) ?: r }
                     if (ring.size < 4) continue
                     // one ring only (21.11.2026: "er soll nur einen umkreis zeigen. die zu erwartende reichweite bei
                     // normaler geschwindigkeit und dem wetter"): the largest contour, the range IDmate expects

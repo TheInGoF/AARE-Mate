@@ -19,6 +19,20 @@ public final class DashData {
     /** Range in km, or null. */
     public static Double rangeKm(Context c) { return fresh(c, "range"); }
 
+    /** Range in km from one source alone ("stick", "backend" …), at most [maxAgeMs] old; or null (System L-087). */
+    public static Double rangeKmFrom(Context c, String src, long maxAgeMs) {
+        Telemetry.Value v = Hub.get(c).telemetry.from(src, "range");
+        if (v == null || !(v.v instanceof Number)) return null;
+        if (v.tsMs > 0 && System.currentTimeMillis() - v.tsMs > maxAgeMs) return null;
+        return ((Number) v.v).doubleValue();
+    }
+
+    /** The source a field's shown value comes from ("stick", "car", "backend" …), null when there is none. */
+    public static String sourceOf(Context c, String field) {
+        Telemetry.Value v = Hub.get(c).telemetry.get(field);
+        return v != null ? v.src : null;
+    }
+
     /** When the state of charge was measured (ms since 1970), or 0. */
     public static long socAtMs(Context c) {
         Telemetry.Value v = Hub.get(c).telemetry.get("soc");

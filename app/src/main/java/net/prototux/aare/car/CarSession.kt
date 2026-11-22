@@ -225,6 +225,8 @@ class CarSession(
             guidanceChanged(hosted = true, guiding = trip != null)
             navBridge?.update(trip)
         }
+        // a trip that waited during a short break goes on (System I-082)
+        net.prototux.aare.ui.car.navi.NaviKeep.scope.launch { net.prototux.aare.ui.car.navi.NaviKeep.carBack() }
         runtime.onPhoneGuidance = { g ->
             guidanceChanged(hosted = false, guiding = g != null)
             navBridge?.updatePhone(g)
@@ -1117,7 +1119,7 @@ class CarSession(
         carPairing?.stop(); carPairing = null
         internetWatch?.stop(); internetWatch = null
         locationFeed.stop()
-        // the car is gone: Mate Navi's trip ends with it (kept for "Fortsetzen"), nothing more to say or show
+        // the car is gone: Mate Navi's trip waits up to 10 min for it, then ends (kept for "Fortsetzen") - System I-082
         net.prototux.aare.ui.car.navi.NaviHeadUp.sink = null
         net.prototux.aare.ui.car.navi.NaviKeep.carGone()
         drivingMode.stop()

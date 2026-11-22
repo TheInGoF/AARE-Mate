@@ -49,7 +49,10 @@ fun DashArea(runtime: CarRuntime, modifier: Modifier = Modifier) {
             val now = System.currentTimeMillis()
             if (now - last < 1_000) return@collect
             last = now
-            DashView.carValues(context, s.speed?.value?.metersPerSecond?.times(3.6f), s.odometer?.value?.km)
+            // the car's GPS (Android Auto) for the map, when it is fresh (System L-087)
+            val loc = runtime.carLocation?.takeIf { now - it.time < 10_000L }
+            DashView.carValues(context, s.speed?.value?.metersPerSecond?.times(3.6f), s.odometer?.value?.km,
+                loc?.latitude, loc?.longitude, loc?.takeIf { it.hasBearing() }?.bearing)
         }
     }
     Box(modifier) {

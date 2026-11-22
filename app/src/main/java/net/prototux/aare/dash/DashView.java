@@ -106,13 +106,19 @@ public final class DashView {
         sStage.reload();
     }
 
-    /** The car's own values (speed in km/h, odometer in km; null where not known) for the dashboard, as the car's source. */
-    public static void carValues(Context ctx, Float speedKmh, Float odometerKm) {
-        if (!sHeld) return;
+    /**
+     * The car's own values (speed in km/h, odometer in km, its GPS position and heading; null where not known) as the car's
+     * source - while the car is connected, not only while the dashboard is shown (System L-087: the map follows the car's
+     * GPS live).
+     */
+    public static void carValues(Context ctx, Float speedKmh, Float odometerKm, Double lat, Double lon, Float heading) {
+        if (!sHeld && !sCar) return;
         JSONObject d = new JSONObject();
         try {
             if (speedKmh != null) d.put("speed", Math.round(speedKmh * 10) / 10.0);
             if (odometerKm != null) d.put("odometer", Math.round(odometerKm * 10) / 10.0);
+            if (lat != null && lon != null) { d.put("lat", lat); d.put("lon", lon); }
+            if (heading != null) d.put("heading", Math.round(heading));
             if (d.length() == 0) return;
             JSONObject t = new JSONObject();
             t.put("v", 1).put("src", CarProbe.SRC).put("ts", Instant.now().toString()).put("seq", ++sSeq).put("type", "status").put("data", d);

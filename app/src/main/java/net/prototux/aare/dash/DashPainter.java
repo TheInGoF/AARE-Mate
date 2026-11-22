@@ -119,6 +119,16 @@ final class DashPainter {
         /* Reichweite */
         y = label(cv, p, s(R.string.dash_range), colL, y, dp);
         y = big(cv, p, num(mTelemetry.number("range"), 0), "km", colL, y, dp);
+        /* System L-087: the car's range big, IDmate's own reckoning small beside it to compare */
+        Telemetry.Value rv = mTelemetry.get("range"), ri = mTelemetry.from("backend", "range");
+        if (rv != null && !"backend".equals(rv.src) && ri != null && ri.v instanceof Number
+                && System.currentTimeMillis() - ri.tsMs < 6 * 3600_000L) {
+            p.setTextAlign(Paint.Align.LEFT);
+            p.setColor(DIM);
+            p.setTextSize(16 * dp);
+            cv.drawText(mCtx.getString(R.string.dash_range_idmate, num(((Number) ri.v).doubleValue(), 0)), colL, y + 4 * dp, p);
+            y += 20 * dp;
+        }
         y += 10 * dp;
 
         /* Zeilen: Name links, Wert rechts */
@@ -126,6 +136,9 @@ final class DashPainter {
         if (sum.consumption != null)
             y = row(cv, p, mCtx.getString(R.string.dash_consumption, sum.trips),
                     num(sum.consumption, 1) + " kWh/100km", colL, colR, y, dp);
+        Telemetry.Value cn = mTelemetry.get("consumption_now");
+        if (cn != null && System.currentTimeMillis() - cn.tsMs < 60_000L)
+            y = row(cv, p, s(R.string.dash_consumption_now), num(mTelemetry.number("consumption_now"), 1) + " kWh/100km", colL, colR, y, dp);
         y = row(cv, p, s(R.string.dash_power), num(mTelemetry.number("power"), 0) + " kW", colL, colR, y, dp);
         y = row(cv, p, s(R.string.dash_speed), num(mTelemetry.number("speed"), 0) + " km/h", colL, colR, y, dp);
         if (mTelemetry.number("t_ext") != null || mTelemetry.number("t_batt") != null)
@@ -150,7 +163,10 @@ final class DashPainter {
             p.setTextAlign(Paint.Align.LEFT);
             p.setColor(sec > 300 ? WARN : DIM);
             p.setTextSize(16 * dp);
-            cv.drawText(mCtx.getString(R.string.dash_age, age), colL, y + 22 * dp, p);
+            int from = "stick".equals(sv.src) || "obd".equals(sv.src) ? R.string.dash_src_stick
+                    : "car".equals(sv.src) ? R.string.dash_src_car : "backend".equals(sv.src) ? R.string.dash_src_backend : 0;
+            String line = mCtx.getString(R.string.dash_age, age);
+            cv.drawText(from != 0 ? line + " · " + s(from) : line, colL, y + 22 * dp, p);
         }
     }
 

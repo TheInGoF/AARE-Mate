@@ -479,8 +479,51 @@ internal object NaviKeep {
     /** A trip going on after a stop is being started: its way driven and its time count on. */
     @Volatile var continuing = false
 
-    /** The car disconnected: the guidance stops (the trip stays saved for "Fortsetzen"), the screen starts empty. */
+    /**
+     * A break with the car off (22.11.2026: "Nach einer kurzen Pause auf der Raststätte, also keine 5 Minuten, hat der
+     * Mate seine Navigation nicht weitergeführt, sondern musste neu berechnen … bis zu 10 Minuten nicht unbedingt
+     * abgebrochen … sondern weiter im Hintergrund wartet"): the trip waits silently this long for the car to come back.
+     */
+    private const val AWAY_MS = 10 * 60_000L
+    /** The car is gone and the trip waits for it ([carGone]); the voice is silent meanwhile. */
+    @Volatile var away = false
+        private set
+    private var awayJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * The car disconnected. A trip being guided waits up to [AWAY_MS], silent, with its route and progress - the car back
+     * in time ([carBack]), it goes on without asking Valhalla anew. Otherwise, or without a trip, the guidance stops (the
+     * trip stays saved for "Fortsetzen") and the screen starts empty.
+     */
     fun carGone() {
+        if (guiding.value && testDrive.value != true && made != null) {
+            away = true
+            made?.third?.let { it.stop(); it.muted = true }
+            awayJob?.cancel()
+            awayJob = scope.launch {
+                kotlinx.coroutines.delay(AWAY_MS)
+                if (away) { android.util.Log.i("MateNavi", "car gone for 10 min: guidance stopped"); away = false; stopNow() }
+            }
+            android.util.Log.i("MateNavi", "car gone: the trip waits up to 10 min")
+            net.prototux.aare.DiagLog.add("navi: car gone - the trip waits up to 10 min")
+            return
+        }
+        stopNow()
+    }
+
+    /** The car connected again: a trip waiting since [carGone] goes on (its voice back). */
+    fun carBack() {
+        if (!away) return
+        away = false
+        awayJob?.cancel(); awayJob = null
+        made?.third?.muted = false
+        android.util.Log.i("MateNavi", "car back: the trip goes on")
+        net.prototux.aare.DiagLog.add("navi: car back - the trip goes on without a new route")
+    }
+
+    private fun stopNow() {
+        awayJob?.cancel(); awayJob = null; away = false
+        made?.third?.muted = false
         made?.let { (session, _, speaker) -> session.stop(); speaker.stop() }
         guiding.value = false; routeJson.value = null; drawnLine.value = emptyList(); limits.value = null
         target.value = null; chargeStops.value = emptyList(); ownStops.value = emptyList(); testDrive.value = null; rolling = null

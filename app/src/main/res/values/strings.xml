@@ -721,6 +721,11 @@
     <string name="dash_last_trip">Last trip</string>
     <string name="dash_last_charge">Last charge</string>
     <string name="dash_age">%1$s ago</string>
+    <string name="dash_range_idmate">IDmate reckons %1$s km</string>
+    <string name="dash_consumption_now">Consumption now</string>
+    <string name="dash_src_stick">from the stick</string>
+    <string name="dash_src_car">from the car</string>
+    <string name="dash_src_backend">from the server</string>
     <string name="dash_map">Map only over HTTPS</string>
     <string name="dash_no_pos">No position</string>
     <string name="stick_title">Telemetry stick</string>

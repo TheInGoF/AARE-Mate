@@ -659,6 +659,11 @@
     <string name="dash_last_trip">Letzte Fahrt</string>
     <string name="dash_last_charge">Letzte Ladung</string>
     <string name="dash_age">Vor %1$s</string>
+    <string name="dash_range_idmate">IDmate rechnet %1$s km</string>
+    <string name="dash_consumption_now">Verbrauch jetzt</string>
+    <string name="dash_src_stick">vom Stick</string>
+    <string name="dash_src_car">vom Auto</string>
+    <string name="dash_src_backend">vom Server</string>
     <string name="dash_map">Karte nur über HTTPS</string>
     <string name="dash_no_pos">Keine Position</string>
     <string name="stick_title">Telemetrie-Stick</string>

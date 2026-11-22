@@ -131,16 +131,39 @@ internal object DashMapCache {
      * IDmate's area with the wind put in by Mate where IDmate left it out (RangeWind): stretched from the car's place
      * (else the middle of the area) by the mean of IDmate's wind points.
      */
+    /**
+     * System L-087: IDmate's area drawn to the car's own range (stick) - stretched from the car's place by car range /
+     * IDmate's range, within 0.7..1.4; 1 without both or with the car outside the area. The factor last used is kept,
+     * so a round can tell when the car's range has moved enough to draw anew.
+     */
+    @Volatile private var areaKm: Double? = null
+    @Volatile private var stretchUsed = 1.0
+
+    private fun stretchFactor(context: Context): Double {
+        val car = DashData.rangeKmFrom(context, "stick", Telemetry.LIVE_HOLD_MS) ?: return 1.0
+        val base = DashData.rangeKmFrom(context, "backend", 6 * 3600_000L) ?: areaKm ?: return 1.0
+        if (base < 5) return 1.0
+        return (car / base).coerceIn(0.7, 1.4)
+    }
+
     private fun makeArea(context: Context, raw: JSONObject): DashMapGeo.Area? {
+        val f = stretchFactor(context)
+        val t0 = Hub.get(context).telemetry
+        val cLat = t0.number("lat"); val cLon = t0.number("lon")
+        val scale: ((List<DoubleArray>) -> List<DoubleArray>)? =
+            if (Math.abs(f - 1) < 0.01 || cLat == null || cLon == null) null
+            else { ring -> DashMapGeo.stretch(ring, doubleArrayOf(cLon, cLat), f) }
+        stretchUsed = if (scale == null) 1.0 else f
+        if (scale != null) Log.i(TAG, "dashboard map: range area stretched to the car's range (x%.3f)".format(java.util.Locale.ROOT, f))
         val wind = windRaw?.let { w -> RangeWind.mean((0 until w.length()).mapNotNull { i -> w.optJSONObject(i)?.let { p ->
             val kmh = p.optDouble("kmh", Double.NaN); val dir = p.optDouble("dir", Double.NaN)
             if (kmh.isNaN() || dir.isNaN()) null else kmh to dir } }) }
-        if (wind == null || wind.ms < RangeWind.CALM_MS) return DashMapGeo.area(raw)
+        if (wind == null || wind.ms < RangeWind.CALM_MS) return DashMapGeo.area(raw, scale = scale)
         val t = Hub.get(context).telemetry
         val lat = t.number("lat"); val lon = t.number("lon")
         val car = net.prototux.aare.host.CarDataService.car(context) ?: net.prototux.aare.host.EnergyModel.Car(capacityWh = 77_000, socPercent = 50.0)
         var center: DoubleArray? = null
-        val made = DashMapGeo.area(raw) { ring ->
+        val made = DashMapGeo.area(raw, scale = scale, deform = { ring ->
             // the car's place when it lies in the area (it was made around it), else the area's middle: an area of
             // earlier with the car far off since would be stretched around a point outside it
             val c = center ?: run {
@@ -148,7 +171,7 @@ internal object DashMapCache {
                 if (inside) doubleArrayOf(lon!!, lat!!) else doubleArrayOf(ring.map { it[0] }.average(), ring.map { it[1] }.average())
             }.also { center = it }
             RangeWind.deform(ring, c, wind, car)
-        }
+        })
         // only when Mate did put it in: IDmate's outline (kind "line", nearly always) has the wind already
         if (made != null && center == null) Log.i(TAG, "dashboard map: range as IDmate drew it (its outline has the wind in it)")
         if (made != null && center != null) Log.i(TAG, "dashboard map: range with the wind from %.0f° at %.0f km/h put in by Mate (%.2f..%.2f of the range)".format(
@@ -169,11 +192,15 @@ internal object DashMapCache {
                 val ts = got.optString("ts")
                 if (ts != areaTs) {
                     val raw = got.optJSONObject("geojson")
+                    areaKm = got.optJSONArray("kms")?.let { k -> (0 until k.length()).maxOfOrNull { k.optDouble(it, 0.0) } }?.takeIf { it > 0 }
                     val made = raw?.let { makeArea(context, it) }
                     Log.i(TAG, "dashboard map: range area " + (if (made != null) "taken (${got.optJSONArray("kms")} km)" else "not readable"))
                     if (made != null) { _area.value = made; areaTs = ts; areaRaw = raw }
                 }
             }
+            // the car's range moved off what the area was drawn for: drawn anew (System L-087)
+            if (areaTs != null && Math.abs(stretchFactor(context) - stretchUsed) > 0.015)
+                areaRaw?.let { raw -> makeArea(context, raw)?.let { _area.value = it } }
             _ferriesOffered.value = d.ferriesOffered
             d.trail()?.let { _trail.value = DashMapGeo.trail(it) }
             val now = System.currentTimeMillis()

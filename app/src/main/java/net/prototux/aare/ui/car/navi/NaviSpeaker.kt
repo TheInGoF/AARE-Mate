@@ -125,7 +125,11 @@ internal class NaviSpeaker(context: Context) {
         speak(text, "warn-" + System.nanoTime(), TextToSpeech.QUEUE_ADD)
     }
 
+    /** The car is away (NaviKeep.carGone): nothing is said - it would come from the tablet's own speaker. */
+    @Volatile var muted = false
+
     private fun speak(words: String, id: String, queue: Int) {
+        if (muted) { Log.i(TAG, "voice (car away, silent): \"$words\""); return }
         if (NaviDebug.quiet && NaviKeep.testDrive.value == true) { Log.i(TAG, "voice (test drive, silent): \"$words\""); return }
         // O230: the chosen Kokoro voice when the announcement was computed ahead; otherwise the phone's voice
         if (NaviKokoro.enabled(app)) {

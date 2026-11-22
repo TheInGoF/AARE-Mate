@@ -21,6 +21,8 @@ import java.util.Map;
 final class Telemetry {
     /** Quellen in der Rangfolge der Uebergabe (kleiner = Vorrang bei gleichem Zeitstempel). */
     static final String[] SOURCES = { "stick", "obd", "car", "backend", "tablet" };
+    /** How long a live value of the car stays ahead of the server's (System L-087). */
+    static final long LIVE_HOLD_MS = 120_000L;
 
     /** Ein Wert mit Herkunft. */
     static final class Value {
@@ -56,6 +58,11 @@ final class Telemetry {
 
     private Summary mSummary = new Summary();
     private final Map<String, Value> mFields = new LinkedHashMap<>();
+    /* System L-087: the last value of each source apart (the car's range beside IDmate's) */
+    private final Map<String, Map<String, Value>> mBySource = new LinkedHashMap<>();
+    /* the consumption of now from the car's power and speed (System L-087), smoothed over about half a minute */
+    private double mNowKwh100 = Double.NaN;
+    private long mNowAt;
     private final Map<String, SourceState> mSources = new LinkedHashMap<>();
     private String mOnly;       /* Fehlersuche: nur diese Quelle anzeigen; null = alle nach Rangfolge */
 
@@ -89,6 +96,7 @@ final class Telemetry {
     synchronized void only(String src) {
         mOnly = src;
         mFields.clear();
+        mNowKwh100 = Double.NaN;
     }
 
     synchronized String only() {
@@ -129,14 +137,51 @@ final class Telemetry {
                 String k = it.next();
                 Object v = data.get(k);
                 if (v == JSONObject.NULL) continue;
+                Value nv = new Value(v, src, ts);
+                Map<String, Value> mine = mBySource.get(src);
+                if (mine == null) mBySource.put(src, mine = new LinkedHashMap<>());
+                mine.put(k, nv);
                 Value old = mFields.get(k);
+                /* System L-087: what the car itself says (stick, OBD, Android Auto) holds for two minutes against the
+                   server - IDmate's own range or a level computed later would else push the car's live value aside */
+                if (old != null && "backend".equals(src) && !"backend".equals(old.src) && !"tablet".equals(old.src)
+                        && System.currentTimeMillis() - old.tsMs < LIVE_HOLD_MS) continue;
                 if (old == null || ts > old.tsMs || (ts == old.tsMs && rank(src) <= rank(old.src)))
-                    mFields.put(k, new Value(v, src, ts));
+                    mFields.put(k, nv);
             }
+            if (!"backend".equals(src) && "status".equals(type) && data.has("power") && data.has("speed")) nowConsumption(data, src, ts);
             return true;
         } catch (JSONException e) {
             return false;
         }
+    }
+
+    /**
+     * The consumption of now in kWh/100 km from a live source's power (kW) and speed (km/h): only while moving faster
+     * than 10 km/h, smoothed with a time constant of 30 s (a second's value jumps with every push of the pedal). Kept as
+     * the field "consumption_now" of that source.
+     */
+    private void nowConsumption(JSONObject data, String src, long ts) {
+        double kw = data.optDouble("power", Double.NaN), kmh = data.optDouble("speed", Double.NaN);
+        if (Double.isNaN(kw) || Double.isNaN(kmh) || kmh < 10) return;
+        double x = kw / kmh * 100.0;
+        if (Double.isNaN(mNowKwh100) || ts - mNowAt > 120_000L || ts < mNowAt) mNowKwh100 = x;
+        else {
+            double a = 1 - Math.exp(-(ts - mNowAt) / 30_000.0);
+            mNowKwh100 += a * (x - mNowKwh100);
+        }
+        mNowAt = ts;
+        Value nv = new Value(Math.round(mNowKwh100 * 10) / 10.0, src, ts);
+        mFields.put("consumption_now", nv);
+        Map<String, Value> mine = mBySource.get(src);
+        if (mine == null) mBySource.put(src, mine = new LinkedHashMap<>());
+        mine.put("consumption_now", nv);
+    }
+
+    /** The last value of [field] from [src] alone, null when that source never sent it. */
+    synchronized Value from(String src, String field) {
+        Map<String, Value> m = mBySource.get(src);
+        return m == null ? null : m.get(field);
     }
 
     /** Alle bekannten Felder mit Herkunft (Kopie), in der Reihenfolge des ersten Eintreffens. */
