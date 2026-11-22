@@ -387,6 +387,8 @@ object CarTools {
 
     private fun open(rt: CarRuntime, what: String): JSONObject {
         val w = what.trim().lowercase()
+        // without a name every label "contains" it: the first app (ABRP) took the screen
+        if (w.isEmpty()) return error("which app? none named")
         val ui = rt.ui
         when (w) {
             "home", "dashboard", "map" -> { ui.screen = CarScreen.Dashboard; return ok("home") }
