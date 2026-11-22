@@ -225,6 +225,8 @@ class CarSession(
             guidanceChanged(hosted = true, guiding = trip != null)
             navBridge?.update(trip)
         }
+        // podcasts and audio books pause for Mate's prompts instead of lying under them (System I-083)
+        net.prototux.aare.audio.SpokenPause.init(context)
         // a trip that waited during a short break goes on (System I-082)
         net.prototux.aare.ui.car.navi.NaviKeep.scope.launch { net.prototux.aare.ui.car.navi.NaviKeep.carBack() }
         runtime.onPhoneGuidance = { g ->

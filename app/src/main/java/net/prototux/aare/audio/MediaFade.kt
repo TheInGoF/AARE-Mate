@@ -34,13 +34,13 @@ object MediaFade {
     }
 
     /** A prompt is coming: down to [LOW] over [DOWN_MS]. */
-    fun duck() { val now = SystemClock.elapsedRealtime(); from = level(now); to = LOW; since = now; span = DOWN_MS; duckedAt = now; upAt = 0L }
+    fun duck() { SpokenPause.hold(); val now = SystemClock.elapsedRealtime(); from = level(now); to = LOW; since = now; span = DOWN_MS; duckedAt = now; upAt = 0L }
 
     /**
      * The prompt is over: the music stays low until the car gives it back ([start], then up over [UP_MS]) - rising earlier
      * would only meet the car's own hard step - or by itself after [WAIT_CAR_MS].
      */
-    fun release() { if (to >= 1.0) return; upAt = SystemClock.elapsedRealtime() + WAIT_CAR_MS }
+    fun release() { SpokenPause.letGo(); if (to >= 1.0) return; upAt = SystemClock.elapsedRealtime() + WAIT_CAR_MS }
 
     /** The car gave the music back after a prompt: a soft start even when nothing of Mate's own lowered it. */
     fun start() { val now = SystemClock.elapsedRealtime(); from = if (to < 1.0) level(now) else LOW; to = 1.0; since = now; span = UP_MS; upAt = 0L }

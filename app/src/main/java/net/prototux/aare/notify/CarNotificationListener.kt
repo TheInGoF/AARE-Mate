@@ -277,6 +277,8 @@ class CarNotificationListener : NotificationListenerService() {
 
     private fun speechStarts() {
         if (speaking.getAndIncrement() > 0) return
+        // a podcast or audio book pauses while a message is read out (System I-083)
+        net.prototux.aare.audio.SpokenPause.init(this); net.prototux.aare.audio.SpokenPause.hold()
         main.post {
             onSpeech?.invoke(true)
             runCatching { getSystemService(android.media.AudioManager::class.java).requestAudioFocus(speechFocus) }
@@ -286,6 +288,7 @@ class CarNotificationListener : NotificationListenerService() {
     private fun speechEnds() {
         if (speaking.decrementAndGet() > 0) return
         speaking.set(0)
+        net.prototux.aare.audio.SpokenPause.letGo()
         main.post {
             runCatching { getSystemService(android.media.AudioManager::class.java).abandonAudioFocusRequest(speechFocus) }
             onSpeech?.invoke(false)
