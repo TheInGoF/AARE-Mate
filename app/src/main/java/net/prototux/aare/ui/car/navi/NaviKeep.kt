@@ -137,6 +137,8 @@ internal object NaviKeep {
         drivenLast = done
     }
     private const val MAX_STEP_M = 3000.0
+    /** No "Neue Route" this long after a route set on purpose (System I-091). */
+    private const val QUIET_AFTER_GO_MS = 60_000L
     private const val NEW_ROUTE_SAY_MS = 60_000L
     /**
      * Navi L-029 step F: the charging plan kept up to date on the way, made when the guidance starts; [rollingRoute] the
@@ -545,7 +547,12 @@ internal object NaviKeep {
                 // said once a minute at most: a new route every few seconds piled the words up, and the voice said them a
                 // minute late (19.11.2026: "Thorsten immer noch eine Minute später neue Route gesagt")
                 val now = android.os.SystemClock.elapsedRealtime()
-                if (session.reroutes != seen && guiding.value && now - saidAt > NEW_ROUTE_SAY_MS) {
+                // System I-091 (22.11.2026: "dass er beim Starten in der Route und beim Neuberechnen in solchen Fällen, wo es
+                // vorgesehen ist, nicht dann jedes Mal sagt, dass er neu berechnet"): only a new route after leaving the
+                // planned one - a route put in on purpose resets the count (it was said then too), and the first minute
+                // after a start or a planned change the car is often still beside the route (the car park, the charger)
+                val more = session.reroutes > seen
+                if (more && guiding.value && now - saidAt > NEW_ROUTE_SAY_MS && now - session.goneAt > QUIET_AFTER_GO_MS) {
                     saidAt = now
                     speaker.warn(app.getString(net.prototux.aare.R.string.mate_navi_warn_new_route))
                 }

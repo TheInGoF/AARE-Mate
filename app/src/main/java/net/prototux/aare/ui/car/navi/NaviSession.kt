@@ -115,6 +115,8 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
     val route: StateFlow<Route?> get() = _route
     /** Recalculations of this trip and the time from noticing the deviation to the new route, for the log and tests. */
     var reroutes = 0; private set
+    /** When the last route was set on purpose ([go]: the start, a plan put in, a stop changed, the faster route). */
+    @Volatile var goneAt = 0L; private set
     private var offSince = 0L
     /** Whether Mate Navi's position comes from the simulation (tests) rather than the car or the phone. */
     var simulating = live == null; private set
@@ -413,6 +415,7 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
         else provider?.disableSimulation()
         core.startNavigation(route, config)
         reroutes = 0; offSince = 0
+        goneAt = android.os.SystemClock.elapsedRealtime()
         _route.value = route
     }
 
