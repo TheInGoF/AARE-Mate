@@ -1448,6 +1448,11 @@
     <string name="dash_map_range">The whole range</string>
     <string name="dash_map_wind">Wind</string>
     <string name="dash_map_rain">Rain (radar)</string>
+    <string name="dash_map_ferries">Long ferries (search once)</string>
+    <string name="dash_ferry_none">No long ferries in reach</string>
+    <string name="dash_ferry_error">Ferry search failed</string>
+    <string name="dash_ferry_nomodel">The ferry search needs the consumption model (too few fast trips)</string>
+    <string name="dash_ferry_forbidden">Please start the ferry search in IDmate – Mate then shows it here</string>
     <string name="dash_rain_light">light · under 1 mm/h</string>
     <string name="dash_rain_moderate">moderate · 1–5 mm/h</string>
     <string name="dash_rain_heavy">heavy · over 5 mm/h</string>

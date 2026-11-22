@@ -1437,6 +1437,11 @@
     <string name="dash_map_range">Die ganze Reichweite</string>
     <string name="dash_map_wind">Wind</string>
     <string name="dash_map_rain">Regen (Radar)</string>
+    <string name="dash_map_ferries">Lange Fähren (einmalig suchen)</string>
+    <string name="dash_ferry_none">Keine langen Fähren in Reichweite gefunden</string>
+    <string name="dash_ferry_error">Fährensuche fehlgeschlagen</string>
+    <string name="dash_ferry_nomodel">Für die Fährensuche fehlt das Verbrauchsmodell (zu wenige schnelle Fahrten)</string>
+    <string name="dash_ferry_forbidden">Fährensuche bitte in IDmate starten – Mate zeigt sie dann hier</string>
     <string name="dash_rain_light">leicht · unter 1 mm/h</string>
     <string name="dash_rain_moderate">mittel · 1–5 mm/h</string>
     <string name="dash_rain_heavy">stark · über 5 mm/h</string>

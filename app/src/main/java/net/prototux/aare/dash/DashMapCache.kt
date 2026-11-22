@@ -42,6 +42,63 @@ internal object DashMapCache {
     /** IDmate's rain raster (frames, cell_km) as last fetched. */
     val rain: StateFlow<JSONObject?> get() = _rain
 
+    private val _ferries = MutableStateFlow<DashMapGeo.Ferries?>(null)
+    private val _ferryState = MutableStateFlow(FERRY_OFF)
+    private val _ferriesOffered = MutableStateFlow(false)
+    /** IDmate's long ferries while the button is on, null otherwise or before the answer. */
+    val ferries: StateFlow<DashMapGeo.Ferries?> get() = _ferries
+    /** Where the search stands: [FERRY_OFF], [FERRY_BUSY], [FERRY_SHOWN] or why there is nothing (the other FERRY_). */
+    val ferryState: StateFlow<String> get() = _ferryState
+    /** IDmate offers the search (its page shows the button): Mate shows it too. */
+    val ferriesOffered: StateFlow<Boolean> get() = _ferriesOffered
+    private var ferryJob: Job? = null
+
+    const val FERRY_OFF = "off"
+    const val FERRY_BUSY = "busy"
+    const val FERRY_SHOWN = "shown"
+    const val FERRY_NONE = "none"
+    const val FERRY_FORBIDDEN = "forbidden"
+    const val FERRY_NO_MODEL = "no_model"
+    const val FERRY_ERROR = "error"
+
+    /**
+     * The button "Fähren" switched on, as on IDmate's page: one search per switch-on (IDmate keeps it 3 h), asked every
+     * 3 s until it is done. Where IDmate lets the display session only read, a search started on IDmate's own page is
+     * shown when there is one.
+     */
+    @Synchronized fun ferriesOn(context: Context) {
+        ferryJob?.cancel()
+        _ferryState.value = FERRY_BUSY
+        val app = context.applicationContext
+        ferryJob = scope.launch {
+            val d = client(app)
+            val started = d.startFerries()
+            Log.i(TAG, "dashboard map: ferry search $started")
+            val end = when (started) {
+                "running", "ok", FERRY_FORBIDDEN -> {
+                    var answer = d.ferries()
+                    val until = System.currentTimeMillis() + 3 * 60_000L
+                    while (isActive && answer?.optString("status") == "running" && System.currentTimeMillis() < until) { delay(3_000); answer = d.ferries() }
+                    val f = DashMapGeo.ferries(answer)
+                    Log.i(TAG, "dashboard map: ferries " + (f?.let { "${it.count} long crossings" } ?: "not answered (${answer?.optString("status")})"))
+                    when {
+                        f != null && f.count > 0 -> { _ferries.value = f; FERRY_SHOWN }
+                        f != null -> FERRY_NONE
+                        started == FERRY_FORBIDDEN -> FERRY_FORBIDDEN
+                        else -> FERRY_ERROR
+                    }
+                }
+                "off" -> FERRY_ERROR
+                FERRY_NO_MODEL -> FERRY_NO_MODEL
+                else -> FERRY_ERROR
+            }
+            if (isActive) _ferryState.value = end
+        }
+    }
+
+    /** The button switched off: the ferries go, a search on its way is no longer waited for. */
+    @Synchronized fun ferriesOff() { ferryJob?.cancel(); ferryJob = null; _ferries.value = null; _ferryState.value = FERRY_OFF }
+
     @Volatile private var windRaw: JSONArray? = null
     /** IDmate's last range area as it came, made anew when the wind changes (RangeWind). */
     @Volatile private var areaRaw: JSONObject? = null
@@ -115,6 +172,7 @@ internal object DashMapCache {
                     if (made != null) { _area.value = made; areaTs = ts; areaRaw = raw }
                 }
             }
+            _ferriesOffered.value = d.ferriesOffered
             d.trail()?.let { _trail.value = DashMapGeo.trail(it) }
             val now = System.currentTimeMillis()
             if (now - rainAt > RAIN_EVERY_MS) d.rain()?.let { _rain.value = it; rainAt = now }

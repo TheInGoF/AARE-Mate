@@ -64,6 +64,7 @@ import org.maplibre.compose.expressions.dsl.image
 import org.maplibre.compose.expressions.value.IconRotationAlignment
 import org.maplibre.compose.expressions.value.LineCap
 import org.maplibre.compose.expressions.value.LineJoin
+import org.maplibre.compose.layers.CircleLayer
 import org.maplibre.compose.layers.FillLayer
 import org.maplibre.compose.layers.LineLayer
 import org.maplibre.compose.layers.SymbolLayer
@@ -121,6 +122,9 @@ private val RAIN_COLS_WIND = listOf(Color(0xFF6BAED6), Color(0xFF2171B5), Color(
  */
 private val RAIN_COLS_NIGHT = listOf(Color(0xFF2B5C8A), Color(0xFF3D8BD9), Color(0xFF9CD0FF))
 private val MAP_BLUE_NIGHT = Color(0xFF58A6FF)
+/** IDmate's ferry purple (drawFerries), at night a lighter one on the dark map. */
+private val FERRY_PURPLE = Color(0xFF7A3FD6)
+private val FERRY_PURPLE_NIGHT = Color(0xFFB392F0)
 private val WIND_COLS = listOf(0xFF57606A.toInt(), 0xFF0969DA.toInt(), 0xFFBC4C00.toInt(), 0xFFCF222E.toInt())
 private val WIND_SIZE = listOf(17, 21, 25, 25)
 private const val NEAR_ZOOM = 13.0
@@ -167,6 +171,9 @@ private fun DashMap(go: (String) -> Unit) {
     val wind by DashMapCache.wind.collectAsState()
     val windSeen by DashMapCache.windSeen.collectAsState()
     val rainRaw by DashMapCache.rain.collectAsState()
+    val ferries by DashMapCache.ferries.collectAsState()
+    val ferryState by DashMapCache.ferryState.collectAsState()
+    val ferriesOffered by DashMapCache.ferriesOffered.collectAsState()
     LaunchedEffect(Unit) { DashMapCache.refreshSoon(context) }
     val rainFrame = remember(rainRaw) { DashMapGeo.rainNow(rainRaw) }
     val rain = remember(rainFrame) { DashMapGeo.rain(rainFrame, rainRaw?.optDouble("cell_km", 0.0) ?: 0.0) }
@@ -212,6 +219,26 @@ private fun DashMap(go: (String) -> Unit) {
         introDone = true; DashMapView.introDone = true
         toCar(NEAR_ZOOM)
     }
+    // the ferries come: range and ferries together in view, held while the button is on (IDmate's drawFerries)
+    LaunchedEffect(ferries) {
+        val f = ferries?.box ?: return@LaunchedEffect
+        val r = rangeBox()
+        val b = if (r == null) f else doubleArrayOf(minOf(r[0], f[0]), minOf(r[1], f[1]), maxOf(r[2], f[2]), maxOf(r[3], f[3]))
+        follow = false
+        runCatching { camera.animateTo(BoundingBox(b[0], b[1], b[2], b[3]), 0.0, 0.0, androidx.compose.foundation.layout.PaddingValues(32.dp)) }
+    }
+    // nothing to show: a word why, then the button is off again (IDmate's toasts)
+    var ferryNote by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(ferryState) {
+        ferryNote = when (ferryState) {
+            DashMapCache.FERRY_NONE -> R.string.dash_ferry_none
+            DashMapCache.FERRY_FORBIDDEN -> R.string.dash_ferry_forbidden
+            DashMapCache.FERRY_NO_MODEL -> R.string.dash_ferry_nomodel
+            DashMapCache.FERRY_ERROR -> R.string.dash_ferry_error
+            else -> null
+        }
+        if (ferryNote != null) { delay(6_000); ferryNote = null; DashMapCache.ferriesOff() }
+    }
     LaunchedEffect(car) { if (follow && introDone) car?.let { c -> runCatching { camera.animateTo(CameraPosition(target = c, zoom = followZoom), 900.milliseconds) } } }
 
     var picked by remember { mutableStateOf<Position?>(null) }
@@ -256,6 +283,22 @@ private fun DashMap(go: (String) -> Unit) {
             }
             LineLayer(id = "dash-range-circle", source = rememberGeoJsonSource(remember(circle) { GeoJsonData.JsonString(circle) }),
                 color = const(if (night) MAP_BLUE_NIGHT else MAP_BLUE), width = const(2.dp), opacity = const(0.8f))
+            // long ferries (IDmate's button "Fähren"): purple with a white edge, the areas behind them lightly filled
+            val fe = ferries
+            val ferryCol = if (night) FERRY_PURPLE_NIGHT else FERRY_PURPLE
+            val ferryHalo = if (night) Color(0xFF0D1117) else Color.White
+            FillLayer(id = "dash-ferry-fill", source = rememberGeoJsonSource(remember(fe?.fill) { GeoJsonData.JsonString(fe?.fill ?: DashMapGeo.EMPTY) }),
+                color = const(ferryCol), opacity = const(if (night) 0.16f else 0.12f))
+            val sea = rememberGeoJsonSource(remember(fe?.sea) { GeoJsonData.JsonString(fe?.sea ?: DashMapGeo.EMPTY) })
+            LineLayer(id = "dash-ferry-sea-halo", source = sea, color = const(ferryHalo), width = const(4.5.dp), opacity = const(0.9f), cap = const(LineCap.Round), join = const(LineJoin.Round))
+            LineLayer(id = "dash-ferry-sea", source = sea, color = const(ferryCol), width = const(2.dp), opacity = const(0.95f), dasharray = const(listOf(3, 2.5)))
+            val ferryLine = rememberGeoJsonSource(remember(fe?.outline) { GeoJsonData.JsonString(fe?.outline ?: DashMapGeo.EMPTY) })
+            LineLayer(id = "dash-ferry-halo", source = ferryLine, color = const(ferryHalo), width = const(5.4.dp), opacity = const(0.9f), cap = const(LineCap.Round), join = const(LineJoin.Round))
+            LineLayer(id = "dash-ferry", source = ferryLine, color = const(ferryCol), width = const(2.7.dp), opacity = const(0.95f), cap = const(LineCap.Round), join = const(LineJoin.Round))
+            CircleLayer(id = "dash-ferry-from", source = rememberGeoJsonSource(remember(fe?.portsFrom) { GeoJsonData.JsonString(fe?.portsFrom ?: DashMapGeo.EMPTY) }),
+                color = const(ferryCol), radius = const(2.5.dp), strokeColor = const(ferryHalo), strokeWidth = const(1.dp))
+            CircleLayer(id = "dash-ferry-to", source = rememberGeoJsonSource(remember(fe?.portsTo) { GeoJsonData.JsonString(fe?.portsTo ?: DashMapGeo.EMPTY) }),
+                color = const(ferryCol), radius = const(3.5.dp), strokeColor = const(ferryHalo), strokeWidth = const(1.5.dp))
             LineLayer(id = "dash-trail", source = rememberGeoJsonSource(remember(trail) { GeoJsonData.JsonString(trail) }),
                 color = const(CAR_TEAL), width = const(4.dp), opacity = const(0.8f), cap = const(LineCap.Round), join = const(LineJoin.Round))
             for (k in 0 until 4) {
@@ -275,6 +318,11 @@ private fun DashMap(go: (String) -> Unit) {
             SignButton(Sign.RANGE, false, stringResource(R.string.dash_map_range)) { overview() }
             if (windSeen) SignButton(Sign.WIND, windOn, stringResource(R.string.dash_map_wind)) { windOn = !windOn; prefs.edit().putBoolean("wind", windOn).apply() }
             SignButton(Sign.RAIN, rainOn, stringResource(R.string.dash_map_rain)) { rainOn = !rainOn; prefs.edit().putBoolean("rain", rainOn).apply() }
+            // only when IDmate can search them; off at every start, one search per switch-on (as IDmate's page)
+            val ferryOn = ferryState == DashMapCache.FERRY_BUSY || ferryState == DashMapCache.FERRY_SHOWN
+            if (ferriesOffered || ferryState != DashMapCache.FERRY_OFF) SignButton(Sign.FERRY, ferryOn, stringResource(R.string.dash_map_ferries)) {
+                if (ferryOn) { DashMapCache.ferriesOff(); overview() } else DashMapCache.ferriesOn(context)
+            }
         }
         // the legends, top right on the map: wind classes and rain grades with time and source (as IDmate's)
         Column(Modifier.align(Alignment.TopEnd).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
@@ -295,6 +343,12 @@ private fun DashMap(go: (String) -> Unit) {
         // the map data's credit, as on Mate Navi's map (ODbL)
         Text(net.prototux.aare.ui.car.navi.OSM_CREDIT, color = Color(0xFF57606A), fontSize = 11.sp,
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp))
+        ferryNote?.let { id ->
+            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).clip(RoundedCornerShape(18.dp)).background(Color(0xE6161B22))
+                .padding(horizontal = 22.dp, vertical = 14.dp)) {
+                Text(stringResource(id), color = Color.White, fontSize = 18.sp)
+            }
+        }
         picked?.let { p ->
             LaunchedEffect(p) { delay(8_000); if (picked == p) picked = null }
             Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).clip(RoundedCornerShape(18.dp)).background(Color(0xE6161B22))
@@ -305,7 +359,7 @@ private fun DashMap(go: (String) -> Unit) {
     }
 }
 
-private enum class Sign { CENTER, RANGE, WIND, RAIN }
+private enum class Sign { CENTER, RANGE, WIND, RAIN, FERRY }
 
 /** IDmate's rain sources by the names their terms ask for. */
 private val SOURCES = mapOf("dwd" to "Deutscher Wetterdienst", "rainviewer" to "RainViewer")
@@ -348,6 +402,11 @@ private fun SignButton(sign: Sign, on: Boolean, label: String, onClick: () -> Un
                 Sign.RAIN -> {        // a cloud, three slanting drops below
                     arc(-12f, -12f, -2f, -2f, 90f, 180f); arc(-6f, -16f, 8f, -2f, 180f, 180f); arc(3f, -11f, 13f, -1f, 270f, 180f)
                     line(-7f, -2f, 8f, -2f); line(-6f, 4f, -8f, 9f); line(0f, 4f, -2f, 9f); line(6f, 4f, 4f, 9f)
+                }
+                Sign.FERRY -> {       // IDmate's ship: hull, cabin, mast, a wave below
+                    line(-15f, 1f, 15f, 1f); line(-15f, 1f, -12f, 8f); line(15f, 1f, 11f, 8f)
+                    line(-8f, 1f, -8f, -6f); line(-8f, -6f, 8f, -6f); line(8f, -6f, 8f, 1f); line(0f, -6f, 0f, -13f)
+                    arc(-17f, 10f, -9f, 16f, 180f, -180f); arc(-9f, 10f, -1f, 16f, 180f, 180f); arc(-1f, 10f, 7f, 16f, 180f, -180f); arc(7f, 10f, 15f, 16f, 180f, 180f)
                 }
             }
         }

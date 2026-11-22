@@ -119,6 +119,48 @@ internal object DashMapGeo {
         Area(lineCollection(outerLines), lineCollection(innerLines), shadeOf(shade), box(shade.ifEmpty { outerLines + innerLines }))
     }.getOrNull()
 
+    /**
+     * IDmate's long ferries (/api/ferries with status "ok", ferries.py): what the car reaches beyond a long crossing, as
+     * IDmate's page draws it (drawFerries) - the outline of all areas behind the ferries ("union", else each one's), a
+     * light fill instead of IDmate's cut out of the shade (MapLibre cannot cut overlapping rings out of one area), the
+     * crossings over the sea and the ports (the far one larger). [from]/[to]/[line] come as [lat, lon].
+     */
+    class Ferries(val outline: String, val fill: String, val sea: String, val portsFrom: String, val portsTo: String, val box: DoubleArray?, val count: Int)
+
+    fun ferries(answer: JSONObject?): Ferries? = runCatching {
+        if (answer?.optString("status") != "ok") return null
+        val list = answer.optJSONArray("ferries") ?: JSONArray()
+        fun outlineOf(gj: JSONObject?): List<List<DoubleArray>> {
+            val fs = gj?.optJSONArray("features") ?: return emptyList()
+            val line = (0 until fs.length()).mapNotNull { fs.optJSONObject(it) }
+                .firstOrNull { it.optJSONObject("properties")?.optString("kind") == "line" } ?: return emptyList()
+            val g = line.optJSONObject("geometry") ?: return emptyList()
+            val parts = when (g.optString("type")) {
+                "MultiLineString" -> lines(g.getJSONArray("coordinates"))
+                "LineString" -> listOf(points(g.getJSONArray("coordinates")))
+                else -> emptyList()
+            }
+            return parts.filter { it.size > 3 }.map { smoothRing(it, 2) }
+        }
+        fun latLon(a: JSONArray?) = a?.takeIf { it.length() >= 2 }?.let { doubleArrayOf(it.getDouble(1), it.getDouble(0)) }
+        val sea = ArrayList<List<DoubleArray>>(); val from = JSONArray(); val to = JSONArray(); val own = ArrayList<List<DoubleArray>>()
+        for (i in 0 until list.length()) {
+            val f = list.optJSONObject(i) ?: continue
+            f.optJSONArray("line")?.let { l -> (0 until l.length()).mapNotNull { latLon(l.optJSONArray(it)) } }?.takeIf { it.size >= 2 }?.let { sea += it }
+            latLon(f.optJSONArray("from"))?.let { from.put(point(it[0], it[1], JSONObject())) }
+            latLon(f.optJSONArray("to"))?.let { to.put(point(it[0], it[1], JSONObject().put("name", f.optString("name")))) }
+            own += outlineOf(f.optJSONObject("area"))
+        }
+        val rings = outlineOf(answer.optJSONObject("union")).ifEmpty { own }
+        val fill = JSONArray()
+        rings.forEach { r -> fill.put(JSONObject().put("type", "Feature").put("properties", JSONObject())
+            .put("geometry", JSONObject().put("type", "Polygon").put("coordinates", JSONArray().put(ring(r))))) }
+        val ports = (0 until to.length()).map { to.getJSONObject(it) } + (0 until from.length()).map { from.getJSONObject(it) }
+        val portPts = ports.map { p -> p.getJSONObject("geometry").getJSONArray("coordinates").let { doubleArrayOf(it.getDouble(0), it.getDouble(1)) } }
+        Ferries(lineCollection(rings), JSONObject().put("type", "FeatureCollection").put("features", fill).toString(), lineCollection(sea),
+            collection(from), collection(to), box(rings + sea + listOf(portPts)), list.length())
+    }.getOrNull()
+
     /** Out of reach slightly dimmed: the world with the reachable rings cut out (IDmate: a tint, the areas cut out of it). */
     fun shadeOf(rings: List<List<DoubleArray>>): String {
         if (rings.isEmpty()) return EMPTY
@@ -213,6 +255,7 @@ internal object DashMapGeo {
     private fun ring(pts: List<DoubleArray>) = JSONArray().apply { pts.forEach { put(JSONArray().put(it[0]).put(it[1])) } }
     private fun point(lon: Double, lat: Double, props: JSONObject) = JSONObject().put("type", "Feature").put("properties", props)
         .put("geometry", JSONObject().put("type", "Point").put("coordinates", JSONArray().put(lon).put(lat)))
+    private fun collection(features: JSONArray) = JSONObject().put("type", "FeatureCollection").put("features", features).toString()
     private fun lineCollection(lines: List<List<DoubleArray>>): String {
         val f = JSONArray()
         lines.filter { it.size >= 2 }.forEach { l ->

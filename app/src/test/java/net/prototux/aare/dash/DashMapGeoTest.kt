@@ -91,4 +91,36 @@ class DashMapGeoTest {
         assertEquals(DashMapGeo.EMPTY, DashMapGeo.trail(JSONArray().put(JSONArray().put(52.0).put(13.0))))
         assertNotNull(JSONObject(DashMapGeo.trail(JSONArray().put(JSONArray().put(52.0).put(13.0)).put(JSONArray().put(52.1).put(13.1)))).optJSONArray("features"))
     }
+
+    private fun lineFeature(vararg parts: List<DoubleArray>) = JSONObject().put("type", "Feature").put("properties", JSONObject().put("kind", "line"))
+        .put("geometry", JSONObject().put("type", "MultiLineString").put("coordinates", JSONArray().apply {
+            parts.forEach { p -> put(JSONArray().apply { p.forEach { put(JSONArray().put(it[0]).put(it[1])) } }) } }))
+
+    @Test fun ferriesWithTheirUnionSeaAndPorts() {
+        val area = JSONObject().put("type", "FeatureCollection").put("features", JSONArray().put(lineFeature(square(11.4, 54.6, 0.3))))
+        val ferry = JSONObject().put("from", JSONArray().put(54.50).put(11.22)).put("to", JSONArray().put(54.65).put(11.35))
+            .put("name", "mate-test-Faehre").put("line", JSONArray().put(JSONArray().put(54.50).put(11.22)).put(JSONArray().put(54.65).put(11.35)))
+            .put("area", area)
+        val answer = JSONObject().put("status", "ok").put("ferries", JSONArray().put(ferry)).put("union", area)
+        val f = DashMapGeo.ferries(answer)!!
+        assertEquals(1, f.count)
+        assertEquals("the union only, not each area again", 1, JSONObject(f.outline).getJSONArray("features").length())
+        assertEquals(1, JSONObject(f.fill).getJSONArray("features").length())
+        val sea = JSONObject(f.sea).getJSONArray("features").getJSONObject(0).getJSONObject("geometry").getJSONArray("coordinates")
+        assertEquals("[lat, lon] turned into [lon, lat]", 11.22, sea.getJSONArray(0).getDouble(0), 1e-9)
+        val to = JSONObject(f.portsTo).getJSONArray("features").getJSONObject(0).getJSONObject("geometry").getJSONArray("coordinates")
+        assertEquals(11.35, to.getDouble(0), 1e-9); assertEquals(54.65, to.getDouble(1), 1e-9)
+        assertTrue(f.box!![0] <= 11.1 && f.box!![2] >= 11.7)
+        assertNull("still searching", DashMapGeo.ferries(JSONObject().put("status", "running")))
+        assertEquals("none found", 0, DashMapGeo.ferries(JSONObject().put("status", "ok").put("ferries", JSONArray()))!!.count)
+    }
+
+    /** I-070: a river IDmate's outline cuts (the Elbe at Hamburg) comes as an open line - drawn as IDmate draws it, not shaded. */
+    @Test fun openLineOfTheOutlineIsDrawnNotShaded() {
+        val river = listOf(doubleArrayOf(9.6, 53.6), doubleArrayOf(9.9, 53.55), doubleArrayOf(10.1, 53.5))
+        val gj = JSONObject().put("type", "FeatureCollection").put("features", JSONArray().put(lineFeature(square(10.0, 53.5, 1.0), river)))
+        val a = DashMapGeo.area(gj)!!
+        assertEquals("ring and river", 2, JSONObject(a.outer).getJSONArray("features").length())
+        assertEquals("the world and the ring's hole only", 2, JSONObject(a.shade).getJSONObject("geometry").getJSONArray("coordinates").length())
+    }
 }

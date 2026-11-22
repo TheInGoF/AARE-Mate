@@ -8,6 +8,7 @@ import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -34,6 +35,9 @@ internal class DashMapData(context: Context) {
     private val http = OkHttpClient.Builder().cookieJar(jar).followRedirects(true)
         .connectTimeout(8, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).build()
     @Volatile private var opened: String? = null
+    /** IDmate searches long ferries (Valhalla and a ferry source set up): the dashboard shows the button "Fähren". */
+    @Volatile var ferriesOffered = false
+        private set
 
     /** The IDmate server's own address (the read API's without /api/v1), null without a link. */
     private fun base(link: Link): String? = link.url.trimEnd('/').removeSuffix("/api/v1").takeIf { it.toHttpUrlOrNull() != null }
@@ -44,7 +48,9 @@ internal class DashMapData(context: Context) {
         jar.clear()
         return runCatching {
             http.newCall(Request.Builder().url(link.url.trimEnd('/') + "/display").header("Authorization", "Bearer " + link.token).build()).execute().use { r ->
-                Log.i(TAG, "dashboard map: display session HTTP ${r.code}, landed on ${r.request.url.encodedPath}, cookies ${jar.loadForRequest(r.request.url).size}")
+                // the page's own flags: whether IDmate can search long ferries (its map button "Fähren")
+                ferriesOffered = r.isSuccessful && mapBoot(runCatching { r.body.string() }.getOrDefault(""))?.optBoolean("ferries") == true
+                Log.i(TAG, "dashboard map: display session HTTP ${r.code}, landed on ${r.request.url.encodedPath}, cookies ${jar.loadForRequest(r.request.url).size}, ferries ${if (ferriesOffered) "offered" else "not offered"}")
                 r.isSuccessful.also { ok -> if (ok) opened = link.url + link.token.hashCode() else Log.w(TAG, "dashboard map: display session refused (HTTP ${r.code})") }
             }
         }.onFailure { Log.w(TAG, "dashboard map: no display session: ${it.javaClass.simpleName}") }.getOrDefault(false)
@@ -94,5 +100,36 @@ internal class DashMapData(context: Context) {
     /** The car's trail of the last 10 minutes. */
     fun trail(): JSONArray? = get("/api/trail")?.let { runCatching { JSONArray(it) }.getOrNull() }
 
-    companion object { private const val TAG = "IDmateStage" }
+    /** IDmate's last search of long ferries (status "none", "running", "ok" with "ferries" and "union", "error"). */
+    fun ferries(): JSONObject? = get("/api/ferries")?.let { runCatching { JSONObject(it) }.getOrNull() }
+
+    /**
+     * Starts IDmate's search of long ferries (its map button "Fähren", /api/ferries/start): "running", "ok" (a recent
+     * one at hand), "off", "no_model", "forbidden" (IDmate lets a display session only read) or "error".
+     */
+    fun startFerries(): String {
+        val link = Link.load(app) ?: return "error"
+        val base = base(link) ?: return "error"
+        if (!session(link)) return "error"
+        val url = (base + "/api/ferries/start").toHttpUrlOrNull() ?: return "error"
+        // IDmate's pages send the token of the csrf_token cookie with every change, from their own address
+        val csrf = jar.loadForRequest(url).firstOrNull { it.name == "csrf_token" }?.value
+        return runCatching {
+            http.newCall(Request.Builder().url(url).post(ByteArray(0).toRequestBody(null)).header("Accept", "application/json")
+                .header("Referer", "$base/").apply { csrf?.let { header("X-CSRFToken", it) } }.build()).execute().use { r ->
+                if (r.code == 401 || r.code == 403) return@use "forbidden"
+                val j = JSONObject(r.body.string())
+                val st = j.optString("status", "error")
+                if (st == "error" && j.optString("error") == "no_model") "no_model" else st
+            }
+        }.onFailure { Log.w(TAG, "dashboard map: ferry search not started: ${it.javaClass.simpleName}") }.getOrDefault("error")
+    }
+
+    companion object {
+        private const val TAG = "IDmateStage"
+
+        /** The flags IDmate's dashboard page carries for its map (<script id="mapBoot">), null when there are none. */
+        fun mapBoot(html: String): JSONObject? = Regex("""id="mapBoot">(.*?)</script>""", RegexOption.DOT_MATCHES_ALL).find(html)
+            ?.groupValues?.get(1)?.let { runCatching { JSONObject(it) }.getOrNull() }
+    }
 }
