@@ -8,7 +8,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Icon
@@ -64,12 +65,14 @@ fun DashArea(runtime: CarRuntime, modifier: Modifier = Modifier) {
             )
             DisposableEffect(Unit) { onDispose { DashView.hide() } }
         }
+        // in Mate's look as the map's buttons beside it (22.11.2026: "alles aus einem guss ein design"): this screen's
+        // density is the display's, the map's Mate's (208/160) - 56 dp here are the map's 44
         Box(
-            Modifier.align(Alignment.TopEnd).padding(16.dp).size(56.dp).clip(CircleShape)
-                .background(Color(0xE6161B22)).clickable { DashView.reload() },
+            Modifier.align(Alignment.TopEnd).padding(16.dp).size(56.dp).clip(RoundedCornerShape(18.dp))
+                .background(Mate.cardSolid).border(2.dp, Mate.floatEdge, RoundedCornerShape(18.dp)).clickable { DashView.reload() },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.Refresh, stringResource(R.string.dash_reload), tint = Color(0xFFF0F6FC), modifier = Modifier.size(30.dp))
+            Icon(Icons.Rounded.Refresh, stringResource(R.string.dash_reload), tint = Mate.text, modifier = Modifier.size(30.dp))
         }
     }
 }

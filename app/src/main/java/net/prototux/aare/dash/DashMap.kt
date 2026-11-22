@@ -20,6 +20,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Adjust
+import androidx.compose.material.icons.rounded.Air
+import androidx.compose.material.icons.rounded.DirectionsBoat
+import androidx.compose.material.icons.rounded.WaterDrop
+import net.prototux.aare.ui.car.Mate
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material.icons.rounded.TravelExplore
@@ -314,7 +319,7 @@ private fun DashMap(go: (String) -> Unit) {
         }
         // the own controls at the driver's side, with the signs they had (CarStage.MapButton): crosshair, range, wind,
         // rain - as large as the car bar's microphone; zoom with two fingers (21.11.2026: "braucht kein Plus und Minus")
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SignButton(Sign.CENTER, follow, stringResource(R.string.dash_map_follow)) { toCar() }
             SignButton(Sign.RANGE, false, stringResource(R.string.dash_map_range)) { overview() }
             if (windSeen) SignButton(Sign.WIND, windOn, stringResource(R.string.dash_map_wind)) { windOn = !windOn; prefs.edit().putBoolean("wind", windOn).apply() }
@@ -337,24 +342,25 @@ private fun DashMap(go: (String) -> Unit) {
                 listOf(R.string.dash_rain_light, R.string.dash_rain_moderate, R.string.dash_rain_heavy).forEachIndexed { g, id ->
                     LegendRow({ Box(Modifier.size(18.dp).clip(RoundedCornerShape(3.dp)).background(cols[g])) }, stringResource(id))
                 }
-                Text(rainAt?.let { stringResource(R.string.dash_rain_now, it) } ?: stringResource(R.string.dash_rain_waiting), color = Color(0xFFB1BAC4), fontSize = 13.sp)
-                rainSrc?.let { Text(stringResource(R.string.dash_rain_source, it), color = Color(0xFF8B949E), fontSize = 12.sp) }
+                Text(rainAt?.let { stringResource(R.string.dash_rain_now, it) } ?: stringResource(R.string.dash_rain_waiting), color = Mate.textSoft, fontSize = Mate.caption)
+                rainSrc?.let { Text(stringResource(R.string.dash_rain_source, it), color = Mate.textFaint, fontSize = Mate.caption) }
             }
         }
         // the map data's credit, as on Mate Navi's map (ODbL)
         Text(net.prototux.aare.ui.car.navi.OSM_CREDIT, color = Color(0xFF57606A), fontSize = 11.sp,
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 6.dp))
         ferryNote?.let { id ->
-            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).clip(RoundedCornerShape(18.dp)).background(Color(0xE6161B22))
-                .padding(horizontal = 22.dp, vertical = 14.dp)) {
-                Text(stringResource(id), color = Color.White, fontSize = 18.sp)
+            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).clip(RoundedCornerShape(14.dp)).background(Mate.cardSolid)
+                .border(1.5.dp, Mate.floatEdge, RoundedCornerShape(14.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
+                Text(stringResource(id), color = Mate.text, fontSize = Mate.body)
             }
         }
         picked?.let { p ->
             LaunchedEffect(p) { delay(8_000); if (picked == p) picked = null }
-            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).clip(RoundedCornerShape(18.dp)).background(Color(0xE6161B22))
-                .clickable { picked = null; go("%.6f,%.6f".format(java.util.Locale.ROOT, p.latitude, p.longitude)) }.padding(horizontal = 22.dp, vertical = 14.dp)) {
-                Text(stringResource(R.string.dash_pick_navigate), color = Color.White, fontSize = 20.sp)
+            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp).clip(RoundedCornerShape(14.dp)).background(Mate.cardSolid)
+                .border(1.5.dp, Mate.floatEdge, RoundedCornerShape(14.dp))
+                .clickable { picked = null; go("%.6f,%.6f".format(java.util.Locale.ROOT, p.latitude, p.longitude)) }.padding(horizontal = 18.dp, vertical = 12.dp)) {
+                Text(stringResource(R.string.dash_pick_navigate), color = Mate.text, fontSize = Mate.heading, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
             }
         }
     }
@@ -371,56 +377,35 @@ private fun clock(iso: String): String? = runCatching {
 }.getOrNull()
 
 /**
- * A map button as the stage had them (CarStage.MapButton): a glass plate with a rounded edge, the sign drawn, teal when
- * on - 56 dp, the size of the car bar's microphone (21.11.2026: "sonst wird es im Fahrzeug schwierig").
+ * A map button in Mate's look, as Mate Navi's buttons (22.11.2026: "die dashboard map bedienflächen sind viel größer als
+ * der rest der bedienoberfläche … alles aus einem guss ein design"): Mate's card with its light edge, a Material sign
+ * (the same as in Mate Navi, the ship as in its trip plan), teal when on; 44 dp at Mate's density, on the car screen
+ * as large as the bar's microphone and the reload button beside the map.
  */
 @Composable
 private fun SignButton(sign: Sign, on: Boolean, label: String, onClick: () -> Unit) {
-    Box(Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)).background(Color(if (on) 0xF20E3B36 else 0xE6161B22))
-        .border(1.2.dp, Color(if (on) 0xFF1DE9B6 else 0xFF57606A), RoundedCornerShape(10.dp))
-        .clickable(onClickLabel = label, onClick = onClick)) {
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            val u = size.width / 52f; val cx = size.width / 2; val cy = size.height / 2
-            val col = Color(if (on) 0xFF1DE9B6 else 0xFFF0F6FC)
-            val st = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.6f * u, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-            fun line(x0: Float, y0: Float, x1: Float, y1: Float) = drawLine(col, androidx.compose.ui.geometry.Offset(cx + x0 * u, cy + y0 * u), androidx.compose.ui.geometry.Offset(cx + x1 * u, cy + y1 * u), 2.6f * u, androidx.compose.ui.graphics.StrokeCap.Round)
-            fun arc(l: Float, t: Float, r: Float, b: Float, start: Float, sweep: Float) = drawArc(col, start, sweep, false,
-                androidx.compose.ui.geometry.Offset(cx + l * u, cy + t * u), androidx.compose.ui.geometry.Size((r - l) * u, (b - t) * u), style = st)
-            when (sign) {
-                Sign.CENTER -> {      // crosshair
-                    drawCircle(col, 8 * u, androidx.compose.ui.geometry.Offset(cx, cy), style = st)
-                    line(0f, -15f, 0f, -10f); line(0f, 10f, 0f, 15f); line(-15f, 0f, -10f, 0f); line(10f, 0f, 15f, 0f)
-                    drawCircle(col, 2.6f * u, androidx.compose.ui.geometry.Offset(cx, cy))
-                }
-                Sign.RANGE -> {       // dashed circle round a point
-                    drawCircle(col, 13 * u, androidx.compose.ui.geometry.Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(2.6f * u,
-                        pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5 * u, 5 * u))))
-                    drawCircle(col, 3.2f * u, androidx.compose.ui.geometry.Offset(cx, cy))
-                }
-                Sign.WIND -> {        // three lines, the middle one an arrow
-                    line(-12f, -7f, 3f, -7f); line(-12f, 0f, 12f, 0f); line(12f, 0f, 7f, -4.5f); line(12f, 0f, 7f, 4.5f); line(-12f, 7f, 0f, 7f)
-                }
-                Sign.RAIN -> {        // a cloud, three slanting drops below
-                    arc(-12f, -12f, -2f, -2f, 90f, 180f); arc(-6f, -16f, 8f, -2f, 180f, 180f); arc(3f, -11f, 13f, -1f, 270f, 180f)
-                    line(-7f, -2f, 8f, -2f); line(-6f, 4f, -8f, 9f); line(0f, 4f, -2f, 9f); line(6f, 4f, 4f, 9f)
-                }
-                Sign.FERRY -> {       // IDmate's ship: hull, cabin, mast, a wave below
-                    line(-15f, 1f, 15f, 1f); line(-15f, 1f, -12f, 8f); line(15f, 1f, 11f, 8f)
-                    line(-8f, 1f, -8f, -6f); line(-8f, -6f, 8f, -6f); line(8f, -6f, 8f, 1f); line(0f, -6f, 0f, -13f)
-                    arc(-17f, 10f, -9f, 16f, 180f, -180f); arc(-9f, 10f, -1f, 16f, 180f, 180f); arc(-1f, 10f, 7f, 16f, 180f, -180f); arc(7f, 10f, 15f, 16f, 180f, 180f)
-                }
-            }
+    val shape = RoundedCornerShape(14.dp)
+    Box(Modifier.size(44.dp).clip(shape).background(if (on) Mate.accentContainer else Mate.cardSolid)
+        .border(1.5.dp, if (on) Mate.accent else Mate.floatEdge, shape)
+        .clickable(onClickLabel = label, onClick = onClick), contentAlignment = Alignment.Center) {
+        val icon = when (sign) {
+            Sign.CENTER -> Icons.Rounded.MyLocation
+            Sign.RANGE -> Icons.Rounded.Adjust
+            Sign.WIND -> Icons.Rounded.Air
+            Sign.RAIN -> Icons.Rounded.WaterDrop
+            Sign.FERRY -> Icons.Rounded.DirectionsBoat
         }
+        Icon(icon, contentDescription = label, tint = if (on) Mate.accent else Mate.text, modifier = Modifier.size(24.dp))
     }
 }
 
 @Composable
 private fun Legend(title: String, rows: @Composable () -> Unit) {
-    // a light edge: on the dark night map the dark plate would melt into it
-    Column(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xE6161B22)).border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(10.dp))
+    // Mate's card with its light edge, as the buttons (on the dark night map the dark plate would melt into it)
+    Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Mate.cardSolid).border(1.5.dp, Mate.floatEdge, RoundedCornerShape(14.dp))
         .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, color = Color.White, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+        Text(title, color = Mate.text, fontSize = Mate.caption, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
         rows()
     }
 }
@@ -428,7 +413,7 @@ private fun Legend(title: String, rows: @Composable () -> Unit) {
 @Composable
 private fun LegendRow(mark: @Composable () -> Unit, label: String) {
     androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        mark(); Text(label, color = Color(0xFFE6EDF3), fontSize = 14.sp)
+        mark(); Text(label, color = Mate.textDim, fontSize = Mate.caption)
     }
 }
 
