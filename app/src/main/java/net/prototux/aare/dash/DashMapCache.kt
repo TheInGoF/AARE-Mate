@@ -149,7 +149,9 @@ internal object DashMapCache {
             }.also { center = it }
             RangeWind.deform(ring, c, wind, car)
         }
-        if (made != null) Log.i(TAG, "dashboard map: range with the wind from %.0f° at %.0f km/h put in by Mate (%.2f..%.2f of the range)".format(
+        // only when Mate did put it in: IDmate's outline (kind "line", nearly always) has the wind already
+        if (made != null && center == null) Log.i(TAG, "dashboard map: range as IDmate drew it (its outline has the wind in it)")
+        if (made != null && center != null) Log.i(TAG, "dashboard map: range with the wind from %.0f° at %.0f km/h put in by Mate (%.2f..%.2f of the range)".format(
             java.util.Locale.ROOT, wind.fromDeg, wind.ms * 3.6, RangeWind.factor(wind.fromDeg, wind, car), RangeWind.factor((wind.fromDeg + 180) % 360, wind, car)))
         return made
     }
