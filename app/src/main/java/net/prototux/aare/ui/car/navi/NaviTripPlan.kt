@@ -1,5 +1,8 @@
 package net.prototux.aare.ui.car.navi
 
+import androidx.compose.material.icons.rounded.AddLocationAlt
+import androidx.compose.material.icons.rounded.EditLocationAlt
+import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -139,7 +142,7 @@ internal object NaviTripPlan {
  * Greifer damit der User sieht dass das geht"). Charging stops and the destination stay; the charging is planned anew.
  */
 @Composable
-internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(rows: List<NaviTripPlan.Row>, onBack: () -> Unit, onClose: () -> Unit,
+internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(rows: List<NaviTripPlan.Row>, onBack: (() -> Unit)?, onClose: () -> Unit,
                                onReorder: (List<Pair<Position, String>>) -> Unit = {}, onEdit: ((List<Pair<Position, String>>) -> Unit)? = null,
                                /** a charging stop taken out during the trip, null: all of them (19.11.2026) */
                                onDropCharge: ((Charger?) -> Unit)? = null,
@@ -153,8 +156,27 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                                /** the stations on the map as a list too, nearest to the stop first (22.11.2026: "dass man dann auch eine Liste bekommt") */
                                altList: List<NaviTripPlan.Option> = emptyList(), onAltPick: (NaviTripPlan.Option) -> Unit = {},
                                onAlternatives: ((Charger) -> Unit)? = null, onAltClose: () -> Unit = {},
-                               onSwap: ((Charger, Charger) -> Unit)? = null) {
+                               onSwap: ((Charger, Charger) -> Unit)? = null,
+                               /** System L-097: the plan is the first thing while guiding - a stop, another destination, the menu */
+                               onAddStop: (() -> Unit)? = null, onChangeDestination: (() -> Unit)? = null, onMenu: (() -> Unit)? = null) {
     PanelHeader(stringResource(R.string.mate_navi_plan), onBack, onClose)
+    // System L-097 (22.11.2026: "wenn wir unten auf das Ziel und das Zwischenziel drücken, dann geht erst der Routenplaner auf
+    // und von dem Routenplaner aus kommen wir auf den Auswahlpanel … wie bei Tesla"): the usual steps right at the top
+    if (onAddStop != null || onChangeDestination != null || onMenu != null) {
+        Spacer(Modifier.size(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            @Composable fun Act(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, go: () -> Unit) =
+                Row(modifier.heightIn(min = 64.dp).clip(RoundedCornerShape(16.dp)).background(Mate.surface).clickable(onClick = go)
+                    .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                    Icon(icon, null, tint = Mate.accent, modifier = Modifier.size(26.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(label, style = MaterialTheme.typography.titleSmall, color = Mate.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            onAddStop?.let { Act(Icons.Rounded.AddLocationAlt, stringResource(R.string.mate_navi_plan_add_stop), Modifier.weight(1f), it) }
+            onChangeDestination?.let { Act(Icons.Rounded.EditLocationAlt, stringResource(R.string.mate_navi_plan_change), Modifier.weight(1f), it) }
+            onMenu?.let { Act(Icons.Rounded.Apps, stringResource(R.string.mate_navi_plan_more), Modifier, it) }
+        }
+    }
     Spacer(Modifier.size(12.dp))
     // System L-089 (22.11.2026: "dass wir angezeigt bekommen, wie viele Kilometer fahren wir gerade, dann kommt ein
     // Ladestopp, wie viele Kilometer fahren wir dazwischen … bis zum Ziel. Dass wir wirklich einen Reiseplan sehen"):

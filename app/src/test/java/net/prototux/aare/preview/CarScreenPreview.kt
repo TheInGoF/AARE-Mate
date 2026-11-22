@@ -259,7 +259,7 @@ class CarScreenPreview {
                             selected = tesla.at, onPick = {}, altFor = tesla, altCount = 7,
                             altPicked = pickedAlt, altList = listOf(pickedAlt,
                                 net.prototux.aare.ui.car.navi.NaviTripPlan.Option(net.prototux.aare.ui.car.navi.Charger(org.maplibre.spatialk.geojson.Position(longitude = 10.02, latitude = 52.95), 150, 4, "Aral pulse"), 4_000.0, 10.0)),
-                            onAlternatives = {}, onSwap = { _, _ -> })
+                            onAlternatives = {}, onSwap = { _, _ -> }, onAddStop = {}, onChangeDestination = {}, onMenu = {})
                     }
                 }
             }

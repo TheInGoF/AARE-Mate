@@ -1489,7 +1489,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     add(HubTile(androidx.compose.material.icons.Icons.Rounded.Tune, context.getString(net.prototux.aare.R.string.navi_options)) { panel = NaviStep.Options(NaviStep.Menu) })
                     add(HubTile(androidx.compose.material.icons.Icons.Rounded.Close, context.getString(net.prototux.aare.R.string.mate_navi_menu_end), Mate.danger) { end() })
                 }
-                NaviHub(target?.name ?: context.getString(net.prototux.aare.R.string.mate_navi_menu), tiles, hubMod, onBack = null, onClose = { panel = NaviStep.None },
+                NaviHub(target?.name ?: context.getString(net.prototux.aare.R.string.mate_navi_menu), tiles, hubMod, onBack = { panel = NaviStep.Plan }, onClose = { panel = NaviStep.None },
                     driverOnRight = driverOnRight,
                     onKeyboard = { book = net.prototux.aare.places.Places.load(context); purpose = Purpose.CHANGE; panel = NaviStep.Search },
                     onMic = { purpose = Purpose.CHANGE; NaviSearchStart.voice = true; panel = NaviStep.Search })
@@ -1510,7 +1510,10 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 androidx.compose.runtime.DisposableEffect(Unit) { onDispose {
                     altFor = null; altMarks = emptyList(); altPicked = null
                     if (planLook != null) { planLook = null; touchedAt = 0L } } }
-                NaviTripPlanPanel(rows, onBack = { panel = NaviStep.Menu }, onClose = { panel = NaviStep.None },
+                NaviTripPlanPanel(rows, onBack = null, onClose = { panel = NaviStep.None },
+                    onAddStop = { book = net.prototux.aare.places.Places.load(context); purpose = Purpose.STOP; panel = NaviStep.Lists },
+                    onChangeDestination = { book = net.prototux.aare.places.Places.load(context); purpose = Purpose.CHANGE; panel = NaviStep.Lists },
+                    onMenu = { panel = NaviStep.Menu },
                     nowPercent = net.prototux.aare.host.CarDataService.car(context)?.socPercent,
                     selected = planLook,
                     altFor = altFor, altCount = altMarks.size, altPicked = altPicked, altList = altMarks,
@@ -1598,7 +1601,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     if (purpose != Purpose.STOP) add(HubTile(androidx.compose.material.icons.Icons.Rounded.Tune, context.getString(net.prototux.aare.R.string.navi_options)) {
                         panel = NaviStep.Options(NaviStep.Lists) })
                 }
-                NaviHub(pickTitle, tiles, hubMod, onBack = if (guiding) ({ panel = NaviStep.Menu }) else null, onClose = { panel = NaviStep.None },
+                NaviHub(pickTitle, tiles, hubMod, onBack = if (guiding) ({ panel = NaviStep.Plan }) else null, onClose = { panel = NaviStep.None },
                     driverOnRight = driverOnRight,
                     onKeyboard = { panel = NaviStep.Search }, onMic = { NaviSearchStart.voice = true; panel = NaviStep.Search })
             }
@@ -1740,7 +1743,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                         if (!net.prototux.aare.Settings(context).combustion) NaviChargeTile(tileArrival, Modifier)
                         NaviSpeed(kmh, limit, Modifier, speedFrom) { beat }
                         NaviEta(trip.progress.distanceRemaining, trip.progress.durationRemaining + chargingAheadS, Modifier,
-                            ahead, aheadCharger, jamLeft) { panel = NaviStep.Menu }
+                            ahead, aheadCharger, jamLeft) { panel = NaviStep.Plan }
                     }
                 }
                 // O193/O194: the speed cameras and the tone over the limit come from NaviKeep, shown or not

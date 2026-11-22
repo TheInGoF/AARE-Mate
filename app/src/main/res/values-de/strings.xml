@@ -980,6 +980,9 @@
     <string name="mate_navi_menu_change">Ziel ändern</string>
     <string name="mate_navi_menu_end">Navigation beenden</string>
     <string name="mate_navi_plan">Reiseplan</string>
+    <string name="mate_navi_plan_add_stop">Zwischenziel</string>
+    <string name="mate_navi_plan_change">Ziel ändern</string>
+    <string name="mate_navi_plan_more">Menü</string>
     <string name="mate_navi_plan_start">Hier, jetzt</string>
     <string name="mate_navi_plan_leg">%1$s · %2$s Fahrt</string>
     <string name="mate_navi_route_list">Route</string>
