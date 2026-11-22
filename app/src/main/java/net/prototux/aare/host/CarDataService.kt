@@ -111,12 +111,43 @@ class CarDataService : Service() {
         }
     }
 
-    /** `ICarMessage`: Maps registers a listener and must get an object; nothing is ever sent. */
+    /** `ICarMessage`: Maps registers a client and asks it for the navigation focus, which the car grants at once. */
     private val messages = object : Binder() {
         override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
             if (code > 0x00ffffff) return super.onTransact(code, data, reply, flags)
-            reply?.writeNoException()
+            note("message", code)
+            when (code) {
+                // registerClient(callback, type): Maps (26.47) asks for the navigation focus through this client and
+                // starts guidance only once it has it - answered empty ("false"), guidance with the navigation provider
+                // started ended in "loading" (B4, System I-003)
+                MSG_REGISTER -> { reply?.writeNoException(); reply?.writeInt(1) }
+                // request(callback, type, 0, ...): the car grants it at once - callback tx 1 (type, 0, 1 = granted)
+                MSG_REQUEST -> {
+                    val callback = runCatching { data.enforceInterface(MESSAGE); data.readStrongBinder() }.getOrNull()
+                    val type = runCatching { data.readInt() }.getOrDefault(1)
+                    reply?.writeNoException()
+                    if (callback != null) grantFocus(callback, type)
+                }
+                else -> reply?.writeNoException()
+            }
             return true
+        }
+    }
+
+    /** Tells Maps' message callback that it has the focus it asked for (type 1 = navigation). */
+    private fun grantFocus(callback: IBinder, type: Int) {
+        val data = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(MESSAGE_CALLBACK)
+            data.writeInt(type)
+            data.writeInt(0)
+            data.writeInt(1)
+            callback.transact(1, data, null, IBinder.FLAG_ONEWAY)
+            Log.i(TAG, "focus $type granted")
+        } catch (e: Exception) {
+            Log.w(TAG, "focus $type: $e")
+        } finally {
+            data.recycle()
         }
     }
 
@@ -238,6 +269,10 @@ class CarDataService : Service() {
         private const val SENSOR = "com.google.android.gms.car.ICarSensor"
         /** Sensor 23 of Android Auto: the vehicle energy model. */
         private const val SENSOR_ENERGY_MODEL = 23
+        private const val MESSAGE = "com.google.android.gms.car.ICarMessage"
+        private const val MESSAGE_CALLBACK = "com.google.android.gms.car.ICarMessageCallback"
+        private const val MSG_REGISTER = 3
+        private const val MSG_REQUEST = 4
         // As Maps' ProjectedCarInfo shows them: fuel 10 = electric; plugs 2 = Type 2 (Mennekes), 5 = CCS Combo 2
         private const val FUEL_ELECTRIC = 10
         private const val PLUG_TYPE_2 = 2

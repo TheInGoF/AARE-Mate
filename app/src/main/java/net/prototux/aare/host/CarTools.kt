@@ -278,8 +278,10 @@ object CarTools {
         // debug builds: whether Mate starts Google Maps' navigation provider when Maps comes on the car screen (B4)
         "debug_nav_provider" -> if (!net.prototux.aare.BuildConfig.DEBUG) JSONObject().put("ok", false) else {
             net.prototux.aare.host.projected.NavigationProvider.enabled = args.optBoolean("on", true)
+            net.prototux.aare.host.projected.NavigationProvider.stopAfterSetup = args.optBoolean("stop_after_setup", false)
             if (args.optBoolean("stop")) net.prototux.aare.host.projected.NavigationProvider.current?.stop()
             JSONObject().put("ok", true).put("on", net.prototux.aare.host.projected.NavigationProvider.enabled)
+                .put("stop_after_setup", net.prototux.aare.host.projected.NavigationProvider.stopAfterSetup)
         }
         // debug builds: a sentence spoken by the phone's text-to-speech as a navigation prompt, the way ABRP speaks ("media": true: as music)
         "debug_say" -> if (!net.prototux.aare.BuildConfig.DEBUG) JSONObject().put("ok", false) else {

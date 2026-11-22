@@ -17,7 +17,10 @@ import android.util.Log
  *
  * Read from Maps: tx 2 hands over a configuration (a bundle: `version`, `dynamic_configuration`), tx 3 the
  * start with `mode` 1, tx 4 the stop. Maps answers only a caller it takes for the Android Auto app.
- * Started only for the setup: while it is started, Maps cannot guide a route (B4) - see [SETUP_MS].
+ * Stays started while Maps is on the car screen and is stopped with the projection (System I-003, 22.11.2026):
+ * Google Maps 26.47 drops the car (lifecycle DISCONNECTED, no energy model, "ChargingNotRequired", routes as for
+ * a petrol car) as soon as the provider stops. Until 15.11.2026 Mate stopped it after the setup because routes
+ * could not be guided while it was started (B4); [stopAfterSetup] keeps that way for debug builds.
  */
 internal class NavigationProvider(private val context: Context) {
     private var connection: ServiceConnection? = null
@@ -31,11 +34,9 @@ internal class NavigationProvider(private val context: Context) {
                 val ok = call(service, 2, reply = true) { it.writeInt(1); it.writeBundle(Bundle().apply { putInt("version", 1); putBundle("dynamic_configuration", Bundle()) }) } &&
                     call(service, 3, reply = false) { it.writeInt(1); it.writeBundle(Bundle().apply { putInt("mode", 1) }) }
                 Log.i(TAG, if (ok) "navigation provider started" else "navigation provider refused")
-                // Only for as long as Maps takes to register the car's sensors (about 2 s): with the provider still
-                // started, every route Maps was asked to guide ended in "an error occurred" (B4, test drive and
-                // Google's desktop head unit). Stopped, Maps keeps the car and its sensors - battery, energy model,
-                // "Is BEV" - and guides (checked in the desk window, 15.11.2026).
-                if (ok) handler.postDelayed(stopAfterSetup, SETUP_MS)
+                // Until 15.11.2026 stopped after the setup (B4: routes ended in "an error occurred" while it was started);
+                // Maps 26.47 then drops the car and plans no charging stops, so it stays started (debug: stop_after_setup)
+                if (ok && stopAfterSetup) handler.postDelayed(stopRunnable, SETUP_MS)
             }
             override fun onServiceDisconnected(name: ComponentName) { binder = null }
         }
@@ -45,13 +46,13 @@ internal class NavigationProvider(private val context: Context) {
     }
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val stopAfterSetup = Runnable {
+    private val stopRunnable = Runnable {
         Log.i(TAG, "navigation provider stopped after setup: Maps guides only without it")
         stop()
     }
 
     fun stop() {
-        handler.removeCallbacks(stopAfterSetup)
+        handler.removeCallbacks(stopRunnable)
         binder?.let { b -> call(b, 4, reply = true) {} }
         binder = null
         connection?.let { runCatching { context.unbindService(it) } }
@@ -79,6 +80,8 @@ internal class NavigationProvider(private val context: Context) {
     companion object {
         /** Debug builds (tool debug_nav_provider): leave Maps' navigation provider alone, to tell its effects apart (B4). */
         @Volatile var enabled = true
+        /** Debug builds (tool debug_nav_provider, "stop_after_setup"): the old way - stop it once the sensors are registered. */
+        @Volatile var stopAfterSetup = false
         /** How long the provider stays started: Maps registers the car's sensors within about 2 s of the start. */
         private const val SETUP_MS = 8_000L
         /** The provider started last, for the debug tool. */
