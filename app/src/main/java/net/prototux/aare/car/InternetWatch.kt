@@ -60,6 +60,12 @@ class InternetWatch(private val context: Context, private val notice: (title: St
                  else if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL)) " (login page)"
                  else if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) " (internet checked)" else " (internet not checked/none)")
         } }.sorted().joinToString(", ").ifEmpty { "none" }
+        // a Wi-Fi asking for internet that has none (yet): its login page confirmed by Mate (PortalLogin)
+        all.forEach { n -> cm.getNetworkCapabilities(n)?.let { c ->
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL) || !c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)))
+                Thread { PortalLogin.confirm(context, n) }.apply { isDaemon = true }.start()
+        } }
         if (text == networksSaid) return
         networksSaid = text
         DiagLog.add("networks: $text" + if (bound != null) " - Mate itself over mobile data" else "", area = "NET")
@@ -72,7 +78,9 @@ class InternetWatch(private val context: Context, private val notice: (title: St
      * thinks of the Wi-Fi. The link to the car is not touched (its sockets are made on the car's network itself). Undone as
      * soon as the Wi-Fi carries internet again, or the session ends.
      */
-    @Volatile private var bound: Network? = null
+    private var bound: Network?
+        get() = mateBound
+        set(v) { mateBound = v }
     private var mobileAsked = false
     private val mobile = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = main.post {
@@ -122,6 +130,8 @@ class InternetWatch(private val context: Context, private val notice: (title: St
                 try { c.responseCode == 204 } finally { c.disconnect() }
             }.getOrDefault(false)
             failed = if (ok) 0 else failed + 1
+            // the Wi-Fi in use gives nothing: perhaps its login page wants confirming
+            if (!ok && lastKind == "wifi") PortalLogin.confirm(context, n)
             val kind = lastKind
             main.post {
                 if (ok && (seen == State.WIFI_STUCK || seen == State.MOBILE_STUCK)) change(State.ONLINE, kind)
@@ -173,8 +183,10 @@ class InternetWatch(private val context: Context, private val notice: (title: St
         notice(context.getString(R.string.internet_notice_title), context.getString(text))
     }
 
-    private companion object {
-        const val SETTLE_MS = 20_000L
-        const val PROBE_MS = 60_000L
+    companion object {
+        /** The network Mate's own traffic is bound to (mobile data while the Wi-Fi gives none), null: Android's choice. */
+        @Volatile var mateBound: Network? = null
+        private const val SETTLE_MS = 20_000L
+        private const val PROBE_MS = 60_000L
     }
 }

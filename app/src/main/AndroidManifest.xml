@@ -106,6 +106,7 @@
             </intent-filter>
             <meta-data android:name="android.speech.tts" android:resource="@xml/mate_tts_engine" />
         </service>
+        <activity android:name=".car.PortalPage" android:exported="false" android:label="@string/portal_title" />
         <activity android:name=".speech.MateTtsSample" android:exported="true" android:theme="@android:style/Theme.NoDisplay">
             <intent-filter>
                 <action android:name="android.speech.tts.engine.GET_SAMPLE_TEXT" />

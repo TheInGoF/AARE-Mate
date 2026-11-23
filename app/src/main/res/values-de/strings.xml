@@ -588,6 +588,8 @@
     <string name="internet_notice_wifi">Das WLAN hat kein Internet. Musik, Suche und Routen laden erst mit einem anderen Netz.</string>
     <string name="internet_notice_wifi_stuck">Das Tablet hängt in einem WLAN ohne Internet (z. B. dem des Autos). Mate selbst lädt jetzt über Mobilfunk; andere Apps erst, wenn das WLAN am Tablet getrennt oder die Anmeldeseite geöffnet ist.</string>
     <string name="internet_notice_mobile_stuck">Mobilfunk ohne Durchkommen (Funkloch oder Datenvolumen?). Musik, Suche und Routen laden erst wieder mit Netz; Offline-Musik und -Karten gehen weiter.</string>
+    <string name="portal_title">Auto-WLAN: Bestätigung nötig</string>
+    <string name="portal_text">Tippen, um die Anmeldeseite des Auto-WLANs zu bestätigen – Mate konnte sie nicht allein bestätigen.</string>
     <string name="internet_notice_offline">Keine Internetverbindung. Musik, Suche und Routen laden erst wieder mit Netz.</string>
     <string name="internet_notice_back">Internet ist wieder da.</string>
     <string name="music_error_offline">Keine Internetverbindung: Musik vom Server geht erst wieder mit Netz.</string>
