@@ -7,8 +7,6 @@
  */
 package net.prototux.aare.dash;
 
-import net.prototux.aare.R;
-
 import android.content.Context;
 import android.content.SharedPreferences;
 

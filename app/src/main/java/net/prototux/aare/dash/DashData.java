@@ -96,12 +96,10 @@ public final class DashData {
     public static final class Rain {
         public final double cellKm;
         public final long[] times;          /* ms since 1970, oldest first */
-        public final String[] kinds;        /* past, now, forecast */
         public final double[][] cells;      /* per frame: lat, lon, level, lat, lon, level ... */
-        public final String[] sources;      /* all sources named in the frames, for the attribution */
         public final long receivedMs;
-        public Rain(double cellKm, long[] times, String[] kinds, double[][] cells, String[] sources) {
-            this.cellKm = cellKm; this.times = times; this.kinds = kinds; this.cells = cells; this.sources = sources;
+        public Rain(double cellKm, long[] times, double[][] cells) {
+            this.cellKm = cellKm; this.times = times; this.cells = cells;
             this.receivedMs = System.currentTimeMillis();
         }
     }

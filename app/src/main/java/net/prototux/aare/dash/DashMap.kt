@@ -402,9 +402,9 @@ private enum class Sign { CENTER, RANGE, WIND, RAIN, FERRY }
 /** IDmate's rain sources by the names their terms ask for. */
 private val SOURCES = mapOf("dwd" to "Deutscher Wetterdienst", "rainviewer" to "RainViewer")
 
-/** "2026-11-21T11:15:00Z" as the device's clock time, "11:15"; null when it is no time. */
+/** "2026-11-21T11:15:00Z" as the device's clock time, "11:15" (12 or 24 hours as the region writes it); null when it is no time. */
 private fun clock(iso: String): String? = runCatching {
-    java.time.Instant.parse(iso).atZone(java.time.ZoneId.systemDefault()).toLocalTime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+    net.prototux.aare.ui.Clock.format(java.time.Instant.parse(iso).toEpochMilli())
 }.getOrNull()
 
 /**

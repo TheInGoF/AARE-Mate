@@ -7,8 +7,6 @@
  */
 package net.prototux.aare.dash;
 
-import net.prototux.aare.R;
-
 import java.nio.charset.StandardCharsets;
 
 final class Cbor {

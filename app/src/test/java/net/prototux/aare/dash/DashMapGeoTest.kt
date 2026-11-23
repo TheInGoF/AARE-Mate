@@ -38,7 +38,6 @@ class DashMapGeoTest {
             .put(polygon(square(13.0, 52.0, 1.0), 300.0)).put(polygon(square(13.0, 52.0, 0.5), 200.0)))
         val a = DashMapGeo.area(gj)!!
         assertEquals(1, JSONObject(a.outer).getJSONArray("features").length())
-        assertEquals("one ring only: the expected range", 0, JSONObject(a.inner).getJSONArray("features").length())
         val shade = JSONObject(a.shade).getJSONObject("geometry").getJSONArray("coordinates")
         assertEquals("the world and one hole", 2, shade.length())
         val box = a.box!!

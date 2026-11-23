@@ -8,6 +8,8 @@
  */
 package net.prototux.aare.dash;
 
+import net.prototux.aare.R;
+
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Rect;
@@ -52,9 +54,6 @@ final class CarStage {
         DashMapView.night(on);
         sNight = on;
     }
-
-    /** The stage in use (the car screen sets it). */
-    static volatile CarStage sCurrent;
 
     CarStage(Context ctx, Hub hub) {
         mCtx = ctx;
@@ -129,14 +128,14 @@ final class CarStage {
         return start(ctx, dpi) ? mRoot : null;
     }
 
-    /** Buehne aufbauen. Liefert false, wenn das Geraet es nicht zulaesst (dann zeichnet MainScreen selbst). */
+    /** Buehne aufbauen. Liefert false, wenn das Geraet es nicht zulaesst (dann zeichnet DashView die Werte selbst). */
     boolean start(Context host, int dpi) {
         stop();
         Link link = Link.load(mCtx);
-        if (link == null) { mHub.telemetry.note("stage", "keine Karte: keine Verbindung zu IDMate eingerichtet"); return false; }
+        if (link == null) { mHub.telemetry.note("stage", mCtx.getString(R.string.stage_no_link), "no map: no link to IDmate set up"); return false; }
         /* IDMate liefert die Kartenansicht nur ueber HTTPS (Ausnahme: Testserver auf dem eigenen Geraet) */
         if (!link.secure() && !link.url.startsWith("http://127.0.0.1")) {
-            mHub.telemetry.note("stage", "keine Karte: Verbindung ohne HTTPS");
+            mHub.telemetry.note("stage", mCtx.getString(R.string.stage_no_https), "no map: link without HTTPS");
             return false;
         }
         try {

@@ -11,10 +11,10 @@ import org.json.JSONObject
  */
 internal object DashMapGeo {
     /**
-     * The lines of the range area and the rings out of which the shade is cut; [outer]/[inner] GeoJSON of lines, [rings]
+     * The lines of the range area and the rings out of which the shade is cut; [outer] GeoJSON of lines, [rings]
      * the reachable rings themselves (the ferries' areas are cut out of the same shade, [shadeOf]).
      */
-    class Area(val outer: String, val inner: String, val shade: String, val box: DoubleArray?, val rings: List<List<DoubleArray>> = emptyList())
+    class Area(val outer: String, val shade: String, val box: DoubleArray?, val rings: List<List<DoubleArray>> = emptyList())
 
     const val EMPTY = """{"type":"FeatureCollection","features":[]}"""
 
@@ -85,7 +85,7 @@ internal object DashMapGeo {
              scale: ((List<DoubleArray>) -> List<DoubleArray>)? = null): Area? = runCatching {
         val features = geojson.optJSONArray("features") ?: return null
         val list = (0 until features.length()).mapNotNull { features.optJSONObject(it) }
-        val outerLines = ArrayList<List<DoubleArray>>(); val innerLines = ArrayList<List<DoubleArray>>()
+        val outerLines = ArrayList<List<DoubleArray>>()
         val shade = ArrayList<List<DoubleArray>>()
         if (list.any { it.optJSONObject("properties")?.has("kind") == true }) {
             // with wind (wind_range.py): the outline, closed loops smoothed as rings
@@ -123,8 +123,8 @@ internal object DashMapGeo {
                 }
             }
         }
-        if (outerLines.isEmpty() && innerLines.isEmpty()) return null
-        Area(lineCollection(outerLines), lineCollection(innerLines), shadeOf(shade), box(shade.ifEmpty { outerLines + innerLines }), shade)
+        if (outerLines.isEmpty()) return null
+        Area(lineCollection(outerLines), shadeOf(shade), box(shade.ifEmpty { outerLines }), shade)
     }.getOrNull()
 
     /**
@@ -308,9 +308,6 @@ internal object DashMapGeo {
      * and on the test instance, which has none. 96 points.
      */
     fun circle(lat: Double, lon: Double, km: Double): String = if (km <= 0) EMPTY else lineCollection(listOf(circleRing(lat, lon, km)))
-
-    /** The circle's dimmed land out of reach, as with the road area. */
-    fun circleShade(lat: Double, lon: Double, km: Double): String = if (km <= 0) EMPTY else shadeOf(listOf(circleRing(lat, lon, km)))
 
     fun circleRing(lat: Double, lon: Double, km: Double): List<DoubleArray> {
         val dLat = km / 111.2; val dLon = km / (111.2 * Math.cos(Math.toRadians(lat)))

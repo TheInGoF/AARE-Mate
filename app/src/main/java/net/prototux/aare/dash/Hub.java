@@ -1,13 +1,11 @@
 /*
- * IDmate Auto: die eine Stelle, an der die Fahrzeugdaten zusammenlaufen. Android Auto (IdmateCarService) und
+ * IDmate Auto: die eine Stelle, an der die Fahrzeugdaten zusammenlaufen. Mates Autobildschirm (DashView) und
  * die Seite am Tablet (SetupActivity) benutzen dieselbe Telemetry und dieselben Quellen.
  *
  * Schalter der Fehlersuche "Quelle": beide (Vorrang nach Zeitstempel), nur Server, nur Stick. Die Quelle Stick
  * (Bluetooth, StickLink) braucht die Firmware mit "Live-Daten ueber Bluetooth" und eine Kopplung.
  */
 package net.prototux.aare.dash;
-
-import net.prototux.aare.R;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -126,7 +124,7 @@ final class Hub {
     private void start() {
         Link link = Link.load(mCtx);
         if (link != null && !MODE_STICK.equals(mode()) && !MODE_CAR.equals(mode())) {
-            mApi = new ReadApi(link, telemetry, this::changed);
+            mApi = new ReadApi(mCtx, link, telemetry, this::changed);
             mApi.start();
         }
         if (!MODE_BACKEND.equals(mode()) && !MODE_CAR.equals(mode()) && stickEnabled()) {

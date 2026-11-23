@@ -15,7 +15,7 @@ class NaviRainTest {
 
     @Test fun placeInItsCell() {
         val (lat, lon) = centre(Math.round(50.83 / step), 200)      // near Chemnitz
-        val g = NaviRain.Grid(DashData.Rain(5.0, longArrayOf(0L), arrayOf("now"), arrayOf(doubleArrayOf(lat, lon, 2.0)), arrayOf("dwd")))
+        val g = NaviRain.Grid(DashData.Rain(5.0, longArrayOf(0L), arrayOf(doubleArrayOf(lat, lon, 2.0))))
         assertEquals(2, g.level(lat, lon, 0))
         assertEquals(2, g.level(lat + step * 0.4, lon - 0.02, 0))       // still inside
         assertEquals(0, g.level(lat + step * 1.0, lon, 0))               // the next row
@@ -23,8 +23,8 @@ class NaviRainTest {
 
     @Test fun nearestPictureInTime() {
         val (lat, lon) = centre(1100, 200)
-        val g = NaviRain.Grid(DashData.Rain(5.0, longArrayOf(0L, 900_000L), arrayOf("now", "forecast"),
-            arrayOf(doubleArrayOf(), doubleArrayOf(lat, lon, 3.0)), arrayOf("dwd")))
+        val g = NaviRain.Grid(DashData.Rain(5.0, longArrayOf(0L, 900_000L),
+            arrayOf(doubleArrayOf(), doubleArrayOf(lat, lon, 3.0))))
         assertEquals(0, g.level(lat, lon, 100_000))
         assertEquals(3, g.level(lat, lon, 800_000))
         assertEquals(3, g.level(lat, lon, 5_000_000))                    // past the last forecast: the last picture

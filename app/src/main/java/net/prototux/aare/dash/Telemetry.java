@@ -8,8 +8,6 @@
  */
 package net.prototux.aare.dash;
 
-import net.prototux.aare.R;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -35,7 +33,6 @@ final class Telemetry {
     /** Stand je Quelle fuer die Fehlersuche. */
     static final class SourceState {
         long lastOkMs;          /* Empfang des letzten Telegramms (Uhr des Tablets) */
-        long lastTsMs;          /* Zeitstempel im letzten Telegramm */
         long lastSeq = -1;
         long received, gaps;
         String error;           /* letzter Fehler, null = keiner */
@@ -52,7 +49,6 @@ final class Telemetry {
         Double chargeKwh;           /* letzter Ladevorgang */
         String chargeAt;
         Boolean chargeDc;
-        Double chargeBattKwh;       /* im Akku angekommen (ab IDMate 1.2.339) */
         Double chargeKw;            /* Durchschnittsleistung (ab IDMate 1.2.339) */
     }
 
@@ -82,9 +78,14 @@ final class Telemetry {
     }
 
     synchronized void note(String src, String text) {
+        note(src, text, text);
+    }
+
+    /** A note shown as [text] (the device's language), logged as [logged] (English). */
+    synchronized void note(String src, String text, String logged) {
         /* the dashboard's page into the kept diagnosis log too (18.11.2026: "Das Dashboard laedt mit 51 nicht mehr" -
            the exported log had nothing of the dashboard to go by) */
-        if ("stage".equals(src) && text != null && !text.equals(source(src).note)) net.prototux.aare.DiagLog.INSTANCE.add("dashboard: " + text);
+        if ("stage".equals(src) && text != null && !text.equals(source(src).note)) net.prototux.aare.DiagLog.INSTANCE.add("dashboard: " + logged);
         source(src).note = text;
     }
 
@@ -96,6 +97,9 @@ final class Telemetry {
     synchronized void only(String src) {
         mOnly = src;
         mFields.clear();
+        /* each source's own values too: accept fills them from the chosen source only (else the server's range stayed
+           beside the stick's) */
+        mBySource.clear();
         mNowKwh100 = Double.NaN;
     }
 
@@ -127,7 +131,6 @@ final class Telemetry {
             if (seq >= 0) s.lastSeq = seq;
             s.received++;
             s.lastOkMs = System.currentTimeMillis();
-            s.lastTsMs = ts;
             s.error = null;
             s.lastRaw = json.length() > 600 ? json.substring(0, 600) + "…" : json;
             if (!"status".equals(type) && !"position".equals(type) && !"charge".equals(type)) return true;
@@ -200,7 +203,7 @@ final class Telemetry {
     static final class EnergyModel {
         double[] speeds = new double[0];    /* km/h, rising */
         double[] kwh100 = new double[0];
-        Double tExt, capacityKwh, startKwh;
+        Double tExt, capacityKwh;
         Double recentKwh100, recentSpeed, recentKm;     /* the trips ended in the last hours */
         int trips;
         long receivedMs;
@@ -222,15 +225,10 @@ final class Telemetry {
             org.json.JSONArray f = d.optJSONArray("frames");
             if (f == null || f.length() == 0) return 0;
             long[] times = new long[f.length()];
-            String[] kinds = new String[f.length()];
             double[][] cells = new double[f.length()][];
-            java.util.LinkedHashSet<String> src = new java.util.LinkedHashSet<>();
             for (int i = 0; i < f.length(); i++) {
                 JSONObject fr = f.getJSONObject(i);
                 times[i] = java.time.Instant.parse(fr.getString("t")).toEpochMilli();
-                kinds[i] = fr.optString("kind");
-                org.json.JSONArray s = fr.optJSONArray("src");
-                if (s != null) for (int k = 0; k < s.length(); k++) src.add(s.getString(k));
                 org.json.JSONArray c = fr.optJSONArray("cells");
                 int n = c == null ? 0 : c.length();
                 double[] a = new double[n * 3];
@@ -241,7 +239,7 @@ final class Telemetry {
                 cells[i] = a;
             }
             /* read without the lock (megabytes on a rainy day); only the finished raster is put in under it */
-            DashData.Rain rain = new DashData.Rain(d.optDouble("cell_km", 5.0), times, kinds, cells, src.toArray(new String[0]));
+            DashData.Rain rain = new DashData.Rain(d.optDouble("cell_km", 5.0), times, cells);
             synchronized (this) { mRain = rain; }
             return d.optBoolean("complete", true) ? 2 : 1;
         } catch (org.json.JSONException | java.time.format.DateTimeParseException e) {
@@ -273,7 +271,6 @@ final class Telemetry {
             }
             m.tExt = d.has("t_ext") ? d.getDouble("t_ext") : null;
             m.capacityKwh = d.has("capacity") ? d.getDouble("capacity") : null;
-            m.startKwh = d.has("start") ? d.getDouble("start") : null;
             JSONObject r = d.optJSONObject("recent");
             if (r != null && r.has("consumption") && r.has("speed")) {
                 m.recentKwh100 = r.getDouble("consumption");
@@ -308,7 +305,7 @@ final class Telemetry {
             Summary old = mSummary;
             s.consumption = old.consumption; s.trips = old.trips; s.tripKm = old.tripKm; s.tripTo = old.tripTo;
             s.chargeKwh = old.chargeKwh; s.chargeAt = old.chargeAt; s.chargeDc = old.chargeDc;
-            s.chargeBattKwh = old.chargeBattKwh; s.chargeKw = old.chargeKw;
+            s.chargeKw = old.chargeKw;
             if ("trip".equals(t.optString("type"))) {
                 double km = 0, kwh = 0;
                 int n = 0;
@@ -331,7 +328,6 @@ final class Telemetry {
                 s.chargeKwh = it.has("energy") ? it.getDouble("energy") : null;
                 s.chargeAt = it.optString("at", null);
                 s.chargeDc = it.has("dc") ? it.getBoolean("dc") : null;
-                s.chargeBattKwh = it.has("energy_battery") ? it.getDouble("energy_battery") : null;
                 s.chargeKw = it.has("power_avg") ? it.getDouble("power_avg") : null;
             }
             mSummary = s;

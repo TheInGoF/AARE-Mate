@@ -92,7 +92,14 @@ internal class DashMapData(context: Context) {
         val link = Link.load(app) ?: return null
         return runCatching {
             http.newCall(Request.Builder().url(link.url.trimEnd('/') + "/rain").header("Authorization", "Bearer " + link.token).build()).execute().use { r ->
-                if (!r.isSuccessful) null else JSONObject(r.body.string()).optJSONObject("data")
+                if (!r.isSuccessful) return@use null
+                // within the read API's bound for the raster: a larger answer is not read into memory
+                val src = r.body.source()
+                if (src.request(ReadApi.RAIN_MAX_BYTES + 1L)) {
+                    Log.w(TAG, "dashboard map: rain answer over ${ReadApi.RAIN_MAX_BYTES} bytes, dropped")
+                    return@use null
+                }
+                JSONObject(src.buffer.readUtf8()).optJSONObject("data")
             }
         }.getOrNull()?.takeIf { (it.optJSONArray("frames")?.length() ?: 0) > 0 }
     }

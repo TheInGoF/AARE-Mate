@@ -40,7 +40,6 @@ class RainAnswerTest {
         val rain = t.rain()
         assertEquals(13, rain.times.size)
         assertEquals(2500 * 3, rain.cells[4].size)
-        assertEquals("now", rain.kinds[4])
     }
 
     @Test fun withoutPicturesAskedAgain() {

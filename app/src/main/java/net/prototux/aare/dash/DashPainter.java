@@ -1,7 +1,7 @@
 /*
  * IDmate Auto: zeichnet das Dashboard (Werte wie im Dashboard von IDmate) und die Zeilen der Fehlersuche.
- * Benutzt von der Ansicht neben der Karte (CarStage) und, wenn es keine Karte gibt, direkt auf der Flaeche
- * von Android Auto (MainScreen).
+ * Benutzt von der Ansicht neben der Karte (CarStage) und, wenn es keine Karte gibt, direkt auf Mates
+ * Autobildschirm (DashView).
  */
 package net.prototux.aare.dash;
 
@@ -221,7 +221,10 @@ final class DashPainter {
         return y + 34 * dp;
     }
 
-    /** Kartenfeld. Die Karte selbst kommt vom Server (noch nicht gebaut); bis dahin Position und Hinweis. */
+    /**
+     * Kartenfeld, wenn Mate keine Karte zeichnen kann (DashView ohne Buehne): Position und, wo es einen gibt, der Grund
+     * (keine Verbindung zu IDmate eingerichtet, oder Verbindung ohne HTTPS).
+     */
     private void mapPanel(Canvas cv, Paint p, RectF m, float dp) {
         p.setColor(PANEL);
         cv.drawRoundRect(m, 18 * dp, 18 * dp, p);
@@ -243,7 +246,11 @@ final class DashPainter {
         p.setTextSize(16 * dp);
         cv.drawText(lat != null && lon != null
                 ? String.format(Locale.ROOT, "%.5f, %.5f", lat, lon) : s(R.string.dash_no_pos), cx, m.bottom - 44 * dp, p);
-        cv.drawText(s(R.string.dash_map), cx, m.bottom - 20 * dp, p);
+        Link link = Link.load(mCtx);
+        /* wie CarStage.start: ohne HTTPS keine Karte (Ausnahme: Testserver auf dem eigenen Geraet) */
+        int why = link == null ? R.string.dash_map_no_link
+                : !link.secure() && !link.url.startsWith("http://127.0.0.1") ? R.string.dash_map : 0;
+        if (why != 0) cv.drawText(s(why), cx, m.bottom - 20 * dp, p);
     }
 
     /** Zeile je Quelle: Name, Alter des letzten Telegramms, Anzahl, Luecken, Fehler. */

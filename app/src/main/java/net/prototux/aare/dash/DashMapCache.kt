@@ -18,8 +18,8 @@ import org.json.JSONObject
  * IDmate's map data kept at hand (21.11.2026: "Es wäre gut, wenn er die Wetterdaten immer ein bisschen auf Vorrat hat,
  * dass er nicht jedes Mal, wenn man auf Dashboard klickt, die Daten ewig laden muss. Die Wetterdaten selber bräuchten wir
  * auch für die Reichweitenberechnung in der App"): while the car is connected the range area, the trail, the rain and
- * the wind are fetched in the background - the dashboard shows the last ones at once and the rest of the app can read
- * the wind around the car ([windPoints]). One process-wide store; the dashboard asks for a round when it opens.
+ * the wind are fetched in the background - the dashboard shows the last ones at once. One process-wide
+ * store; the dashboard asks for a round when it opens.
  */
 internal object DashMapCache {
     private const val TAG = "IDmateStage"
@@ -108,9 +108,6 @@ internal object DashMapCache {
     @Volatile private var data: DashMapData? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var loop: Job? = null
-
-    /** The wind of this hour around the car as IDmate has it ([{lat, lon, kmh, dir, gust?}]), null before the first. */
-    fun windPoints(): JSONArray? = windRaw
 
     /** The car connected: the rounds start (and run until [stop]). */
     @Synchronized fun start(context: Context) {

@@ -23,6 +23,8 @@ import java.time.Instant;
 public final class DashView {
     private DashView() {}
 
+    /** The source the car's own values come in as. */
+    static final String SRC = "car";
     private static final long HOLD_MS = 10 * 60_000L;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static CarStage sStage;
@@ -53,7 +55,6 @@ public final class DashView {
             hub.acquire();
         }
         if (sStage == null) sStage = new CarStage(app, hub);
-        CarStage.sCurrent = sStage;
         CarStage.sGo = go;
         boolean kept = sStage.running();
         View v = sStage.view(ctx, dpi);
@@ -92,6 +93,9 @@ public final class DashView {
         sCar = false;
         Hub.get(ctx.getApplicationContext()).release();
         DashMapCache.INSTANCE.stop();
+        /* nothing of the gone connection kept: neither its navigation (holding its runtime) nor views of its screen */
+        CarStage.sGo = null;
+        if (sStage != null) sStage.stop();
     }
 
     /** Night or day on the car's screen (System L-074): the map's colours follow. Main thread. */
@@ -121,7 +125,7 @@ public final class DashView {
             if (heading != null) d.put("heading", Math.round(heading));
             if (d.length() == 0) return;
             JSONObject t = new JSONObject();
-            t.put("v", 1).put("src", CarProbe.SRC).put("ts", Instant.now().toString()).put("seq", ++sSeq).put("type", "status").put("data", d);
+            t.put("v", 1).put("src", SRC).put("ts", Instant.now().toString()).put("seq", ++sSeq).put("type", "status").put("data", d);
             Hub.get(ctx.getApplicationContext()).telemetry.accept(t.toString());
         } catch (JSONException e) {
             return;
