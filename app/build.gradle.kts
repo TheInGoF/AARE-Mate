@@ -191,10 +191,8 @@ dependencies {
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.car.app)
     implementation(libs.androidx.car.app.projected)
     // the built-in dashboard reads its server's pairing code as a QR code
@@ -207,8 +205,7 @@ dependencies {
     // MapLibre draws the map from the own tiles
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation(libs.ferrostar.core)
-    implementation(libs.ferrostar.ui.maplibre)
-    implementation(libs.ferrostar.ui.formatters)
+    implementation(libs.maplibre.compose)
     // Ferrostar talks to the routing service through OkHttp (its own dependency is runtime only)
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
     // Car audio without the screen-capture consent: through Shizuku (adb rights), or Android's

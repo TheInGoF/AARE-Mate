@@ -33,11 +33,9 @@ in a car session (not the on-phone preview), sits outside the user's app order, 
   every runtime permission, the optional ones too (calendar, call log, contacts, phone calls). A user
   who refuses one of those for good keeps the card. Splitting required from optional permissions
   changes what counts as "set up", so it is left to the owner.
-- **Translations (findings 50 and 66).** The car-screen and auto-reply texts are string resources now,
-  but the new keys (`msg_autoreply_default`, `dash_menu_exit_to_car`, `media_error_*`, `tpl_*`,
-  `carapp_error_*`, `common_ok`/`common_try_again`/`common_something_went_wrong`…) are English only
-  in all 19 locales. Status: made translatable, translations pending. `msg_autoreply_default` matters
-  most, as it is sent to contacts.
+- **Translations (findings 50 and 66).** Mate keeps two languages only: `values` (English) and
+  `values-de` (German); the other locales were removed. `StringsParityTest` checks that both hold
+  the same keys.
 - **Rotary focus with the phone locked on Android 14+ (finding 6).** Leaving touch mode with
   `requestFocusFromTouch()` may be refused when the phone's own focused window isn't ours. To check
   on a phone: logcat for "Touch mode switch rejected" with the screen locked and a knob-only unit.
@@ -57,6 +55,9 @@ sort by name and an older copy would be offered first. Rejected: bundling the fi
 ask for). If Google ever replaces the CA, the pin needs an app update.
 
 ## Xposed host-shims module (optional, rooted phones)
+
+*Inherited from AARE: this section describes the module as AARE made it; Mate builds it with the
+project but has not checked or changed it.*
 
 `xposed/` is a standalone libxposed module (a separate APK, not part of the app, no app dependency
 on it). It lets AARE pass for Google's Android Auto host through hooks, for users already on LSPosed,

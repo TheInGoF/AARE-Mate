@@ -1,5 +1,5 @@
-# Mate's release from a version tag (v2.0.13), signed with Mate's key from the repository (signing/mate-release.enc,
-# opened with the secret MATE_KEY_PASS, see mate-key.yml) - the same assets as the releases made at the build PC
+# Mate's release from a version tag (v2.0.13), signed with Mate's key from the repository secrets (MATE_KEY_ENC, the
+# encrypted key, opened with MATE_KEY_PASS) - the same assets as the releases made at the build PC
 # before: mate-<version>.apk, title "Mate <version>", for the Panel-Store. Without the key nothing is published
 # (never a debug-signed APK). A release that exists already (made at the PC) is left as it is.
 name: Mate release
@@ -47,12 +47,10 @@ jobs:
         run: |
           set -eu
           case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::Not a version: $TAG (v1.2.3)"; exit 1;; esac
-          # the encrypted key from the secret MATE_KEY_ENC (base64 of signing/mate-release.enc; 20.11.2026, out of the
-          # repository before it goes public), else from the file as before
-          keyfile=signing/mate-release.enc
-          if [ -n "${MATE_KEY_ENC:-}" ]; then keyfile="$RUNNER_TEMP/mate-release.enc"; printf '%s' "$MATE_KEY_ENC" | base64 -d > "$keyfile"; fi
-          if [ -z "$MATE_KEY_PASS" ] || [ ! -f "$keyfile" ]; then
-            echo "::error::No release key: set the secrets MATE_KEY_PASS and MATE_KEY_ENC (or run the workflow 'Mate key' once)"; exit 1; fi
+          # the encrypted key from the secret MATE_KEY_ENC (base64; 20.11.2026, out of the repository before it goes public)
+          if [ -z "${MATE_KEY_PASS:-}" ] || [ -z "${MATE_KEY_ENC:-}" ]; then
+            echo "::error::No release key: set the secrets MATE_KEY_PASS and MATE_KEY_ENC"; exit 1; fi
+          keyfile="$RUNNER_TEMP/mate-release.enc"; printf '%s' "$MATE_KEY_ENC" | base64 -d > "$keyfile"
           VERSION="${TAG#v}"
           # release notes: what changed, never only the version (L-072) - from the input, else from the file of the version
           notes="$RUNNER_TEMP/notes.md"

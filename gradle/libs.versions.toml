@@ -1,11 +1,12 @@
 [versions]
 ferrostar = "0.59.0"
+maplibreCompose = "0.13.0"
 agp = "9.5.1"
 kotlin = "2.4.21"
 composeBom = "2026.09.00"
 coreKtx = "1.19.1"
 lifecycle = "2.9.4"
-activityCompose = "1.8.2"
+activityCompose = "1.13.0"
 carApp = "1.8.0-rc01"
 media3 = "1.11.1"
 protobuf = "4.36.2"
@@ -18,16 +19,13 @@ libxposed = "102.0.0"
 
 [libraries]
 ferrostar-core = { group = "com.stadiamaps.ferrostar", name = "core", version.ref = "ferrostar" }
-ferrostar-ui-maplibre = { group = "com.stadiamaps.ferrostar", name = "ui-maplibre", version.ref = "ferrostar" }
-ferrostar-ui-formatters = { group = "com.stadiamaps.ferrostar", name = "ui-formatters", version.ref = "ferrostar" }
+maplibre-compose = { group = "org.maplibre.compose", name = "maplibre-compose-android", version.ref = "maplibreCompose" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
-androidx-lifecycle-service = { group = "androidx.lifecycle", name = "lifecycle-service", version.ref = "lifecycle" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
-androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material-icons = { group = "androidx.compose.material", name = "material-icons-extended" }

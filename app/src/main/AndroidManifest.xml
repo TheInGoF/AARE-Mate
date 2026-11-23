@@ -84,12 +84,6 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
-    <!-- 17.11.2026: Shizuku seen as installed (Android 11+ hides other apps otherwise), so "set up" opens it instead of
-         the download page -->
-    <queries>
-        <package android:name="moe.shizuku.privileged.api" />
-    </queries>
-
     <application
         android:name=".AareApp"
         android:allowBackup="false"
@@ -207,6 +201,11 @@
         <!-- keeps the subscribed playlists on the device up to date -->
         <service
             android:name=".music.MusicSyncJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- starts Shizuku through Mate's own wireless debugging a while after the tablet started -->
+        <service
+            android:name=".service.ShizukuStartJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
 
