@@ -6,6 +6,8 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,5 +32,16 @@ class MusicFolderUiTest {
             val bmp = rule.onRoot().captureToImage().asAndroidBitmap()
             File("build/preview/phone").apply { mkdirs() }.let { File(it, "musik-ordner.png") }.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
+    }
+
+    /** "Er zeigt den laufenden Umzug beim Scrollen sowieso nicht mehr an": the card gone and back still shows the move. */
+    @Test fun moveShownAfterScrollingBack() {
+        var shown by androidx.compose.runtime.mutableStateOf(true)
+        rule.setContent { androidx.compose.material3.MaterialTheme { if (shown) MusicFolderCard() } }
+        StorageMove.progress.value = Triple(net.prototux.aare.Storage.Phase.COPY, 1L shl 30, 13L shl 30)
+        rule.runOnIdle { shown = false }
+        rule.runOnIdle { shown = true }
+        rule.onNodeWithText("Kopiere", substring = true).assertExists()
+        StorageMove.progress.value = null
     }
 }

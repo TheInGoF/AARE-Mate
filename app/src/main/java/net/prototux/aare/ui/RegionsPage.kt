@@ -240,13 +240,13 @@ private fun WholePackage(r: RegionPacks.Region, mapDate: String, compact: Boolea
 internal fun StorageCard(busy: Boolean, kinds: List<String> = net.prototux.aare.Storage.MAP_KINDS, intro: Int = R.string.storage_intro,
                          moveAsk: Int = R.string.storage_move_ask, changed: () -> Unit) {
     val ctx = LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var tick by remember { mutableIntStateOf(0) }
+    val tick = StorageMove.finished.intValue
     val vols = remember(tick) { net.prototux.aare.Storage.volumes(ctx) }
     val chosen = remember(tick) { net.prototux.aare.Storage.chosen(ctx, kinds.first()) }
     val missing = remember(tick) { net.prototux.aare.Storage.cardMissing(ctx, kinds.first()) }
-    var moving by remember { mutableStateOf<Triple<net.prototux.aare.Storage.Phase, Long, Long>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    // held outside the card: still shown after scrolling away and back (StorageMove)
+    val moving = StorageMove.progress.value
+    var error by StorageMove.error
     var target by remember { mutableStateOf<net.prototux.aare.Storage.Volume?>(null) }
     if (vols.size < 2 && !missing) return
     val size = { b: Long -> Formatter.formatShortFileSize(ctx, b) }
@@ -284,15 +284,9 @@ internal fun StorageCard(busy: Boolean, kinds: List<String> = net.prototux.aare.
                         Text(stringResource(moveAsk, t.label, size(need)), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { target = null }) { Text(stringResource(android.R.string.cancel)) }
                         FilledTonalButton(enabled = !busy, onClick = {
-                            moving = Triple(net.prototux.aare.Storage.Phase.COPY, 0L, need)
-                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                var shown = 0L
-                                val r = runCatching { net.prototux.aare.Storage.move(ctx, t, kinds) { ph, d, a ->
-                                    val now = android.os.SystemClock.elapsedRealtime()
-                                    if (now - shown > 500 || d == a) { shown = now; moving = Triple(ph, d, a) }
-                                } }
-                                error = r.exceptionOrNull()?.let { e -> ctx.getString(R.string.storage_move_failed, e.message ?: e.javaClass.simpleName) }
-                                moving = null; target = null; tick++; changed()
+                            target = null
+                            StorageMove.start(need, { e -> ctx.getString(R.string.storage_move_failed, e.message ?: e.javaClass.simpleName) }, changed) { p ->
+                                net.prototux.aare.Storage.move(ctx, t, kinds, p)
                             }
                         }) { Text(stringResource(R.string.storage_move)) }
                     }

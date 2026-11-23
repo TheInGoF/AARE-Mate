@@ -2105,23 +2105,16 @@ private fun MusicOfflineCard(refresh: Int) {
 @Composable
 internal fun MusicFolderCard() {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var tick by remember { mutableIntStateOf(0) }
+    // the move is held outside the card (StorageMove): scrolled away and back it is still shown
+    val tick = StorageMove.finished.intValue
     val folder = remember(tick) { net.prototux.aare.Storage.musicFolder(ctx) }
-    val bytes = produceState(0L, tick) { value = withContext(Dispatchers.IO) { net.prototux.aare.music.Offline.bytes(ctx) } }.value
-    var moving by remember { mutableStateOf<Pair<Long, Long>?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val moving = StorageMove.progress.value
+    val bytes = produceState(0L, tick, moving == null) { value = withContext(Dispatchers.IO) { net.prototux.aare.music.Offline.bytes(ctx) } }.value
+    var error by StorageMove.error
     var access by remember(tick) { mutableStateOf(allFiles()) }
     fun moveTo(to: java.io.File?) {
-        moving = 0L to bytes; error = null
-        scope.launch(Dispatchers.IO) {
-            var shown = 0L
-            val r = runCatching { net.prototux.aare.Storage.moveMusic(ctx, to) { _, d, a ->
-                val now = android.os.SystemClock.elapsedRealtime()
-                if (now - shown > 500 || d == a) { shown = now; moving = d to a }
-            } }
-            error = r.exceptionOrNull()?.let { e -> ctx.getString(R.string.storage_move_failed, e.message ?: e.javaClass.simpleName) }
-            moving = null; tick++
+        StorageMove.start(bytes, { e -> ctx.getString(R.string.storage_move_failed, e.message ?: e.javaClass.simpleName) }) { p ->
+            net.prototux.aare.Storage.moveMusic(ctx, to, p)
         }
     }
     val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -2138,7 +2131,7 @@ internal fun MusicFolderCard() {
         Text(android.text.format.Formatter.formatShortFileSize(ctx, bytes), style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (!access) Text(stringResource(R.string.music_folder_access), style = MaterialTheme.typography.bodyMedium)
-        moving?.let { (d, a) ->
+        moving?.let { (_, d, a) ->
             androidx.compose.material3.LinearProgressIndicator(progress = { if (a > 0) d.toFloat() / a else 0f }, Modifier.fillMaxWidth())
             Text(stringResource(R.string.storage_copying, android.text.format.Formatter.formatShortFileSize(ctx, d),
                 android.text.format.Formatter.formatShortFileSize(ctx, a)), style = MaterialTheme.typography.bodySmall)
