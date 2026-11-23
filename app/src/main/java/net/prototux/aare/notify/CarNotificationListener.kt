@@ -139,9 +139,35 @@ class CarNotificationListener : NotificationListenerService() {
             PhoneGuidance.from(this, sbn)?.let { _guidance.value = it }
             return
         }
-        val sink = sink ?: return
-        message(sbn)?.let(sink)
+        val chatty = sbn.packageName != packageName && looksLikeMessage(sbn.notification)
+        val sink = sink
+        if (sink == null) { if (chatty) note(sbn, "no car connected - kept for the message area"); return }
+        val m = message(sbn)
+        if (m != null) { if (chatty) note(sbn, "shown"); sink(m) } else if (chatty) note(sbn, why ?: "not a conversation")
     }
+
+    /** Why the last [message] gave none (for the log). */
+    private var why: String? = null
+
+    /**
+     * A line in Mate's log for each messenger notification and what became of it (23.11.2026: Element X's private messages
+     * did not come through, its group messages did, and the log said nothing): the app, the kind of notification and the
+     * outcome - no names, no texts.
+     */
+    private fun note(sbn: StatusBarNotification, outcome: String) {
+        val n = sbn.notification
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n)
+        val kind = when {
+            n.flags and Notification.FLAG_GROUP_SUMMARY != 0 -> "group summary"
+            style == null -> "plain (no MessagingStyle)"
+            style.isGroupConversation -> "group conversation, ${style.messages.size} messages"
+            else -> "private conversation, ${style.messages.size} messages"
+        }
+        net.prototux.aare.DiagLog.add("message: ${sbn.packageName} $kind, category ${n.category ?: "none"}" +
+            (if (replyAction(n) != null) ", can reply" else "") + " - $outcome", area = "PHONE")
+    }
+
+
 
     /**
      * The messages that came in while no car was connected and are still unread on the phone, oldest first:
@@ -153,6 +179,7 @@ class CarNotificationListener : NotificationListenerService() {
 
     /** The news of a conversation's notification as a message for the car; null when there is none. */
     private fun message(sbn: StatusBarNotification): Message? {
+        why = null
         val c = parse(sbn) ?: return null
         val last = c.messages.last()
         // Apps re-post the whole conversation on every change: after the user's own reply, when
@@ -160,9 +187,9 @@ class CarNotificationListener : NotificationListenerService() {
         // news (not "newer": senders' clocks differ), and never one the user wrote (an auto-reply
         // would otherwise show as from the contact).
         val prev = forwarded[sbn.key]
-        if (prev != null && last.timeMs == prev.timeMs && last.text == prev.text && last.sender == prev.sender) return null
+        if (prev != null && last.timeMs == prev.timeMs && last.text == prev.text && last.sender == prev.sender) { why = "the same last message again"; return null }
         forwarded[sbn.key] = last
-        if (last.fromUser) return null
+        if (last.fromUser) { why = "last message is the user's own"; return null }
         val actions = buildList<Pair<String, () -> Unit>> {
             add(getString(R.string.msg_action_read_aloud) to { speak(getString(R.string.msg_spoken, last.sender.ifEmpty { c.title }, last.text)) })
             c.markRead?.let { pi -> add(getString(R.string.msg_action_mark_read) to { runCatching { pi.send() } }) }
@@ -221,8 +248,8 @@ class CarNotificationListener : NotificationListenerService() {
     private fun parse(sbn: StatusBarNotification): Conversation? {
         val n = sbn.notification
         if (sbn.packageName == packageName) return null
-        if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return null
-        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n) ?: return null
+        if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) { why = "group summary"; return null }
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n) ?: return plain(sbn)
         val lines = style.messages.mapNotNull { m ->
             val text = m.text?.toString() ?: return@mapNotNull null
             // A null sender is the user, per MessagingStyle; some apps name the user instead.
@@ -231,7 +258,7 @@ class CarNotificationListener : NotificationListenerService() {
                 (p.key == null && p.name != null && p.name.toString() == style.user.name?.toString())
             Conversation.Line(p?.name?.toString() ?: "", text, m.timestamp, fromUser)
         }
-        if (lines.isEmpty()) return null
+        if (lines.isEmpty()) { why = "conversation without text"; return null }
         val title = style.conversationTitle?.toString()
             ?: lines.lastOrNull { it.sender.isNotEmpty() && !it.fromUser }?.sender
             ?: n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: ""
@@ -249,14 +276,27 @@ class CarNotificationListener : NotificationListenerService() {
         )
     }
 
-    private fun actionWith(n: Notification, semantic: Int): NotificationCompat.Action? {
-        val count = NotificationCompat.getActionCount(n)
-        for (i in 0 until count) {
-            val a = NotificationCompat.getAction(n, i) ?: continue
-            if (a.semanticAction == semantic) return a
-        }
-        return null
+    /**
+     * A chat notification without MessagingStyle as a conversation of one message (23.11.2026: Element X's private messages
+     * did not come through, its group messages did): some messengers post a plain notification when they cannot show the
+     * conversation, e.g. an encrypted message not yet readable, or post private chats plainly. Title = sender, text = message.
+     */
+    private fun plain(sbn: StatusBarNotification): Conversation? {
+        val n = sbn.notification
+        if (!looksLikeMessage(n)) return null
+        if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) { why = "ongoing notification"; return null }
+        val (title, text) = plainParts(n) ?: run { why = "plain notification without title or text"; return null }
+        val time = n.`when`.takeIf { it > 0 } ?: sbn.postTime
+        return Conversation(
+            key = sbn.key, packageName = sbn.packageName, title = title,
+            messages = listOf(Conversation.Line(title, text, time)),
+            icon = (n.getLargeIcon() ?: n.smallIcon)?.let { loadIcon(it, sbn.packageName) },
+            timeMs = time,
+            markRead = actionWith(n, NotificationCompat.Action.SEMANTIC_ACTION_MARK_AS_READ)?.actionIntent,
+            reply = replyAction(n),
+        )
     }
+
 
     /** Icons are loaded with our identity, so a URI icon must pass the same owner check as media art. */
     private fun loadIcon(icon: Icon, owner: String): Bitmap? = runCatching {
@@ -378,6 +418,30 @@ class CarNotificationListener : NotificationListenerService() {
 
         /** Takes what waits unread when a car connects (see [waiting]): quietly, no banner, no voice. */
         @Volatile var waitingSink: ((Message) -> Unit)? = null
+
+        /** A notification of a chat: a conversation, of the message category, or with a reply field. */
+        internal fun looksLikeMessage(n: Notification) = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(n) != null ||
+            n.category == Notification.CATEGORY_MESSAGE || replyAction(n) != null
+
+        internal fun replyAction(n: Notification) = actionWith(n, NotificationCompat.Action.SEMANTIC_ACTION_REPLY)
+            ?: (0 until NotificationCompat.getActionCount(n)).asSequence().mapNotNull { NotificationCompat.getAction(n, it) }
+                .firstOrNull { !it.remoteInputs.isNullOrEmpty() }
+
+        internal fun actionWith(n: Notification, semantic: Int): NotificationCompat.Action? {
+            for (i in 0 until NotificationCompat.getActionCount(n)) {
+                val a = NotificationCompat.getAction(n, i) ?: continue
+                if (a.semanticAction == semantic) return a
+            }
+            return null
+        }
+
+        /** Sender and text of a plain chat notification, null without both. */
+        internal fun plainParts(n: Notification): Pair<String, String>? {
+            val x = n.extras
+            val title = x.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.takeIf { it.isNotBlank() } ?: return null
+            val text = (x.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: x.getCharSequence(Notification.EXTRA_TEXT))?.toString()?.takeIf { it.isNotBlank() } ?: return null
+            return title to text
+        }
 
         /** Hands the waiting messages to [waitingSink]; each once, so calling it again does no harm. Main thread. */
         fun catchUp() {
