@@ -54,7 +54,7 @@
     <string name="setup_check_rival_chosen_subtitle">Als Standard-App fürs Auto ist Android Auto gewählt. In den Einstellungen unter „Android Auto“ Mate wählen.</string>
     <string name="setup_check_rival_subtitle">Beide Apps melden sich beim Auto, das zeigt dann einen Fehler. Beim Einstecken „Mate“ und „Immer“ wählen; hier bei Android Auto unter „Standardmäßig öffnen“ die Standards löschen.</string>
     <string name="setup_bt_address_label">Bluetooth-Adresse des Telefons (optional)</string>
-    <string name="setup_bt_address_hint">Das Auto will wissen, welches Gerät verbunden ist: Damit führt es Anrufe über seine Lautsprecher und sein Mikrofon, manche zeigen sonst auch einen schwarzen Bildschirm. Mate liest die Adresse selbst, wo Shizuku oder Root es erlauben; sonst steht sie unter Einstellungen &gt; Über das Telefon &gt; Status.</string>
+    <string name="setup_bt_address_hint">Das Auto will wissen, welches Gerät verbunden ist: Damit führt es Anrufe über seine Lautsprecher und sein Mikrofon, manche zeigen sonst auch einen schwarzen Bildschirm. Mate liest die Adresse selbst, wo Shizuku es erlaubt; sonst steht sie unter Einstellungen &gt; Über das Telefon &gt; Status.</string>
     <string name="setup_toggle_wireless_title">Kabellos</string>
     <string name="setup_toggle_wireless_subtitle">Verbindet sich über Wi-Fi mit gekoppelten Autos, sobald sie in Bluetooth-Reichweite kommen</string>
     <string name="setup_toggle_resume_music_title">Musik fortsetzen</string>
@@ -112,20 +112,7 @@
     <string name="setup_choice_colors_auto">Tag/Nacht des Autos</string>
     <string name="setup_choice_dark">Dunkel</string>
     <string name="setup_choice_light">Hell</string>
-    <string name="setup_choice_bar">Lage</string>
-    <string name="setup_choice_bar_auto">Fahrerseite</string>
-    <string name="setup_choice_left">Links</string>
-    <string name="setup_choice_right">Rechts</string>
-    <string name="setup_choice_bottom">Unten</string>
-    <string name="setup_toggle_dark_bar_title">Dunkle Leiste</string>
-    <string name="setup_toggle_dark_bar_subtitle">Leiste auch bei Tagfarben dunkel halten</string>
     <string name="setup_section_dashboard">Dashboard</string>
-    <string name="setup_choice_wallpaper">Hintergrundbild</string>
-    <string name="setup_wallpaper_none">Kein</string>
-    <string name="setup_wallpaper_photo">Foto</string>
-    <string name="setup_wallpaper_dusk">Abend</string>
-    <string name="setup_wallpaper_forest">Wald</string>
-    <string name="setup_wallpaper_ocean">Meer</string>
     <string name="setup_toggle_weather_title">Wetter</string>
     <string name="setup_toggle_weather_subtitle">Neben der Uhr, von Open-Meteo (es erhält eine ungefähre Position von etwa 10 km)</string>
     <string name="setup_toggle_calendar_title">Nächster Kalendertermin</string>
@@ -154,10 +141,6 @@
     <string name="setup_section_connection_log">Verbindungsprotokoll</string>
     <string name="setup_about_versions">Mate %1$s · Grundlage AARE %2$s · AARE-Änderungen gesichtet bis %3$s</string>
     <string name="setup_about_text">Mate %1$s, ein Fork von AARE · GPL-3.0-or-later · Nicht mit Google verbunden. Android Auto ist eine Marke von Google LLC.</string>
-    <string name="setup_choice_style">Stil</string>
-    <string name="setup_style_android_auto">Android Auto</string>
-    <string name="setup_style_carplay">CarPlay</string>
-    <string name="setup_switch_dark_bar">Dunkle Leiste, auch bei Tagfarben</string>
     <string name="setup_switch_passenger">Beifahrermodus: keine Fahreinschränkungen (der Fahrer darf den Bildschirm nicht benutzen)</string>
     <string name="setup_switch_message_notifications">Nachrichtenbenachrichtigungen</string>
     <string name="setup_switch_audio_next_connection">Telefonaudio im Auto (nächste Verbindung)</string>
@@ -216,7 +199,7 @@
     <string name="audio_no_method">Noch keine Methode eingerichtet: Wähle unten eine aus.</string>
     <string name="audio_method_policy">Systemweg (wie Android Auto)</string>
     <string name="audio_method_shizuku_policy">Shizuku, Musik und Navigation getrennt (wie Android Auto)</string>
-    <string name="audio_method_shizuku">Shizuku oder Root</string>
+    <string name="audio_method_shizuku">Shizuku</string>
     <string name="audio_method_playback">Bildschirmaufnahme-Berechtigung</string>
     <string name="audio_policy_info_title">Systemweg für den Ton</string>
     <string name="audio_policy_info_text">Dieser Weg braucht Mate als System-App mit dem Recht MODIFY_AUDIO_ROUTING – das kommt mit dem eigenen ROM, in dem Mate eingebaut ist. Bis dahin nimmt Mate Shizuku: Musik und Navigationsstimme gehen dabei ebenfalls getrennt ins Auto, wie bei Android Auto. Weiter ist nichts einzurichten.</string>
@@ -226,7 +209,7 @@
     <string name="audio_shizuku_ready">Bereit. Musik und Navigationsstimme gehen getrennt ins Auto, wie bei Android Auto; das Telefon bleibt stumm.</string>
     <string name="audio_shizuku_needs_android12">Erfordert Android 12 oder neuer.</string>
     <string name="audio_shizuku_tap_allow">Shizuku läuft: Tippen, um Mate zu erlauben.</string>
-    <string name="audio_shizuku_install_hint">Kein Root erforderlich. Installiere Shizuku, starte es (drahtloses Debugging, einmal pro Neustart) und komm dann hierher zurück.</string>
+    <string name="audio_shizuku_install_hint">Installiere Shizuku, starte es (drahtloses Debugging, einmal pro Neustart) und komm dann hierher zurück.</string>
     <string name="audio_playback_ready">Bereit. Nur Medien: keine Navigationsstimme, manche Apps nehmen nicht teil, und das Telefon spielt weiterhin mit.</string>
     <string name="audio_playback_not_ready">Funktioniert überall, mit Einschränkungen: nur Medien, keine Navigationsstimme. Android fragt nach der Bildschirmaufnahme: Wähle „Gesamter Bildschirm“ (wird auch vom Telefonbildschirm verwendet).</string>
     <string name="audio_notice_setup_hint">Öffne Mate auf dem Telefon und richte Autoaudio ein, um das Telefon im Auto zu hören</string>
@@ -370,12 +353,12 @@
     <!-- search: media search view -->
     <string name="search_parked_only">Suche ist beim Parken verfügbar</string>
 
-    <!-- standalone: launching ordinary phone apps on the car screen (root/Shizuku, parked only) -->
+    <!-- standalone: launching ordinary phone apps on the car screen (Shizuku, parked only) -->
     <string name="standalone_section_title">Apps auf dem Autobildschirm (erweitert)</string>
-    <string name="standalone_section_warning">Das sind keine Android Auto-Apps: Mate zeigt deren normalen Telefonbildschirm, nur während das Auto geparkt ist, und benötigt root oder Shizuku. Nutzung auf eigene Gefahr.</string>
+    <string name="standalone_section_warning">Das sind keine Android Auto-Apps: Mate zeigt deren normalen Telefonbildschirm, nur während das Auto geparkt ist, und benötigt Shizuku. Nutzung auf eigene Gefahr.</string>
     <string name="standalone_toggle_title">Telefon-Apps auf dem Autobildschirm starten</string>
     <string name="standalone_toggle_subtitle">Wähle unten die Apps aus. Nur beim Parken angezeigt.</string>
-    <string name="standalone_need_root">Braucht Root oder Shizuku. Richte eins davon auf der Seite Autoaudio ein und komm dann zurück.</string>
+    <string name="standalone_need_shizuku">Braucht Shizuku. Richte es auf der Seite Autoaudio ein und komm dann zurück.</string>
     <string name="standalone_not_native">Keine Android Auto-App · Nutzung beim Parken</string>
     <string name="standalone_starting">Wird gestartet…</string>
     <string name="standalone_paused_driving">Nur im Stand: Wählhebel auf P, Auto steht still.</string>
@@ -444,10 +427,7 @@
     <string name="setup_toggle_verbose_log_title">Ausführliches Head-Unit-Protokoll</string>
     <string name="setup_toggle_verbose_log_subtitle">Zeichnet den vollständigen Head-Unit-Protokollverlauf in diesem Log auf, zum Anhängen an einen Fehlerbericht. Erzeugt viele Daten; sonst ausgeschaltet lassen.</string>
     <string name="setup_nothing_to_open">Dieses Telefon hat keine App, die dies öffnen kann</string>
-    <string name="setup_wallpaper_failed">Dieses Foto konnte nicht als Hintergrundbild verwendet werden</string>
     <string name="msg_autoreply_default">Ich fahre gerade und antworte später.</string>
-    <string name="audio_root_ready">Bereit, über Root. Alles, was das Telefon abspielt, geht ans Auto, einschließlich der Navigationsstimme; das Telefon bleibt stumm.</string>
-    <string name="audio_shizuku_or_root_hint">Auf einem gerooteten Telefon (KernelSU, Magisk, APatch …) tippen, um Root zu erlauben. Andernfalls Shizuku installieren und starten (drahtloses Debugging, einmal pro Neustart).</string>
     <string name="dash_menu_exit_to_car">Zurück zum Auto</string>
     <string name="media_action_retry">Wiederholen</string>
     <string name="media_error_fix">Beheben</string>
@@ -493,7 +473,6 @@
     <string name="aa_reason_private_uses">Nutzt Googles eigene Android-Auto-Schnittstelle (%1$s), die nur Android Auto selbst anzeigen kann.</string>
     <string name="aa_refused_note">lässt nur Googles Android Auto zu</string>
     <string name="carapp_error_cant_start">%1$s konnte nicht starten: %2$s</string>
-    <string name="setup_style_idmate">IDmate</string>
     <string name="idmate_tab_dashboard">Dashboard</string>
     <string name="idmate_tab_navigation">Navi</string>
     <string name="idmate_tab_music">Audio</string>
@@ -686,7 +665,7 @@
     <string name="mate_page_music">Musik</string>
     <string name="mate_page_music_sub">Plex-Server, Standard-App, zusätzlich gezeigte Apps</string>
     <string name="mate_page_bar">Bedienleiste</string>
-    <string name="mate_page_bar_sub">Lage, dunkle Leiste, Titelstreifen</string>
+    <string name="mate_page_bar_sub">Titelstreifen, „Fehler markieren“</string>
     <string name="mate_navi_title">Navi-App</string>
     <string name="mate_navi_hint">Eine App füllt den Bereich Navi. Im Auto: im Umschalter auf „Navi“ nach oben wischen. Lehnt eine App Mate ab, nimmt Mate die nächste, die läuft.</string>
     <string name="mate_music_title">Musik-Apps</string>
@@ -1572,4 +1551,5 @@
         <item>Spiele das Album Jenseits von Eden von den Toten Hosen.</item>
         <item>Anna schreibt: Ich bin in zehn Minuten da, soll ich noch etwas vom Bäcker mitbringen?</item>
     </string-array>
+    <string name="stick_permission_denied_location">Ohne Standort-Berechtigung kann Mate den Stick nicht suchen (Android vor Version 12 braucht sie für die Bluetooth-Suche). Erlaube sie in den App-Einstellungen.</string>
 </resources>

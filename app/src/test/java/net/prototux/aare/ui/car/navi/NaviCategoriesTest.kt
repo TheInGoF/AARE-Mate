@@ -46,4 +46,17 @@ class NaviCategoriesTest {
         assertNull(NaviCategories.asked("Hamburg"))
         assertNull(NaviCategories.asked("Ladenburg Marktplatz"))
     }
+
+    /** Navi I-060a: a word's beginning typed so far is not yet the category (Ladenburg, Restaurant). */
+    @Test fun notByItsBeginning() {
+        assertNull(NaviCategories.asked("Lade"))
+        assertNull(NaviCategories.asked("Ladenb"))
+        assertNull(NaviCategories.asked("Rest"))
+        assertNull(NaviCategories.asked("Resta"))
+        assertNull(NaviCategories.asked("Rastpl"))
+        assertNull(NaviCategories.asked("Ladesäul"))
+        assertEquals(NaviCategories.Kind.CHARGER, NaviCategories.asked("Laden"))
+        assertEquals(NaviCategories.Kind.CHARGER, NaviCategories.asked("Ladestaton"))
+        assertEquals(NaviCategories.Kind.REST, NaviCategories.asked("Rasthpf"))
+    }
 }

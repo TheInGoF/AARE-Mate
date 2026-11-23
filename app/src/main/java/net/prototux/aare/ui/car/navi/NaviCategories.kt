@@ -18,11 +18,22 @@ internal object NaviCategories {
             "charger", "chargers", "charging", "chargepoint"),
         Kind.REST to listOf("rastplatz", "raststatte", "rasthof", "rastanlage", "pause", "reststop", "restarea", "services"))
 
-    /** The category a typed text asks for, if it is one of its words (forgiving typos). */
+    /**
+     * The category a typed text asks for, if it is one of its words as a whole (forgiving typos). Only a whole word:
+     * a beginning typed so far ("Lade" on the way to Ladenburg, "Rest" to Restaurant) asks for nothing yet (Navi I-060a).
+     */
     fun asked(query: String): Kind? {
         val w = NaviFuzzy.words(query).singleOrNull() ?: return null
         if (w.length < 4) return null
-        return WORDS.entries.firstOrNull { (_, words) -> words.any { NaviFuzzy.wordCost(w, it) != null } }?.key
+        return WORDS.entries.firstOrNull { (_, words) -> words.any { matches(w, it) } }?.key
+    }
+
+    /** [typed] is [word]: the same, or with a typo or two by length - but never only its beginning, nor the word going on. */
+    private fun matches(typed: String, word: String): Boolean {
+        if (typed == word) return true
+        if (word.startsWith(typed) || typed.startsWith(word) || kotlin.math.abs(typed.length - word.length) > 1) return false
+        val allowed = when { typed.length <= 4 -> 0.0; typed.length <= 7 -> 1.0; else -> 2.0 }
+        return allowed > 0.0 && NaviFuzzy.distance(typed, word) <= allowed
     }
 
     /**

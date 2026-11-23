@@ -166,6 +166,29 @@ internal object PortalLogin {
      * pages go this way; everything else stays HTTPS only. [body] null sends a GET, else a form POST.
      */
     private fun plainRequest(n: Network, url: String, body: String?, cookies: MutableMap<String, String>, referer: String?): Answer {
+        val extra = LinkedHashMap<String, String>()
+        extra["Accept"] = "text/html,*/*"
+        if (cookies.isNotEmpty()) extra["Cookie"] = cookieHeader(cookies)
+        if (body != null && referer != null) extra["Referer"] = referer
+        val raw = plainRaw(n, url, body?.toByteArray(Charsets.UTF_8), extra)
+        val text = String(raw.bytes, raw.charset() ?: Charsets.UTF_8).take(MAX_CHARS)
+        return answer(raw.code, raw.header("Location"), raw.headers.filter { it.first.equals("Set-Cookie", true) }.map { it.second }, text, cookies)
+    }
+
+    /** A plain-http answer as it came: status, headers, body bytes (decoded from chunks, at most [MAX_BYTES]). */
+    internal class Raw(val code: Int, val reason: String, val headers: List<Pair<String, String>>, val bytes: ByteArray) {
+        fun header(name: String) = headers.firstOrNull { it.first.equals(name, true) }?.second
+        fun charset(): java.nio.charset.Charset? = header("Content-Type")?.let { Regex("(?i)charset=\"?([\\w.:-]+)").find(it)?.groupValues?.get(1) }
+            ?.let { runCatching { java.nio.charset.Charset.forName(it) }.getOrNull() }
+    }
+
+    /**
+     * The raw request behind [plainRequest], also for [PortalPage]'s WebView (I-118c: its plain-http login pages are
+     * fetched here and handed to it, so the app's ban on plain HTTP stays as it is). [extra] are request headers to send
+     * (Host, Connection, Accept-Encoding and Content-Length are set here); [payload] null sends a GET, else a form POST.
+     * Off the main thread.
+     */
+    internal fun plainRaw(n: Network, url: String, payload: ByteArray?, extra: Map<String, String>): Raw {
         val u = URL(url)
         val port = if (u.port > 0) u.port else 80
         val path = u.file.ifEmpty { "/" }
@@ -174,19 +197,19 @@ internal object PortalLogin {
         n.socketFactory.createSocket().use { s ->
             s.connect(InetSocketAddress(address, port), TIMEOUT_MS)
             s.soTimeout = TIMEOUT_MS
-            val payload = body?.toByteArray(Charsets.UTF_8)
             val head = StringBuilder()
             head.append(if (payload != null) "POST" else "GET").append(' ').append(path).append(" HTTP/1.1\r\n")
             head.append("Host: ").append(u.host).append(if (u.port > 0 && u.port != 80) ":${u.port}" else "").append("\r\n")
-            head.append("User-Agent: ").append(AGENT).append("\r\n")
-            head.append("Accept: text/html,*/*\r\n")
+            val own = setOf("host", "connection", "accept-encoding", "content-length")
+            val sent = extra.filterKeys { it.lowercase() !in own && it.none { c -> c == '\r' || c == '\n' } }
+                .filterValues { v -> v.none { c -> c == '\r' || c == '\n' } }
+            if (sent.keys.none { it.equals("User-Agent", true) }) head.append("User-Agent: ").append(AGENT).append("\r\n")
+            sent.forEach { (k, v) -> head.append(k).append(": ").append(v).append("\r\n") }
             head.append("Accept-Encoding: identity\r\n")
             head.append("Connection: close\r\n")
-            if (cookies.isNotEmpty()) head.append("Cookie: ").append(cookieHeader(cookies)).append("\r\n")
             if (payload != null) {
-                head.append("Content-Type: application/x-www-form-urlencoded\r\n")
+                if (sent.keys.none { it.equals("Content-Type", true) }) head.append("Content-Type: application/x-www-form-urlencoded\r\n")
                 head.append("Content-Length: ").append(payload.size).append("\r\n")
-                if (referer != null) head.append("Referer: ").append(referer).append("\r\n")
             }
             head.append("\r\n")
             val out = BufferedOutputStream(s.getOutputStream())
@@ -196,10 +219,13 @@ internal object PortalLogin {
 
             val input = BufferedInputStream(s.getInputStream())
             var code: Int
+            var reason: String
             var headers: List<Pair<String, String>>
             do { // skip interim answers (100 Continue)
                 val status = line(input, deadline) ?: throw IOException("no status line")
-                code = status.split(' ').getOrNull(1)?.toIntOrNull() ?: throw IOException("bad status line")
+                val parts = status.split(' ', limit = 3)
+                code = parts.getOrNull(1)?.toIntOrNull() ?: throw IOException("bad status line")
+                reason = parts.getOrNull(2)?.trim().orEmpty()
                 headers = generateSequence { line(input, deadline)?.takeIf { it.isNotEmpty() } }
                     .take(200).mapNotNull { h -> h.indexOf(':').takeIf { it > 0 }?.let { h.substring(0, it).trim() to h.substring(it + 1).trim() } }.toList()
             } while (code in 100..199)
@@ -209,10 +235,7 @@ internal object PortalLogin {
                 header("Transfer-Encoding")?.contains("chunked", true) == true -> chunked(input, deadline)
                 else -> header("Content-Length")?.toLongOrNull()?.let { exactly(input, it, deadline) } ?: rest(input, deadline)
             }
-            val cs = header("Content-Type")?.let { Regex("(?i)charset=\"?([\\w.:-]+)").find(it)?.groupValues?.get(1) }
-                ?.let { runCatching { charset(it) }.getOrNull() } ?: Charsets.UTF_8
-            val text = String(bytes, cs).take(MAX_CHARS)
-            return answer(code, header("Location"), headers.filter { it.first.equals("Set-Cookie", true) }.map { it.second }, text, cookies)
+            return Raw(code, reason, headers, bytes)
         }
     }
 

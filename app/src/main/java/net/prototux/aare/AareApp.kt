@@ -7,7 +7,7 @@ class AareApp : Application() {
         super.onCreate()
         instance = this
         DiagLog.init(this)
-        // Mate's colours are read by screens that do not pass IdmateShell (the Android Auto and CarPlay styles)
+        // Mate's colours are read by screens outside IdmateShell too
         net.prototux.aare.ui.car.Mate.init(this)
         net.prototux.aare.audio.AudioTrials.load(this)
         // which Mate runs, once per start (System L-075: bugs reported against an older version stay recognisable)
@@ -18,6 +18,8 @@ class AareApp : Application() {
         Memory.givers += { if (net.prototux.aare.speech.Dictation.Model.release()) "the speech recognition" else null }
         // the car's position as the phone's, left behind by an earlier run of Mate: the phone's own GPS again
         net.prototux.aare.car.PhoneLocationFeed.clearLeftovers(this)
+        // a Wi-Fi network coming later starts Shizuku too (E-045)
+        net.prototux.aare.adb.SelfAdb.watchWifi(this)
     }
 
     /**

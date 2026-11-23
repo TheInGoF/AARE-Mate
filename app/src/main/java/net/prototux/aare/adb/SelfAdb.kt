@@ -126,6 +126,41 @@ object SelfAdb {
         work.execute { try { startNow(app, why) } finally { done() } }
     }
 
+    @Volatile private var wifiWatched = false
+
+    /**
+     * E-045: a Wi-Fi network that comes only later (the car's Wi-Fi Mate joins itself, a hotspot) gets another try at starting
+     * Shizuku - before, Mate tried at boot, at the car's connection and when the app opened, and nothing after. Registered once
+     * per process from [net.prototux.aare.AareApp] with the application context; it only listens (no request of its own), so
+     * Mate's own joining of the car's Wi-Fi is not touched. A Wi-Fi network that goes away ends nothing: Shizuku runs on.
+     * Wireless debugging needs Android 11.
+     */
+    fun watchWifi(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val app = context.applicationContext
+        // only Mate's main process (the others have no use for it)
+        if (android.app.Application.getProcessName() != app.packageName) return
+        synchronized(this) { if (wifiWatched) return; wifiWatched = true }
+        val cm = app.getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        val request = android.net.NetworkRequest.Builder()
+            .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
+            // any Wi-Fi will do, the car's has no internet
+            .removeCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        runCatching {
+            cm.registerNetworkCallback(request, object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    if (CaptureMethods.shizukuAvailable() || !paired(app) || !CaptureMethods.shizukuInstalled(app)) return
+                    DiagLog.add("shizuku by Mate (Wi-Fi came): Shizuku not running, trying to start it")
+                    ensureShizuku(app, "Wi-Fi came")
+                }
+            })
+        }.onFailure {
+            wifiWatched = false
+            DiagLog.add("shizuku by Mate (Wi-Fi came): watching Wi-Fi failed - ${it.javaClass.simpleName}: ${it.message}")
+        }
+    }
+
     /** Started from the phone app's button: without the once-a-minute limit. */
     fun startByHand(context: Context) {
         val app = context.applicationContext

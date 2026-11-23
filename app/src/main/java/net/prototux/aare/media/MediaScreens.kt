@@ -461,7 +461,7 @@ private fun ItemRow(hub: DefaultMediaHub, item: MediaItem, style: ContentStyle, 
                 var queued by androidx.compose.runtime.remember(item.mediaId) { androidx.compose.runtime.mutableStateOf(false) }
                 LaunchedEffect(queued) { if (queued) { kotlinx.coroutines.delay(1_800); queued = false } }
                 Box(
-                    Modifier.size(LocalCarDimens.current.touchTarget).clip(CircleShape).clickable { c.enqueue(item); queued = true },
+                    Modifier.size(LocalCarDimens.current.touchTarget).clip(CircleShape).clickable { queued = c.enqueue(item) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(

@@ -371,16 +371,26 @@ internal class MediaConnection(
     // ... and which it was: a new queue since (an album started, a voice wish, a mix) no longer has it there
     private var enqueuedId: String? = null
 
-    /** Puts [item] right behind what plays (behind the ones put in before it); starts it when nothing plays. */
-    fun enqueue(item: MediaItem) {
-        val b = browser ?: return connect()
-        if (b.mediaItemCount == 0) return play(item)
-        val now = b.currentMediaItemIndex
-        val follow = enqueuedAt in (now + 1) until b.mediaItemCount && b.getMediaItemAt(enqueuedAt).mediaId == enqueuedId
-        val at = (if (follow) enqueuedAt + 1 else now + 1).coerceAtMost(b.mediaItemCount)
-        b.addMediaItem(at, item)
-        enqueuedAt = at
-        enqueuedId = item.mediaId
+    /**
+     * Puts [item] right behind what plays (behind the ones put in before it); starts it when nothing plays.
+     * True when the track was handed over (I-118d: the list's tick shows only then); false without a connection (one is
+     * made for the next time) or when the player refused it.
+     */
+    fun enqueue(item: MediaItem): Boolean {
+        val b = browser ?: run { connect(); return false }
+        if (b.mediaItemCount == 0) { play(item); return true }
+        return try {
+            val now = b.currentMediaItemIndex
+            val follow = enqueuedAt in (now + 1) until b.mediaItemCount && b.getMediaItemAt(enqueuedAt).mediaId == enqueuedId
+            val at = (if (follow) enqueuedAt + 1 else now + 1).coerceAtMost(b.mediaItemCount)
+            b.addMediaItem(at, item)
+            enqueuedAt = at
+            enqueuedId = item.mediaId
+            true
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "enqueue ${item.mediaId} in ${app.packageName} failed: $e")
+            false
+        }
     }
 
     fun play(item: MediaItem) {

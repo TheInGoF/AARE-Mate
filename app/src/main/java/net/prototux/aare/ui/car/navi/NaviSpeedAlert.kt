@@ -64,7 +64,11 @@ internal class NaviSpeedAlert(private val overKmh: Int, val times: Int) {
                 .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(RATE)
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
                 .setTransferMode(AudioTrack.MODE_STATIC).setBufferSizeInBytes(pcm.size * 2).build()
-                .also { it.write(pcm, 0, pcm.size) } }
+                .also { t ->
+                    // a track that could not take the tone is let go here (I-118i), else it stays held
+                    val written = runCatching { t.write(pcm, 0, pcm.size) }.getOrElse { e -> t.release(); throw e }
+                    if (written < 0) { t.release(); throw IllegalStateException("write failed ($written)") }
+                } }
                 .onFailure { android.util.Log.w("MateNavi", "speed warning: tone could not be played", it) }.getOrNull() ?: run {
                     // the music up again, it was turned down for the tone
                     net.prototux.aare.audio.MediaFade.release()

@@ -258,7 +258,7 @@ public final class Offline {
                         loaded++;
                     } catch (IOException e) {
                         complete = false;
-                        Log.w(TAG, "Titel nicht geladen: " + e.getClass().getSimpleName());
+                        Log.w(TAG, "track not loaded: " + e.getClass().getSimpleName());
                     }
                 }
                 for (String th : thumbs) {
@@ -270,14 +270,14 @@ public final class Offline {
             }
             /* Abos, die es am Server nicht mehr gibt, bleiben abonniert, behalten aber ihr Verzeichnis nicht */
         } catch (IOException e) {
-            Log.w(TAG, "Abgleich: " + e.getClass().getSimpleName());
+            Log.w(TAG, "sync: " + e.getClass().getSimpleName());
             return -1;
         }
         if (sCancel) return 0;
         /* aufraeumen: was in keiner abonnierten Liste mehr steht - nur wenn der Server die Abos auch kennt; sonst (anderes
            Konto, anderer Server, Listen umbenannt) wuerde alles Geladene geloescht (23.11.2026: "Musik ist gelöscht") */
         if (found < subs.size()) {
-            Log.w(TAG, "Abgleich: " + found + " von " + subs.size() + " Abos am Server gefunden, nichts geloescht");
+            Log.w(TAG, "sync: " + found + " of " + subs.size() + " subscriptions found on the server, nothing deleted");
             if (complete) Plex.prefs(c).edit().putLong(KEY_LAST, System.currentTimeMillis()).apply();
             return loaded;
         }
@@ -297,7 +297,7 @@ public final class Offline {
             if (!sub) f.delete();
         }
         if (complete) Plex.prefs(c).edit().putLong(KEY_LAST, System.currentTimeMillis()).apply();
-        Log.i(TAG, "Abgleich: " + loaded + " Titel neu, " + keep.size() + " vorhanden");
+        Log.i(TAG, "sync: " + loaded + " tracks new, " + keep.size() + " present");
         return loaded;
     }
 
@@ -315,9 +315,9 @@ public final class Offline {
             try (OutputStream out = new FileOutputStream(tmp)) {
                 out.write(new JSONObject().put("title", title).put("tracks", a).toString().getBytes(StandardCharsets.UTF_8));
             }
-            if (!tmp.renameTo(f)) throw new IOException("Liste nicht gespeichert");
+            if (!tmp.renameTo(f)) throw new IOException("list not saved");
         } catch (JSONException e) {
-            throw new IOException("Liste nicht gespeichert");
+            throw new IOException("list not saved");
         }
     }
 
@@ -335,8 +335,8 @@ public final class Offline {
                 byte[] buf = new byte[64 * 1024];
                 for (int n; (n = in.read(buf)) > 0; ) { out.write(buf, 0, n); got += n; }
             }
-            if (want > 0 && got != want) throw new IOException("unvollstaendig");
-            if (!tmp.renameTo(to)) throw new IOException("nicht gespeichert");
+            if (want > 0 && got != want) throw new IOException("incomplete");
+            if (!tmp.renameTo(to)) throw new IOException("not saved");
         } finally {
             h.disconnect();
             tmp.delete();

@@ -6,6 +6,7 @@ import android.app.job.JobScheduler;
 import android.app.job.JobService;
 import android.content.ComponentName;
 import android.content.Context;
+import android.util.Log;
 
 /**
  * Haelt die abonnierten Listen aktuell (Offline): alle sechs Stunden, sobald ein passendes Netz da ist
@@ -31,7 +32,10 @@ public final class MusicSyncJob extends JobService {
     public boolean onStartJob(JobParameters params) {
         Thread work = new Thread(() -> {
             int r = Offline.sync(this, null);
-            jobFinished(params, r < 0);
+            /* I-118e: ohne Server (abgemeldet) kein neuer Versuch mit Backoff - erst zur naechsten Periode wieder */
+            boolean server = r < 0 && Plex.load(this) != null;
+            if (r < 0 && !server) Log.i("MusicSyncJob", "sync skipped: no server (signed out), next try at the next period");
+            jobFinished(params, server);
         }, "music-sync");
         work.start();
         return true;

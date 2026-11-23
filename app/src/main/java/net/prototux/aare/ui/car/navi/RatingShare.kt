@@ -33,7 +33,8 @@ internal object RatingShare {
         val sig = signature(v.rating, v.power, v.price, v.worked) ?: return
         val p = prefs(c)
         val key = chargerKey(v)
-        if (p.getString("sent:$key", null) == sig) return
+        // back at what was sent: a change waiting from in between is dropped, else it would go out later (Navi I-060b)
+        if (p.getString("sent:$key", null) == sig) { synchronized(this) { p.edit().remove("wait:$key").apply() }; return }
         // one id per charge: the visit's time names the charge
         val idKey = "id:$key@${v.lastMillis}"
         val id = p.getString(idKey, null) ?: java.util.UUID.randomUUID().toString().also { p.edit().putString(idKey, it).apply() }

@@ -150,7 +150,7 @@
     <string name="setup_toggle_resume_music_title">Resume music</string>
     <string name="setup_toggle_resume_music_subtitle">Start the last music app playing when the car connects. Music that was paused last time stays paused</string>
     <string name="setup_bt_address_label">Phone Bluetooth address (optional)</string>
-    <string name="setup_bt_address_hint">The car wants to know which device is connected: with that it takes calls over its speakers and microphone, and some show a black screen otherwise. Mate reads the address itself where Shizuku or root allow it; otherwise it is under Settings &gt; About phone &gt; Status.</string>
+    <string name="setup_bt_address_hint">The car wants to know which device is connected: with that it takes calls over its speakers and microphone, and some show a black screen otherwise. Mate reads the address itself where Shizuku allows it; otherwise it is under Settings &gt; About phone &gt; Status.</string>
     <string name="setup_section_location">Location</string>
     <string name="setup_toggle_car_gps_title">Use the car\'s GPS</string>
     <string name="setup_toggle_car_gps_subtitle">While connected, apps on the phone see the car\'s position instead of the phone\'s own, so navigation apps don\'t mix the two</string>
@@ -206,20 +206,7 @@
     <string name="setup_choice_colors_auto">Car\'s day/night</string>
     <string name="setup_choice_dark">Dark</string>
     <string name="setup_choice_light">Light</string>
-    <string name="setup_choice_bar">Position</string>
-    <string name="setup_choice_bar_auto">Driver\'s side</string>
-    <string name="setup_choice_left">Left</string>
-    <string name="setup_choice_right">Right</string>
-    <string name="setup_choice_bottom">Bottom</string>
-    <string name="setup_toggle_dark_bar_title">Dark bar</string>
-    <string name="setup_toggle_dark_bar_subtitle">Keep the bar dark even with day colors</string>
     <string name="setup_section_dashboard">Dashboard</string>
-    <string name="setup_choice_wallpaper">Wallpaper</string>
-    <string name="setup_wallpaper_none">None</string>
-    <string name="setup_wallpaper_photo">Photo</string>
-    <string name="setup_wallpaper_dusk">Dusk</string>
-    <string name="setup_wallpaper_forest">Forest</string>
-    <string name="setup_wallpaper_ocean">Ocean</string>
     <string name="setup_toggle_weather_title">Weather</string>
     <string name="setup_toggle_weather_subtitle">Next to the clock, from Open-Meteo (it gets an approximate position, about 10 km)</string>
     <string name="setup_toggle_calendar_title">Next calendar event</string>
@@ -251,15 +238,10 @@
     <string name="setup_toggle_verbose_log_subtitle">Record the full head-unit protocol trace in this log, to attach to a bug report. Logs a lot; leave it off otherwise.</string>
     <string name="setup_about_versions">Mate %1$s · based on AARE %2$s · AARE changes looked through up to %3$s</string>
     <string name="setup_about_text">Mate %1$s, a fork of AARE · GPL-3.0-or-later · Not affiliated with Google. Android Auto is a trademark of Google LLC.</string>
-    <string name="setup_choice_style">Style</string>
-    <string name="setup_style_android_auto">Android Auto</string>
-    <string name="setup_style_carplay">CarPlay</string>
-    <string name="setup_switch_dark_bar">Dark bar, even with day colors</string>
     <string name="setup_switch_passenger">Passenger mode: no driving restrictions (the driver must not use the screen)</string>
     <string name="setup_switch_message_notifications">Message notifications</string>
     <string name="setup_switch_audio_next_connection">Phone audio in the car (next connection)</string>
     <string name="setup_nothing_to_open">This phone has no app that can open this</string>
-    <string name="setup_wallpaper_failed">Couldn\'t use this photo as the wallpaper</string>
 
     <!-- cert: certificate management -->
     <string name="cert_section_title">Phone certificates</string>
@@ -284,7 +266,7 @@
     <string name="huserver_toggle_lanonce_title">Turn off network mode after a session</string>
     <string name="huserver_toggle_lanonce_subtitle">Safer: the network has to be allowed again for each session. Turn this off for head units that reconnect on their own, like openauto or Headunit Revived.</string>
     <string name="huserver_toggle_mirror_title">Phone screen on the server</string>
-    <string name="huserver_toggle_mirror_subtitle">Also offer "Phone screen" to whoever connects here. Risky: they see the phone\'s screen and can tap on it, so leave it off unless you trust the head unit.</string>
+    <string name="huserver_toggle_mirror_subtitle">Also offer \"Phone screen\" to whoever connects here. Risky: they see the phone\'s screen and can tap on it, so leave it off unless you trust the head unit.</string>
     <string name="huserver_toggle_localhost_title">Allow localhost (webaa / paath)</string>
     <string name="huserver_toggle_localhost_subtitle">Accept a connection from an Android-Auto-in-the-browser app on this phone, for cars without Android Auto (e.g. Tesla). Any app on the phone could connect, so leave it off unless you use one.</string>
 
@@ -319,7 +301,7 @@
     <string name="audio_no_method">No method is set up yet: choose one below.</string>
     <string name="audio_method_policy">System audio routing (like Android Auto)</string>
     <string name="audio_method_shizuku_policy">Shizuku, music and navigation apart (like Android Auto)</string>
-    <string name="audio_method_shizuku">Shizuku or root</string>
+    <string name="audio_method_shizuku">Shizuku</string>
     <string name="audio_method_playback">Screen-capture permission</string>
     <string name="audio_policy_info_title">System audio routing</string>
     <string name="audio_policy_info_text">This way needs Mate installed as a system app with the MODIFY_AUDIO_ROUTING permission – it comes with a system image that includes Mate. Until then Mate takes Shizuku: music and navigation voice reach the car apart as well, like Android Auto. Nothing else to set up.</string>
@@ -329,9 +311,7 @@
     <string name="audio_shizuku_ready">Ready. Music and navigation voice reach the car apart, like Android Auto; the phone stays quiet.</string>
     <string name="audio_shizuku_needs_android12">Needs Android 12 or newer.</string>
     <string name="audio_shizuku_tap_allow">Shizuku is running: tap to allow Mate.</string>
-    <string name="audio_shizuku_install_hint">No root needed. Install Shizuku, start it (wireless debugging, once per reboot), then come back here.</string>
-    <string name="audio_root_ready">Ready, through root. Everything the phone plays goes to the car, navigation voice included; the phone stays quiet.</string>
-    <string name="audio_shizuku_or_root_hint">On a rooted phone (KernelSU, Magisk, APatch…), tap to allow root. Otherwise install Shizuku and start it (wireless debugging, once per reboot).</string>
+    <string name="audio_shizuku_install_hint">Install Shizuku, start it (wireless debugging, once per reboot), then come back here.</string>
     <string name="audio_playback_ready">Ready. Media only: no navigation voice, some apps opt out, and the phone keeps playing too.</string>
     <string name="audio_playback_not_ready">Works everywhere, with limits: media only, no navigation voice. Android asks to capture the screen: choose Entire screen (also used by the phone screen).</string>
     <string name="audio_notice_setup_hint">Open Mate on the phone and set up car audio to hear the phone in the car</string>
@@ -341,16 +321,16 @@
     <string name="phone_toggle_enable_title">Phone screen in the car</string>
     <string name="phone_toggle_enable_subtitle">The phone\'s own screen, for apps Mate can\'t host (Google Maps, Waze). Paused while the phone is locked, and while driving unless a navigation app is guiding. Not offered on the head unit server unless enabled there</string>
     <string name="phone_check_touch_title">Touch on the phone screen</string>
-    <string name="phone_check_touch_subtitle">Turn on Mate in Accessibility. Sideloaded apps may first need "Allow restricted settings" in Mate\'s app info</string>
+    <string name="phone_check_touch_subtitle">Turn on Mate in Accessibility. Sideloaded apps may first need \"Allow restricted settings\" in Mate\'s app info</string>
     <string name="phone_hint_touch_capture">The picture uses the screen-capture permission (Car audio page, choose Entire screen).</string>
     <string name="phone_app_row_subtitle">The phone\'s own screen, for apps Mate can\'t host</string>
 
-    <!-- standalone: launching ordinary phone apps on the car screen (root/Shizuku, parked only) -->
+    <!-- standalone: launching ordinary phone apps on the car screen (Shizuku, parked only) -->
     <string name="standalone_section_title">Apps on the car screen (advanced)</string>
-    <string name="standalone_section_warning">These are not Android Auto apps: Mate shows their normal phone screen, only while parked, and needs root or Shizuku. Use at your own risk.</string>
+    <string name="standalone_section_warning">These are not Android Auto apps: Mate shows their normal phone screen, only while parked, and needs Shizuku. Use at your own risk.</string>
     <string name="standalone_toggle_title">Launch phone apps on the car screen</string>
     <string name="standalone_toggle_subtitle">Pick the apps below. Shown only when parked.</string>
-    <string name="standalone_need_root">Needs root or Shizuku. Set one up in Audio settings, then come back.</string>
+    <string name="standalone_need_shizuku">Needs Shizuku. Set it up in Audio settings, then come back.</string>
     <string name="standalone_not_native">Not an Android Auto app · parked use</string>
     <string name="standalone_starting">Starting…</string>
     <string name="standalone_paused_driving">Only when parked: gear in P, the car standing still.</string>
@@ -555,7 +535,6 @@
     <string name="aa_reason_private_uses">Uses Google\'s private Android Auto interface (%1$s), which only Android Auto can show.</string>
     <string name="aa_refused_note">lets only Google\'s Android Auto in</string>
     <string name="carapp_error_cant_start">%1$s couldn\'t start: %2$s</string>
-    <string name="setup_style_idmate">IDmate</string>
     <string name="idmate_tab_dashboard">Dashboard</string>
     <string name="idmate_tab_navigation">Navigation</string>
     <string name="idmate_tab_music">Audio</string>
@@ -726,16 +705,16 @@
     <string name="dash_map">Map only over HTTPS</string>
     <string name="dash_no_pos">No position</string>
     <string name="stick_title">Telemetry stick</string>
-    <string name="stick_hint">Live data straight from the stick over Bluetooth. On the stick: Config → BLE / ABRP → Live data over Bluetooth, then restart it. Then press "Gerät koppeln" on the stick and "Find stick" here: Android asks for the code shown on the stick - it must be entered within 30 seconds.</string>
+    <string name="stick_hint">Live data straight from the stick over Bluetooth. On the stick: Config → BLE / ABRP → Live data over Bluetooth, then restart it. Then press \"Gerät koppeln\" on the stick and \"Find stick\" here: Android asks for the code shown on the stick - it must be entered within 30 seconds.</string>
     <string name="stick_search">Find stick</string>
     <string name="stick_unpair">Drop pairing</string>
-    <string name="stick_unpaired">Pairing dropped. Now press "Gerät koppeln" on the stick, have the code ready, then "Find stick".</string>
-    <string name="stick_no_data">Connected, but the stick sends nothing: press "Gerät koppeln" on the stick, then "Find stick" here.</string>
-    <string name="stick_unpair_by_hand">The old pairing could not be dropped: remove the stick under Android settings → Connected devices → "OBDII" → gear → Unpair, then "Gerät koppeln" on the stick and "Find stick" here.</string>
+    <string name="stick_unpaired">Pairing dropped. Now press \"Gerät koppeln\" on the stick, have the code ready, then \"Find stick\".</string>
+    <string name="stick_no_data">Connected, but the stick sends nothing: press \"Gerät koppeln\" on the stick, then \"Find stick\" here.</string>
+    <string name="stick_unpair_by_hand">The old pairing could not be dropped: remove the stick under Android settings → Connected devices → \"OBDII\" → gear → Unpair, then \"Gerät koppeln\" on the stick and \"Find stick\" here.</string>
     <string name="stick_pair_now">Pairing: enter the code shown on the stick now - Bluetooth allows 30 seconds</string>
     <string name="stick_paired">Paired with the stick</string>
-    <string name="stick_pair_failed">Pairing broke off (the code was not entered within 30 seconds, or a wrong one). Press "Gerät koppeln" on the stick again, have the code ready, then "Find stick" here.</string>
-    <string name="stick_not_paired">Not paired yet: press "Gerät koppeln" on the stick, then "Find stick" here.</string>
+    <string name="stick_pair_failed">Pairing broke off (the code was not entered within 30 seconds, or a wrong one). Press \"Gerät koppeln\" on the stick again, have the code ready, then \"Find stick\" here.</string>
+    <string name="stick_not_paired">Not paired yet: press \"Gerät koppeln\" on the stick, then \"Find stick\" here.</string>
     <string name="stick_off">Do not use stick</string>
     <string name="dbg_src_car">Car only</string>
     <string name="stick_state_off">Not in use</string>
@@ -748,7 +727,7 @@
     <string name="mate_page_music">Music</string>
     <string name="mate_page_music_sub">Plex server, default app, apps shown beside it</string>
     <string name="mate_page_bar">Controls</string>
-    <string name="mate_page_bar_sub">Position, dark bar, title strip</string>
+    <string name="mate_page_bar_sub">Title strip, \u201cMark fault\u201d</string>
     <string name="mate_navi_title">Navigation app</string>
     <string name="mate_navi_hint">One app fills the navigation area. In the car: swipe up on \u201cNavi\u201d in the switcher. An app that refuses Mate is stepped over while another works.</string>
     <string name="mate_music_title">Music apps</string>
@@ -1102,7 +1081,7 @@
     <string name="music_folder_back">Back into Mate’s storage</string>
     <string name="music_folder_unknown">This folder cannot be used. Please choose one on the device or the memory card.</string>
     <string name="storage_intro_music">Where downloaded music is kept - apart from the offline maps place. Choose another place and the music moves there; it is checked before the old copies go.</string>
-    <string name="storage_move_ask_music">Move the music to "%1$s" (%2$s)?</string>
+    <string name="storage_move_ask_music">Move the music to \"%1$s\" (%2$s)?</string>
     <string name="storage_card">Memory card (%1$s)</string>
     <string name="storage_card_plain">Memory card</string>
     <string name="storage_internal">Device storage</string>
@@ -1306,10 +1285,10 @@
     <string name="voice_thinking">Understanding …</string>
     <string name="voice_service_label">Mate speech recognition</string>
     <string name="speech_system_title">For the whole device</string>
-    <string name="speech_system_hint">Mate\'s speech recognition (Whisper, on the device) can be the voice input of every app: choose "Mate speech recognition" in the system settings.</string>
+    <string name="speech_system_hint">Mate\'s speech recognition (Whisper, on the device) can be the voice input of every app: choose \"Mate speech recognition\" in the system settings.</string>
     <string name="speech_system_open">Open voice input settings</string>
     <string name="first_restore_title">Restore a backup?</string>
-    <string name="first_restore_hint">Mate is new on this device. If you saved Mate\'s settings before (a ZIP from "Transfer settings"), they can be restored now: places, routes, views, sound and more.</string>
+    <string name="first_restore_hint">Mate is new on this device. If you saved Mate\'s settings before (a ZIP from \"Transfer settings\"), they can be restored now: places, routes, views, sound and more.</string>
     <string name="first_restore_pick">Choose backup (ZIP)</string>
     <string name="first_restore_new">Set up anew</string>
     <string name="first_restore_failed">Not restored: %1$s</string>
@@ -1334,8 +1313,8 @@
     <string name="first_obd_warning">Mind the compatibility: in modern cars the OBD socket has constant 12 V. An adapter that does not sleep can keep waking the car and drain the 12 V battery. Choose one with automatic sleep (or a switch) that is recommended for your model.</string>
     <string name="first_obd_ok">Understood</string>
     <string name="voice_call_confirm">Call %1$s?</string>
-    <string name="voice_call_in">Calling in %1$d s – say "cancel" or tap X</string>
-    <string name="voice_call_cancel_hint">Say "cancel" or tap X</string>
+    <string name="voice_call_in">Calling in %1$d s – say \"cancel\" or tap X</string>
+    <string name="voice_call_cancel_hint">Say \"cancel\" or tap X</string>
     <string name="voice_call_now">Call now</string>
     <string name="music_level_all">Other apps and prompts too</string>
     <string name="music_level_all_hint">Audio books, podcasts, other music apps and navigation prompts are measured on their way to the car and turned down to the same target level (never up). The first time this takes a few seconds per source, then Mate remembers it. Calls run over the hands-free connection of the car and stay as they are.</string>
@@ -1372,7 +1351,7 @@
     <string name="car_internet_title">Use the car\'s internet</string>
     <string name="car_internet_sub">The car\'s Wi-Fi is made known to the tablet as a normal network. Where it has internet, the tablet uses it instead of mobile data. Android asks once whether Mate may suggest networks.</string>
     <string name="car_internet_login_title">The car\'s internet</string>
-    <string name="car_internet_login_text">The car\'s Wi-Fi wants a login: tap "Sign in to network" on the tablet. Until then the internet goes over mobile data.</string>
+    <string name="car_internet_login_text">The car\'s Wi-Fi wants a login: tap \"Sign in to network\" on the tablet. Until then the internet goes over mobile data.</string>
     <string name="cinema_title">Cinema</string>
     <string name="cinema_closed">The car is no longer parked – the app is closed and paused.</string>
     <string name="setup_log_filter_all">All</string>
@@ -1429,13 +1408,13 @@
     <string name="self_adb_channel">Shizuku by Mate</string>
     <string name="self_adb_title">Mate starts Shizuku</string>
     <string name="self_adb_code">Pairing code</string>
-    <string name="self_adb_pair_open">Pair once: in the developer options turn on "Wireless debugging" and open "Pair device with pairing code". Then type the code here, keeping that window open.</string>
+    <string name="self_adb_pair_open">Pair once: in the developer options turn on \"Wireless debugging\" and open \"Pair device with pairing code\". Then type the code here, keeping that window open.</string>
     <string name="self_adb_pair_found">Pairing found. Type the six-digit code here.</string>
-    <string name="self_adb_pair_no_service">No pairing found yet. Please open "Pair device with pairing code" and type the code again.</string>
+    <string name="self_adb_pair_no_service">No pairing found yet. Please open \"Pair device with pairing code\" and type the code again.</string>
     <string name="self_adb_pairing">Pairing …</string>
     <string name="self_adb_pair_failed">Pairing did not work. Check the code and type it again.</string>
     <string name="self_adb_ready">Paired. From now on Mate starts Shizuku itself when it is not running (when the car connects, after a restart, when the app opens). The tablet needs a Wi-Fi network for it.</string>
-    <string name="self_adb_paired_not_started">Paired, but Shizuku could not be started just now. The reason is in the diagnostic log ("shizuku by Mate").</string>
+    <string name="self_adb_paired_not_started">Paired, but Shizuku could not be started just now. The reason is in the diagnostic log (\"shizuku by Mate\").</string>
     <string name="self_adb_check_start">Shizuku is not running. Mate starts it itself as soon as there is Wi-Fi; tap to try now.</string>
     <string name="self_adb_check_pair">Shizuku is not running. Tap: pair Mate once with wireless debugging, then Mate starts Shizuku itself - also after every restart.</string>
     <string name="logbook_title">Trip log</string>
@@ -1443,7 +1422,7 @@
     <string name="logbook_how">A trip starts as soon as the car leaves P and ends once it has stood in P this long. Distance and route come from the car\'s GPS, battery level and charging from the telemetry stick.</string>
     <string name="logbook_grace">A trip ends after … in P</string>
     <string name="logbook_minutes">%d min</string>
-    <string name="logbook_stick">Connect the stick: home page → Dashboard → "Connect the dashboard" → Telemetry stick → "Find stick". Without the stick, battery level, consumption and charges are missing.</string>
+    <string name="logbook_stick">Connect the stick: home page → Dashboard → \"Connect the dashboard\" → Telemetry stick → \"Find stick\". Without the stick, battery level, consumption and charges are missing.</string>
     <string name="logbook_trips">Trips (%d)</string>
     <string name="logbook_charges">Charges (%d)</string>
     <string name="logbook_no_trips">No trip yet. They appear after the first trip with the car connected.</string>
@@ -1583,4 +1562,5 @@
         <item>Play the album East of Eden by Die Toten Hosen.</item>
         <item>Anna writes: I will be there in ten minutes, shall I bring something from the bakery?</item>
     </string-array>
+    <string name="stick_permission_denied_location">Without the location permission Mate cannot search for the stick (Android before 12 needs it for Bluetooth searches). Allow it in the app settings.</string>
 </resources>

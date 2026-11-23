@@ -65,6 +65,14 @@ fun ProjectedAppScreen(
                 surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                     override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
                         if (w <= 0 || h <= 0) return
+                        // I-118a: the kept app taken over above already has its host and surface on this texture - the
+                        // view still reports the texture as available once it is attached; a second host is not made then
+                        val kept = host
+                        if (kept != null && surface != null) {
+                            Log.i("ProjectedHost", "surface ${w}x$h: kept app already on it, no second host")
+                            if ((w to h) != size) { size = w to h; st.setDefaultBufferSize(w, h); kept.resize(w, h) }
+                            return
+                        }
                         st.setDefaultBufferSize(w, h)
                         surface = Surface(st)
                         size = w to h

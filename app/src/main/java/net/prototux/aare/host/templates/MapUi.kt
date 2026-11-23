@@ -140,7 +140,7 @@ internal fun MapScaffold(
     // what the app puts into its strips, for checking without looking at the map
     LaunchedEffect(actionStrip, mapActionStrip) {
         fun names(st: ActionStrip?) = st?.actions?.joinToString(" | ") { a ->
-            (a.title?.toString() ?: "") + "(" + Action.typeToString(a.type) + (if (a.icon != null) ",Symbol" else "") + ")"
+            (a.title?.toString() ?: "") + "(" + Action.typeToString(a.type) + (if (a.icon != null) ",icon" else "") + ")"
         } ?: "-"
         android.util.Log.i("MateMap", "top strip: ${names(actionStrip)} · map strip: ${names(mapActionStrip)}")
     }

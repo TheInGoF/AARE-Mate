@@ -305,7 +305,9 @@ public final class SetupActivity extends ComponentActivity {
         // refused: said so; refused for good (no dialog any more), the app's settings opened to allow it there
         boolean again = false;
         for (String p : StickLink.permissions()) if (shouldShowRequestPermissionRationale(p)) again = true;
-        android.widget.Toast.makeText(this, R.string.stick_permission_denied, android.widget.Toast.LENGTH_LONG).show();
+        // before Android 12 the search needs the location permission, not a Bluetooth one (I-118h)
+        android.widget.Toast.makeText(this, android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                ? R.string.stick_permission_denied : R.string.stick_permission_denied_location, android.widget.Toast.LENGTH_LONG).show();
         if (!again) {
             try {
                 startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
