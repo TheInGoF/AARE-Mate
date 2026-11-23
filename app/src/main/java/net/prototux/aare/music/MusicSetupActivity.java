@@ -54,8 +54,8 @@ public final class MusicSetupActivity extends Activity {
         super.onCreate(saved);
         colors();
         mDp = getResources().getDisplayMetrics().density;
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
+        /* hinter den (durchsichtigen) Systemleisten; der Inhalt bleibt per fitsSystemWindows frei davon */
+        getWindow().getDecorView().setBackgroundColor(BG);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(16), dp(20), dp(24));
@@ -196,7 +196,7 @@ public final class MusicSetupActivity extends Activity {
             } catch (java.io.IOException e) {
                 ui(run, () -> {
                     mCode.setVisibility(View.GONE);
-                    mPlex.setText(getString(R.string.music_login_failed, e.getMessage()));
+                    mPlex.setText(getString(R.string.music_login_failed, Plex.Failure.text(this, e)));
                 });
             }
         }, "mate-plex-login").start();
@@ -245,7 +245,7 @@ public final class MusicSetupActivity extends Activity {
             try {
                 msg = getString(R.string.music_ok, p.name(), p.playlists().size(), p.url);
             } catch (java.io.IOException e) {
-                msg = p.url + "\n" + e.getMessage();
+                msg = getString(R.string.music_check_failed, p.url, Plex.Failure.text(this, e));
             }
             final String m = msg;
             mMain.post(() -> mPlex.setText(m));

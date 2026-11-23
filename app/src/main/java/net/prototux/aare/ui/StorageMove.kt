@@ -38,4 +38,15 @@ internal object StorageMove {
         }
         return true
     }
+
+    /** A failed move in the device's language: the reason of [Storage.MoveFailed], else the error's own text. */
+    fun describe(context: android.content.Context, e: Throwable): String {
+        val why = (e as? Storage.MoveFailed)?.why?.let { w -> context.getString(when (w) {
+            Storage.MoveFailed.Why.NO_ROOM -> net.prototux.aare.R.string.storage_reason_room
+            Storage.MoveFailed.Why.TOO_LARGE -> net.prototux.aare.R.string.storage_reason_fat32
+            Storage.MoveFailed.Why.NOT_WRITABLE -> net.prototux.aare.R.string.storage_reason_not_writable
+            Storage.MoveFailed.Why.VERIFY -> net.prototux.aare.R.string.storage_reason_verify
+        }) }
+        return context.getString(net.prototux.aare.R.string.storage_move_failed, why ?: e.message ?: e.javaClass.simpleName)
+    }
 }

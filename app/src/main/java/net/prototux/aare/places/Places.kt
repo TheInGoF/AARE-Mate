@@ -48,26 +48,41 @@ object Places {
 
     private fun file(context: Context) = File(context.filesDir, FILE)
 
+    /**
+     * The file could not be read as a whole: kept as places.json.bad, and nothing is saved until it reads again - else
+     * the next change would write the empty book over all places.
+     */
+    private var broken = false
+
     @Synchronized
     fun load(context: Context): Book {
         val f = file(context)
         if (!f.isFile) return Book(defaultCategories(context), emptyList())
         return runCatching {
             val o = JSONObject(f.readText())
-            val cats = o.getJSONArray("categories").let { a -> (0 until a.length()).map { a.getJSONObject(it) }.map {
-                Category(it.getString("id"), it.getString("name"), it.optString("icon", "star"), Order.of(it.optString("order"))) } }
-            val places = o.getJSONArray("places").let { a -> (0 until a.length()).map { a.getJSONObject(it) }.map { p ->
+            // one broken entry costs only itself, not the whole list
+            val cats = o.getJSONArray("categories").let { a -> (0 until a.length()).mapNotNull { i -> runCatching { a.getJSONObject(i).let {
+                Category(it.getString("id"), it.getString("name"), it.optString("icon", "star"), Order.of(it.optString("order"))) } }.getOrNull() } }
+            val places = o.getJSONArray("places").let { a -> (0 until a.length()).mapNotNull { i -> runCatching { a.getJSONObject(i).let { p ->
                 val v = p.optJSONArray("visits")
                 Place(p.getString("id"), p.getString("category"), p.getString("name"), p.optString("address"),
                     p.getDouble("lat"), p.getDouble("lon"), v?.let { (0 until it.length()).map { i -> it.getLong(i) } } ?: emptyList(),
                     p.optBoolean("pinned", false), p.optBoolean("home", false), p.optBoolean("wallbox", false))
-            } }
-            Book(cats, places)
-        }.getOrElse { Book(defaultCategories(context), emptyList()) }
+            } }.getOrNull() } }
+            Book(cats, places).also { broken = false }
+        }.getOrElse { e ->
+            if (!broken) {
+                runCatching { f.copyTo(File(f.parentFile, "$FILE.bad"), overwrite = true) }
+                net.prototux.aare.DiagLog.error("places: $FILE not readable, kept as $FILE.bad, saving stopped - $e")
+            }
+            broken = true
+            Book(defaultCategories(context), emptyList())
+        }
     }
 
     @Synchronized
     fun save(context: Context, book: Book) {
+        if (broken) { net.prototux.aare.DiagLog.warn("places: not saved, $FILE could not be read"); return }
         val o = JSONObject()
             .put("categories", JSONArray().apply { book.categories.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("icon", it.icon).put("order", it.order.key)) } })
             .put("places", JSONArray().apply { book.places.forEach { p ->
@@ -77,7 +92,7 @@ object Places {
         val f = file(context)
         val tmp = File(f.parentFile, "$FILE.tmp")
         tmp.writeText(o.toString(1))
-        tmp.renameTo(f)
+        if (!tmp.renameTo(f)) net.prototux.aare.DiagLog.error("places: $FILE.tmp could not replace $FILE")
     }
 
     private fun defaultCategories(context: Context) = listOf(
@@ -87,15 +102,19 @@ object Places {
 
     fun newId(): String = UUID.randomUUID().toString().take(8)
 
+    @Synchronized
     fun addCategory(context: Context, name: String, icon: String): Book =
         load(context).let { b -> b.copy(categories = b.categories + Category(newId(), name.trim(), icon)) }.also { save(context, it) }
 
+    @Synchronized
     fun removeCategory(context: Context, id: String): Book =
         load(context).let { b -> b.copy(categories = b.categories.filter { it.id != id }, places = b.places.filter { it.category != id }) }.also { save(context, it) }
 
+    @Synchronized
     fun addPlace(context: Context, p: Place): Book =
         load(context).let { b -> b.copy(places = b.places.filter { it.id != p.id } + p) }.also { save(context, it) }
 
+    @Synchronized
     fun removePlace(context: Context, id: String): Book =
         load(context).let { b -> b.copy(places = b.places.filter { it.id != id }) }.also { save(context, it) }
 
@@ -138,6 +157,7 @@ object Places {
         book.places.any { it.home && it.wallbox && metres(it.lat, it.lon, lat, lon) <= withinM }
 
     /** Notes an arrival at the place nearest to [lat]/[lon] within [withinM] metres, if there is one. */
+    @Synchronized
     fun noteArrival(context: Context, lat: Double, lon: Double, withinM: Double = 150.0) {
         val b = load(context)
         val near = b.places.minByOrNull { metres(it.lat, it.lon, lat, lon) }?.takeIf { metres(it.lat, it.lon, lat, lon) <= withinM } ?: return
@@ -145,6 +165,7 @@ object Places {
     }
 
     /** The order of list [id], kept for it (the holiday list by distance, the work list by use). */
+    @Synchronized
     fun setOrder(context: Context, id: String, order: Order): Book =
         load(context).let { b -> b.copy(categories = b.categories.map { if (it.id == id) it.copy(order = order) else it }) }.also { save(context, it) }
 

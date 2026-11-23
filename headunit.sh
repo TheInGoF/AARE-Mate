@@ -1,10 +1,10 @@
 #!/bin/sh
 # Pseudo head unit on the desktop, for a phone (or emulator) connected with adb.
 #
-#   ./headunit.sh                 AARE on the phone, through AARE's own desktop head unit
+#   ./headunit.sh                 Mate on the phone, through Mate's own desktop head unit
 #   ./headunit.sh google          the official Android Auto app, through Google's Desktop Head Unit
 #
-# Both follow a simulated Paris -> Marseille drive: AARE's head unit sends it as the car's GPS,
+# Both follow a simulated Paris -> Marseille drive: Mate's head unit sends it as the car's GPS,
 # and on an emulator the phone's own GPS is moved along it too (so apps using the phone's location
 # follow as well). Extra options are passed to the head unit, e.g.:
 #   ./headunit.sh --res 1920x1080 --time-scale 10 --speed 110 --rhd
@@ -31,15 +31,15 @@ SERIAL=${ANDROID_SERIAL:-$(adb devices | awk 'NR>1 && $2=="device" {print $1; ex
 export ANDROID_SERIAL=$SERIAL
 echo "Phone: $SERIAL"
 
-# AARE listens on the abstract unix socket @aare_hu (only adb may connect); the official app listens on TCP 5277.
+# Mate listens on the abstract unix socket @aare_hu (only adb may connect); the official app listens on TCP 5277.
 if [ "$MODE" = aare ]; then
     adb forward tcp:5277 localabstract:aare_hu >/dev/null
     command -v ffmpeg >/dev/null || { echo "ffmpeg not found: install it (it decodes the car screen)" >&2; exit 1; }
     if ! adb shell pm path app.idmate.mate >/dev/null 2>&1; then
-        echo "AARE isn't installed on $SERIAL: ./build.sh && adb install -r app/build/outputs/apk/debug/app-debug.apk" >&2
+        echo "Mate isn't installed on $SERIAL: ./build.sh && adb install -r app/build/outputs/apk/debug/app-debug.apk" >&2
         exit 1
     fi
-    # Debug builds of AARE turn their head unit server on when asked (release builds: toggle it in the app).
+    # Debug builds of Mate turn their head unit server on when asked (release builds: toggle it in the app).
     adb shell am start -n app.idmate.mate/net.prototux.aare.ui.MainActivity --ez hu_server true >/dev/null 2>&1 || true
     # adb forward accepts connections even when nothing listens on the phone, so check the phone itself
     # (an abstract socket shows as @aare_hu in /proc/net/unix).
@@ -47,7 +47,7 @@ if [ "$MODE" = aare ]; then
     i=0
     while ! listening && [ $i -lt 10 ]; do sleep 1; i=$((i + 1)); done
     if ! listening; then
-        echo "AARE's head unit server isn't listening on the phone yet. On the phone, open AARE and turn on" >&2
+        echo "Mate's head unit server isn't listening on the phone yet. On the phone, open Mate and turn on" >&2
         echo "\"Head unit server\" (release builds always need this). The head unit keeps retrying." >&2
     fi
 
@@ -93,7 +93,7 @@ GPS_PID=""
 case "$SERIAL" in emulator-*)
     BIN="$ROOT/headunit/build/install/aare-headunit/bin/aare-headunit"
     [ -x "$BIN" ] || "$ROOT/build.sh" :headunit:installDist --console=plain -q
-    AARE_HEADUNIT_GPS_ONLY=1 "$BIN" --gps-only --serial "$SERIAL" "$@" &
+    "$BIN" --gps-only --serial "$SERIAL" "$@" &
     GPS_PID=$!
     trap '[ -n "$GPS_PID" ] && kill $GPS_PID 2>/dev/null' EXIT INT TERM
     echo "Driving the emulator's GPS from Paris to Marseille (pid $GPS_PID)."

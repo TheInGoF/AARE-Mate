@@ -15,7 +15,6 @@ package net.prototux.aare.dash;
 
 import net.prototux.aare.R;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.res.ColorStateList;
@@ -36,13 +35,16 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import com.google.zxing.integration.android.IntentIntegrator;
-import com.google.zxing.integration.android.IntentResult;
+import androidx.activity.ComponentActivity;
+import androidx.activity.result.ActivityResultLauncher;
+
+import com.journeyapps.barcodescanner.ScanContract;
+import com.journeyapps.barcodescanner.ScanOptions;
 
 import java.util.Locale;
 import java.util.Map;
 
-public final class SetupActivity extends Activity {
+public final class SetupActivity extends ComponentActivity {
     /* Farben des IDmate-Dashboards und des Logos */
     private static final int BG = 0xFF0D1117, PANEL = 0xFF161B22, PANEL_HIGH = 0xFF21262D, LINE = 0xFF30363D;
     private static final int TEXT = 0xFFF0F6FC, DIM = 0xFF8B949E, TEAL = 0xFF1DE9B6, INK = 0xFF0E1B2C;
@@ -59,14 +61,18 @@ public final class SetupActivity extends Activity {
     private float mDp;
     private TextView mState, mStateDot, mStick, mDebug;
     private LinearLayout mModes;
+    /* QR-Code des Dashboards: der Inhalt geht an take() */
+    private final ActivityResultLauncher<ScanOptions> mScan = registerForActivityResult(new ScanContract(), r -> {
+        if (r.getContents() != null) take(r.getContents());
+    });
 
     @Override
     protected void onCreate(Bundle saved) {
         super.onCreate(saved);
         mHub = Hub.get(this);
         mDp = getResources().getDisplayMetrics().density;
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
+        /* hinter den (durchsichtigen) Systemleisten; der Inhalt bleibt per fitsSystemWindows frei davon */
+        getWindow().getDecorView().setBackgroundColor(BG);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -95,13 +101,9 @@ public final class SetupActivity extends Activity {
         LinearLayout buttons = row();
         buttons.setPadding(0, dp(14), 0, 0);
         buttons.addView(button(R.string.setup_scan, true, v -> {
-            IntentIntegrator i = new IntentIntegrator(this);
-            i.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-            i.setPrompt(getString(R.string.setup_scan_prompt));
-            i.setBeepEnabled(false);
-            i.setOrientationLocked(false);
-            i.setCaptureActivity(ScanActivity.class);
-            i.initiateScan();
+            mScan.launch(new ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                    .setPrompt(getString(R.string.setup_scan_prompt)).setBeepEnabled(false).setOrientationLocked(false)
+                    .setCaptureActivity(ScanActivity.class));
         }));
         buttons.addView(button(R.string.setup_clear, false, v -> {
             Link.clear(this);
@@ -296,19 +298,20 @@ public final class SetupActivity extends Activity {
     }
 
     @Override
-    protected void onActivityResult(int request, int result, Intent data) {
-        IntentResult r = IntentIntegrator.parseActivityResult(request, result, data);
-        if (r != null) {
-            if (r.getContents() != null) take(r.getContents());
-            return;
-        }
-        super.onActivityResult(request, result, data);
-    }
-
-    @Override
     public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
-        if (request == 1 && StickLink.permitted(this)) mHub.stickEnabled(true);
+        if (request != 1) return;
+        if (StickLink.permitted(this)) { mHub.stickEnabled(true); return; }
+        // refused: said so; refused for good (no dialog any more), the app's settings opened to allow it there
+        boolean again = false;
+        for (String p : StickLink.permissions()) if (shouldShowRequestPermissionRationale(p)) again = true;
+        android.widget.Toast.makeText(this, R.string.stick_permission_denied, android.widget.Toast.LENGTH_LONG).show();
+        if (!again) {
+            try {
+                startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", getPackageName(), null)));
+            } catch (android.content.ActivityNotFoundException ignored) { }
+        }
     }
 
     private boolean take(String text) {

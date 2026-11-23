@@ -23,6 +23,8 @@ object DiagLog {
     private const val FILE_MAX = 1_500_000L
 
     private val _lines = MutableStateFlow<List<String>>(emptyList())
+    /** The file is written on a thread of its own, in the order of the lines: [add] is called from the main thread too. */
+    private val writer = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "mate-diaglog").apply { isDaemon = true } }
     val lines: StateFlow<List<String>> = _lines
     private var file: File? = null
 
@@ -54,12 +56,14 @@ object DiagLog {
         val all = (_lines.value + entry).takeLast(MAX_LINES)
         _lines.value = all
         val f = file ?: return
-        runCatching {
-            // Rewrite now and then to drop old lines; append otherwise.
-            // (only once the file has grown well past what is kept: at 64 KB the kept 600 lines alone could be larger,
-            // and the whole file was then written anew with every single line)
-            if (all.size == MAX_LINES && f.length() > FILE_MAX) f.writeText(all.joinToString("\n", postfix = "\n"))
-            else f.appendText("$entry\n")
+        writer.execute {
+            runCatching {
+                // Rewrite now and then to drop old lines; append otherwise.
+                // (only once the file has grown well past what is kept: at 64 KB the kept 600 lines alone could be larger,
+                // and the whole file was then written anew with every single line)
+                if (all.size == MAX_LINES && f.length() > FILE_MAX) f.writeText(all.joinToString("\n", postfix = "\n"))
+                else f.appendText("$entry\n")
+            }
         }
     }
     fun warn(line: String, area: String? = null) = add(line, Level.WARN, area)
@@ -102,24 +106,24 @@ object DiagLog {
         val kept = lines.filterNot { NOISE.containsMatchIn(it) }
         val entries = kept.map(::parse).let { all -> if (clean == null) all else all.map { Entry(it.stamp, it.level, it.area, clean(it.text)) } }
         val out = StringBuilder()
-        out.append("Mate ").append(version).append(if (clean == null) " · Diagnose-Log" else " · Issue-Log (anonymisiert)")
-        if (kept.isNotEmpty()) out.append(" ").append(kept.first().take(STAMP - 2)).append(" bis ").append(kept.last().take(STAMP - 2))
-        out.append(" · ").append(kept.size).append(" Zeilen (").append(lines.size - kept.size).append(" Pings weggelassen)\n")
-        out.append("Stufen: ").append(Level.values().joinToString { lv -> "${lv.name} ${entries.count { it.level == lv }}" }).append("\n")
-        out.append("Bereiche: ").append(entries.groupingBy { it.area }.eachCount().entries.sortedByDescending { it.value }
+        out.append("Mate ").append(version).append(if (clean == null) " · Diagnostic log" else " · Issue log (anonymised)")
+        if (kept.isNotEmpty()) out.append(" ").append(kept.first().take(STAMP - 2)).append(" to ").append(kept.last().take(STAMP - 2))
+        out.append(" · ").append(kept.size).append(" lines (").append(lines.size - kept.size).append(" pings left out)\n")
+        out.append("Levels: ").append(Level.values().joinToString { lv -> "${lv.name} ${entries.count { it.level == lv }}" }).append("\n")
+        out.append("Areas: ").append(entries.groupingBy { it.area }.eachCount().entries.sortedByDescending { it.value }
             .joinToString { "${it.key} ${it.value}" }).append("\n")
         val drops = kept.count { "session failed" in it }
         val tight = kept.count { "memory: tight" in it }
         val ends = kept.count { "last end of Mate" in it }
-        out.append("Abbrüche ").append(drops).append(" · Speicher knapp ").append(tight).append(" · Mate beendet ").append(ends).append("\n")
-        entries.filter { it.text.startsWith("fault of ") }.forEach { out.append("Fehlermarke ").append(it.text.removePrefix("fault of ")).append("\n") }
+        out.append("Drops ").append(drops).append(" · Memory tight ").append(tight).append(" · Mate ended ").append(ends).append("\n")
+        entries.filter { it.text.startsWith("fault of ") }.forEach { out.append("Fault mark ").append(it.text.removePrefix("fault of ")).append("\n") }
         // the problems first, to find them at a glance - each still in its place below
         val problems = entries.filter { it.level == Level.ERROR || it.level == Level.WARN }
         if (problems.isNotEmpty()) {
-            out.append("\nProbleme (").append(problems.size).append(if (problems.size > MAX_PROBLEMS) ", die letzten $MAX_PROBLEMS" else "").append("):\n")
+            out.append("\nProblems (").append(problems.size).append(if (problems.size > MAX_PROBLEMS) ", the last $MAX_PROBLEMS" else "").append("):\n")
             problems.takeLast(MAX_PROBLEMS).forEach { out.append(line(it)).append("\n") }
         }
-        out.append("\nAlle Zeilen:\n")
+        out.append("\nAll lines:\n")
         entries.forEach { out.append(line(it)).append("\n") }
         return out.toString()
     }
@@ -157,6 +161,6 @@ object DiagLog {
     @Synchronized
     fun clear() {
         _lines.value = emptyList()
-        file?.let { runCatching { it.writeText("") } }
+        file?.let { f -> writer.execute { runCatching { f.writeText("") } } }
     }
 }

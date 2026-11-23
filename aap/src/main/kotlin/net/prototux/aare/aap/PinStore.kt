@@ -19,13 +19,6 @@ interface PinStore {
     fun add(peerKey: String, sha256: String)
 }
 
-/** A [PinStore] that lives only as long as the object, for tests and tools. */
-class MemoryPinStore : PinStore {
-    private val pins = java.util.concurrent.ConcurrentHashMap<String, Set<String>>()
-    override fun get(peerKey: String): Set<String> = pins[peerKey].orEmpty()
-    override fun add(peerKey: String, sha256: String) { pins.merge(peerKey, setOf(sha256)) { a, b -> a + b } }
-}
-
 fun fingerprint(certificate: X509Certificate): String =
     MessageDigest.getInstance("SHA-256").digest(certificate.encoded).joinToString("") { "%02x".format(it) }
 

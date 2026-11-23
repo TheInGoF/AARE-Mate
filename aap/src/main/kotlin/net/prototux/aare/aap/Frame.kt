@@ -31,8 +31,6 @@ object Frame {
      */
     const val MAX_PAYLOAD = 16128 - 8
 
-    const val HEADER_SIZE = 2
-    const val SHORT_SIZE = 2
     const val EXTENDED_SIZE = 6
 
     fun isFirst(flags: Int) = flags and FLAG_FIRST != 0

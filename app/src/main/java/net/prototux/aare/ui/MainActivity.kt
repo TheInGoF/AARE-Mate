@@ -26,7 +26,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.StarBorder
@@ -57,12 +56,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Bookmarks
@@ -79,9 +75,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
-import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -130,7 +124,6 @@ import net.prototux.aare.DiagLog
 import net.prototux.aare.R
 import net.prototux.aare.SessionAapLog
 import net.prototux.aare.Settings
-import net.prototux.aare.UpdateChecker
 import net.prototux.aare.audio.CaptureMethod
 import net.prototux.aare.audio.CaptureMethods
 import net.prototux.aare.car.DrivingMode
@@ -237,7 +230,7 @@ private fun Home() {
     var page by rememberSaveable { mutableStateOf<Page?>(null) }
     // the settings of Mate and the system behind one panel (O169); a page opened from there goes back to that list
     var inSettings by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) { net.prototux.aare.adb.SelfAdb.ensureShizuku(ctx, "phone app opened"); ProjectionService.startIdleIfEnabled(ctx); ProjectionService.probeUsb(ctx); ProjectionService.probeWireless(ctx); UpdateChecker.refresh(ctx) }
+    LaunchedEffect(Unit) { net.prototux.aare.adb.SelfAdb.ensureShizuku(ctx, "phone app opened"); ProjectionService.startIdleIfEnabled(ctx); ProjectionService.probeUsb(ctx); ProjectionService.probeWireless(ctx) }
     // Re-check permissions and capture methods whenever the user comes back to the app.
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(lifecycle) {
@@ -257,7 +250,6 @@ private fun Home() {
             ) {
                 item { Header() }
                 item { FirstStartCard() }
-                item { UpdateBanner() }
                 item { RecorderCard() }
                 // connected (or a car to trust): the card at the top; not connected only a pill at the bottom (18.11.2026)
                 if (state.connected || state.pendingTrust != null) item { StatusCard(state) }
@@ -642,7 +634,7 @@ private fun FirstStartCard() {
     // asked only while setting up a fresh install (18.11.2026: "das soll er eigentlich nur beim Einrichten anzeigen und
     // nicht dauerhaft darauf hinweisen"); later the packages are loaded under Sprache
     val toAsk = if (!fresh) emptyList() else missing.filter { it.second !in declined && progress[it.second] == null }
-    val running = missing.filter { progress[it.second] != null }
+    val running = missing.filter { progress[it.second].let { p -> p != null && (p in 0f..1f || p == -1f) } }
     if (toAsk.isEmpty() && running.isEmpty() && note == null) return
     Section(stringResource(if (running.isNotEmpty()) R.string.first_packages_title else if (toAsk.isNotEmpty()) R.string.first_packages_ask_title else R.string.transfer_title)) {
         note?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(8.dp)) }
@@ -853,33 +845,6 @@ private fun CombustionCard(settings: Settings) {
     }
 }
 
-/** A quiet warning when a newer release is on GitHub: tap to view it, or dismiss it. No popup. */
-@Composable
-private fun UpdateBanner() {
-    val ctx = LocalContext.current
-    val update by UpdateChecker.available.collectAsState()
-    update?.let { u ->
-        Row(
-            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.tertiaryContainer)
-                .clickable { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u.url))) }
-                .padding(start = 18.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Rounded.SystemUpdate, null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.update_available_title, u.version), style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer)
-                Text(stringResource(R.string.update_available_subtitle, net.prototux.aare.BuildConfig.VERSION_NAME),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
-            }
-            IconButton(onClick = { UpdateChecker.dismiss(ctx) }) {
-                Icon(Icons.Rounded.Close, stringResource(R.string.common_dismiss), tint = MaterialTheme.colorScheme.onTertiaryContainer)
-            }
-        }
-    }
-}
-
 @Composable
 private fun StatusCard(state: ProjectionService.State) {
     val ctx = LocalContext.current
@@ -1053,7 +1018,6 @@ private fun Context.startSafely(intent: Intent, fallback: Intent? = null) {
 @Composable
 private fun ConnectionSettings(settings: Settings, refresh: Int) {
     var wireless by remember { mutableStateOf(settings.wireless) }
-    var checkUpdates by remember { mutableStateOf(settings.checkUpdates) }
     var fps60 by remember { mutableStateOf(settings.prefer60fps) }
     var maxH by remember { mutableIntStateOf(settings.maxVideoHeight) }
     var forceH264 by remember { mutableStateOf(settings.forceH264) }
@@ -1274,7 +1238,7 @@ private fun naviPicks(ctx: android.content.Context): List<PickApp> =
                 .sortedBy { it.label.lowercase() }
                 // Mate's own navigation first (bauplan: "in der Tablet-App als Navi wählbar") - it was left out with
                 // Mate's own package, so a chosen Mate Navi showed no choice at all
-                .let { listOf(PickApp(ctx.packageName, "Mate Navi",
+                .let { listOf(PickApp(ctx.packageName, ctx.getString(R.string.mate_navi_label),
                     runCatching<android.graphics.Bitmap?> { ctx.packageManager.getApplicationIcon(ctx.packageName).let { d ->
                         android.graphics.Bitmap.createBitmap(96, 96, android.graphics.Bitmap.Config.ARGB_8888).also { b ->
                             val c = android.graphics.Canvas(b); d.setBounds(0, 0, 96, 96); d.draw(c) } } }.getOrNull())) + it }
@@ -1549,7 +1513,7 @@ private fun SoundCard(settings: Settings) {
                         listOf(SoundKind.MUSIC to R.string.sound_kind_music, SoundKind.BOOK to R.string.sound_kind_book, SoundKind.NAVI to R.string.sound_kind_navi).forEach { (kk, label) ->
                             androidx.compose.material3.FilterChip(selected = k == kk, modifier = Modifier.padding(start = 4.dp),
                                 onClick = { S.setKind(ctx, app.packageName, if (kk == auto) null else kk); changed() },
-                                label = { Text(stringResource(label) + if (kk == auto) " ·A" else "") })
+                                label = { Text(if (kk == auto) stringResource(R.string.sound_kind_auto, stringResource(label)) else stringResource(label)) })
                         }
                     }
                 }
@@ -1600,7 +1564,7 @@ private fun MeasureSection(apply: (FloatArray, String) -> Unit) {
         val g = r?.gains
         when {
             run != null -> {
-                Text(stringResource(when (phase) { net.prototux.aare.audio.CarEqMeasure.Phase.NOISE -> R.string.sound_measure_noise; net.prototux.aare.audio.CarEqMeasure.Phase.SWEEP -> R.string.sound_measure_sweep; else -> R.string.sound_measure_quiet }),
+                Text(stringResource(when (phase) { net.prototux.aare.audio.CarEqMeasure.Phase.SWEEP -> R.string.sound_measure_sweep; else -> R.string.sound_measure_quiet }),
                     style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                 androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 8.dp))
                 androidx.compose.material3.OutlinedButton(onClick = { run?.cancel() }) { Text(stringResource(R.string.sound_measure_cancel)) }
@@ -1675,8 +1639,8 @@ private fun ViewsCard() {
     var list by remember { mutableStateOf(views.all) }
     var active by remember { mutableStateOf(views.active?.name) }
     var editing by remember { mutableStateOf<net.prototux.aare.ui.car.MateViews.View?>(null) }
-    fun label(pkg: String?): String = pkg?.let { p ->
-        if (p == ctx.packageName) return@let ctx.getString(R.string.music_name)
+    fun label(pkg: String?, navi: Boolean = false): String = pkg?.let { p ->
+        if (p == ctx.packageName) return@let ctx.getString(if (navi) R.string.mate_navi_label else R.string.music_name)
         runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(p, 0)).toString() }.getOrDefault(p)
     } ?: ctx.getString(R.string.views_app_auto)
     val startNames = mapOf(
@@ -1695,7 +1659,7 @@ private fun ViewsCard() {
             }
             list.forEach { v ->
                 val shareName = listOf(0.25f to "¼", 1f / 3 to "⅓", 0.5f to "½", 2f / 3 to "⅔", 0.75f to "¾").minByOrNull { kotlin.math.abs(it.first - v.share) }!!.second
-                val sub = stringResource(R.string.views_summary, startNames[v.start] ?: v.start, label(v.navi), label(v.music)) +
+                val sub = stringResource(R.string.views_summary, startNames[v.start] ?: v.start, label(v.navi, navi = true), label(v.music)) +
                     if (v.start == net.prototux.aare.ui.car.MateViews.START_SPLIT)
                         " · " + stringResource(if (v.naviRight) R.string.views_side_right else R.string.views_side_left) + " " + shareName else ""
                 ViewRow(v.name, sub, active == v.name, onEdit = { editing = v }, onDelete = { views.delete(v.name); list = views.all; active = views.active?.name }) {
@@ -1906,6 +1870,8 @@ private fun SpeechTry(sizes: List<String>) {
 private fun PiperChoice(settings: Settings) {
     val ctx = LocalContext.current
     var engine by remember { mutableStateOf(settings.ttsEngine) }
+    // bumped after a delete, so the voices are looked up on the device again
+    var deleted by remember { mutableStateOf(0) }
     val voices = net.prototux.aare.speech.Voices.offered(ctx)
     Section(stringResource(R.string.voice_engine_section)) {
         Text(stringResource(R.string.voice_engine_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1930,7 +1896,7 @@ private fun PiperChoice(settings: Settings) {
         }
         voices.forEach { v ->
             val loading = net.prototux.aare.speech.ModelDownload.progress[v.id]
-            val there = remember(loading) { net.prototux.aare.speech.Voices.available(ctx, v) }
+            val there = remember(loading, deleted) { net.prototux.aare.speech.Voices.available(ctx, v) }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 androidx.compose.material3.RadioButton(engine == v.id, { if (there) { engine = v.id; settings.ttsEngine = v.id } }, enabled = there)
                 androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
@@ -1953,7 +1919,7 @@ private fun PiperChoice(settings: Settings) {
                         // frees its space; one that cannot be downloaded again only from a saved settings file
                         androidx.compose.material3.TextButton(onClick = {
                             net.prototux.aare.speech.Voices.delete(ctx, v); engine = settings.ttsEngine
-                            net.prototux.aare.speech.ModelDownload.progress[v.id] = -2f
+                            net.prototux.aare.speech.ModelDownload.progress.remove(v.id); deleted++
                         }) { Text(stringResource(R.string.voice_engine_delete)) }
                     }
                 }
@@ -2037,8 +2003,16 @@ private fun MusicOfflineCard(refresh: Int) {
         failed = r == null
         lists = r ?: emptyList()
     }
-    // the numbers under each list and the space used, read again every few seconds while a sync runs
-    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(3000); tick++ } }
+    // the numbers under each list and the space used, read again every few seconds while a sync runs (and once after it)
+    LaunchedEffect(Unit) {
+        var was = false
+        while (true) {
+            kotlinx.coroutines.delay(3000)
+            val now = net.prototux.aare.music.Offline.running()
+            if (now || was) tick++
+            was = now
+        }
+    }
     val states = produceState(emptyMap<String, IntArray>(), subs, tick, lists) {
         value = withContext(Dispatchers.IO) { subs.associateWith { net.prototux.aare.music.Offline.state(ctx, it) } }
     }.value
@@ -2113,7 +2087,7 @@ internal fun MusicFolderCard() {
     var error by StorageMove.error
     var access by remember(tick) { mutableStateOf(allFiles()) }
     fun moveTo(to: java.io.File?) {
-        StorageMove.start(bytes, { e -> ctx.getString(R.string.storage_move_failed, e.message ?: e.javaClass.simpleName) }) { p ->
+        StorageMove.start(bytes, { e -> StorageMove.describe(ctx, e) }) { p ->
             net.prototux.aare.Storage.moveMusic(ctx, to, p)
         }
     }
@@ -2139,9 +2113,8 @@ internal fun MusicFolderCard() {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             androidx.compose.material3.FilledTonalButton(enabled = moving == null, onClick = {
                 if (!allFiles()) {
-                    runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                        android.net.Uri.parse("package:" + ctx.packageName))) }
-                        .onFailure { ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+                    ctx.startSafely(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        android.net.Uri.parse("package:" + ctx.packageName)), Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
                 } else pick.launch(null)
             }) { Text(stringResource(if (access) R.string.music_folder_pick else R.string.music_folder_allow)) }
             if (folder != null) androidx.compose.material3.TextButton(enabled = moving == null, onClick = { moveTo(null) }) {
@@ -2948,7 +2921,7 @@ private fun CarDataCard() {
         DataRow(stringResource(R.string.car_data_gear), car.gearName)
         DataRow(stringResource(R.string.car_data_parking_brake), onOff(car.parkingBrake?.value))
         DataRow(stringResource(R.string.car_data_odometer), car.odometer?.let { o ->
-            "%.0f km".format(o.value.km) + (o.value.tripKm?.let { " · trip %.0f km".format(it) } ?: "") })
+            "%.0f km".format(o.value.km) + (o.value.tripKm?.let { " · " + stringResource(R.string.car_data_trip, it) } ?: "") })
         DataRow(stringResource(R.string.car_data_fuel), car.fuel?.let { f ->
             listOfNotNull(f.value.levelPercent?.let { "$it%" }, f.value.rangeKm?.let { "$it km" }, if (f.value.low == true) stringResource(R.string.car_data_low) else null)
                 .joinToString(" · ").ifBlank { null } })
@@ -2969,7 +2942,17 @@ private fun CarDataCard() {
             }
             if (open.isEmpty()) stringResource(R.string.car_data_closed) else open.joinToString(", ") })
         DataRow(stringResource(R.string.car_data_lights), car.lights?.let { l ->
-            listOfNotNull(l.value.headLights?.name?.lowercase(), l.value.turn?.takeIf { it != CarData.Turn.NONE }?.name?.lowercase(),
+            listOfNotNull(
+                l.value.headLights?.let { h -> stringResource(when (h) {
+                    CarData.HeadLights.OFF -> R.string.car_data_off
+                    CarData.HeadLights.ON -> R.string.car_data_on
+                    CarData.HeadLights.HIGH -> R.string.car_data_lights_high
+                }) },
+                when (l.value.turn) {
+                    CarData.Turn.LEFT -> stringResource(R.string.car_data_turn_left)
+                    CarData.Turn.RIGHT -> stringResource(R.string.car_data_turn_right)
+                    else -> null
+                },
                 if (l.value.hazard == true) stringResource(R.string.car_data_hazard) else null).joinToString(" · ").ifBlank { null } })
         DataRow(stringResource(R.string.car_data_passenger), yesNo(car.passengerPresent?.value))
         DataRow(stringResource(R.string.car_data_toll), yesNo(car.tollCardPresent?.value))
@@ -2991,7 +2974,7 @@ private fun VehicleOverridesCard() {
         if (uri == null) return@rememberLauncherForActivityResult
         runCatching {
             ctx.contentResolver.openInputStream(uri)?.use { input -> file.outputStream().use { input.copyTo(it) } }
-        }.onFailure { Toast.makeText(ctx, it.message, Toast.LENGTH_SHORT).show() }
+        }.onFailure { Toast.makeText(ctx, ctx.getString(R.string.file_import_failed, it.message ?: it.javaClass.simpleName), Toast.LENGTH_SHORT).show() }
         count = net.prototux.aare.car.VehicleOverrides.ruleCount(ctx)
     }
     Section(stringResource(R.string.vehicles_section_title)) {
@@ -3004,7 +2987,7 @@ private fun VehicleOverridesCard() {
             TextButton(onClick = { import.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Text(stringResource(R.string.vehicles_import)) }
             TextButton(onClick = {
                 runCatching { file.parentFile?.mkdirs(); file.writeText(net.prototux.aare.car.VehicleOverrides.template()) }
-                    .onFailure { Toast.makeText(ctx, it.message, Toast.LENGTH_SHORT).show() }
+                    .onFailure { Toast.makeText(ctx, ctx.getString(R.string.file_save_failed, it.message ?: it.javaClass.simpleName), Toast.LENGTH_SHORT).show() }
                 count = net.prototux.aare.car.VehicleOverrides.ruleCount(ctx)
                 Toast.makeText(ctx, file.absolutePath, Toast.LENGTH_LONG).show()
             }) { Text(stringResource(R.string.vehicles_template)) }
@@ -3031,7 +3014,7 @@ private fun LogCard() {
                 DiagLog.digest(lines, net.prototux.aare.BuildConfig.VERSION_NAME) { net.prototux.aare.debug.LogScrub.scrub(it, known) }
             } else DiagLog.digest(lines, net.prototux.aare.BuildConfig.VERSION_NAME)
             ctx.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
-        }.onFailure { Toast.makeText(ctx, it.message, Toast.LENGTH_SHORT).show() }
+        }.onFailure { Toast.makeText(ctx, ctx.getString(R.string.file_save_failed, it.message ?: it.javaClass.simpleName), Toast.LENGTH_SHORT).show() }
     }
     fun saveAs(asIssue: Boolean) {
         issue = asIssue
@@ -3107,51 +3090,57 @@ private fun About() {
     }
 }
 
+/**
+ * One line of [LICENCES]: proper names and licence ids in code, the describing words as resources with the name or the
+ * licence id as their %1$s.
+ */
+private class LicenceRow(val name: String, val licence: String, val nameRes: Int? = null, val licenceRes: Int? = null)
+
 /** What Mate takes from others, with its licence (the same as THIRD_PARTY.md in the repository). */
-private val LICENCES: List<Pair<Int, List<Pair<String, String>>>> = listOf(
+private val LICENCES: List<Pair<Int, List<LicenceRow>>> = listOf(
     R.string.licences_code to listOf(
-        "AARE (prototux and contributors) - Mate is its fork" to "GPL-3.0-or-later",
-        "aasdk protocol definitions (f1x.studio, OpenCarDev)" to "GPL-3.0-or-later"),
+        LicenceRow("AARE (prototux and contributors)", "GPL-3.0-or-later", R.string.licences_row_fork),
+        LicenceRow("aasdk protocol definitions (f1x.studio, OpenCarDev)", "GPL-3.0-or-later")),
     R.string.licences_libraries to listOf(
-        "Ferrostar (Stadia Maps)" to "BSD-3-Clause",
-        "MapLibre Native" to "BSD-2-Clause",
-        "MapLibre Compose" to "BSD-3-Clause",
-        "MapLibre spatial-k" to "MIT",
-        "MapLibre Android GeoJSON" to "Apache-2.0",
-        "AndroidX, Jetpack Compose, Car App Library, Media3" to "Apache-2.0",
-        "Kotlin, kotlinx.coroutines" to "Apache-2.0",
-        "Protocol Buffers" to "BSD-3-Clause",
-        "OkHttp" to "Apache-2.0",
-        "ZXing Android Embedded" to "Apache-2.0",
-        "Shizuku API (RikkaApps)" to "MIT",
-        "libadb-android (Muntashir Al-Islam)" to "GPL-3.0-or-later",
-        "spake2-java (Muntashir Al-Islam)" to "LGPL-3.0",
-        "Conscrypt" to "Apache-2.0",
-        "Bouncy Castle" to "MIT",
-        "HiddenApiBypass (LSPosed)" to "Apache-2.0",
-        "sherpa-onnx (k2-fsa), ONNX Runtime" to "Apache-2.0, MIT"),
+        LicenceRow("Ferrostar (Stadia Maps)", "BSD-3-Clause"),
+        LicenceRow("MapLibre Native", "BSD-2-Clause"),
+        LicenceRow("MapLibre Compose", "BSD-3-Clause"),
+        LicenceRow("MapLibre spatial-k", "MIT"),
+        LicenceRow("MapLibre Android GeoJSON", "Apache-2.0"),
+        LicenceRow("AndroidX, Jetpack Compose, Car App Library, Media3", "Apache-2.0"),
+        LicenceRow("Kotlin, kotlinx.coroutines", "Apache-2.0"),
+        LicenceRow("Protocol Buffers", "BSD-3-Clause"),
+        LicenceRow("OkHttp", "Apache-2.0"),
+        LicenceRow("ZXing Android Embedded", "Apache-2.0"),
+        LicenceRow("Shizuku API (RikkaApps)", "MIT"),
+        LicenceRow("libadb-android (Muntashir Al-Islam)", "GPL-3.0-or-later"),
+        LicenceRow("spake2-java (Muntashir Al-Islam)", "LGPL-3.0"),
+        LicenceRow("Conscrypt", "Apache-2.0"),
+        LicenceRow("Bouncy Castle", "MIT"),
+        LicenceRow("HiddenApiBypass (LSPosed)", "Apache-2.0"),
+        LicenceRow("sherpa-onnx (k2-fsa), ONNX Runtime", "Apache-2.0, MIT")),
     R.string.licences_downloaded to listOf(
-        "Whisper models (OpenAI)" to "MIT",
-        "Piper voice Thorsten (Thorsten Müller)" to "CC0-1.0",
-        "Piper voices Kerstin, Karlsson (rhasspy)" to "CC0-1.0",
-        "Piper voices Eva, Ramona (M-AILABS)" to "M-AILABS licence (BSD-style)",
-        "Piper voices Dii, Miro (OpenVoiceOS), Ryan, HFC (US)" to "CC BY-NC-SA 4.0, private use only",
-        "Piper voice Lessac (US, Blizzard 2013)" to "Blizzard 2013 licence, non-commercial",
-        "Piper voices Cori (GB), LJSpeech (US)" to "Public domain",
-        "Piper voice Alba (GB)" to "CC BY 4.0",
-        "Piper voice Northern English (GB, OpenSLR 83)" to "CC BY-SA 4.0",
-        "Kokoro voices (Kokoro-82M)" to "Apache-2.0",
-        "espeak-ng data" to "GPL-3.0"),
+        LicenceRow("(OpenAI)", "MIT", R.string.licences_row_whisper),
+        LicenceRow("Thorsten (Thorsten Müller)", "CC0-1.0", R.string.licences_row_piper_voice),
+        LicenceRow("Kerstin, Karlsson (rhasspy)", "CC0-1.0", R.string.licences_row_piper_voices),
+        LicenceRow("Eva, Ramona (M-AILABS)", "M-AILABS", R.string.licences_row_piper_voices, R.string.licences_lic_bsd_style),
+        LicenceRow("Dii, Miro (OpenVoiceOS), Ryan, HFC (US)", "CC BY-NC-SA 4.0", R.string.licences_row_piper_voices, R.string.licences_lic_private),
+        LicenceRow("Lessac (US, Blizzard 2013)", "Blizzard 2013", R.string.licences_row_piper_voice, R.string.licences_lic_noncommercial),
+        LicenceRow("Cori (GB), LJSpeech (US)", "", R.string.licences_row_piper_voices, R.string.licences_lic_public_domain),
+        LicenceRow("Alba (GB)", "CC BY 4.0", R.string.licences_row_piper_voice),
+        LicenceRow("Northern English (GB, OpenSLR 83)", "CC BY-SA 4.0", R.string.licences_row_piper_voice),
+        LicenceRow("(Kokoro-82M)", "Apache-2.0", R.string.licences_row_kokoro),
+        LicenceRow("espeak-ng", "GPL-3.0", R.string.licences_row_espeak)),
     R.string.licences_data to listOf(
-        "Noto Sans (map lettering)" to "SIL OFL 1.1",
-        "© OpenStreetMap contributors: map, routes, places, service areas, chargers" to "ODbL 1.0",
-        "Protomaps basemaps: map style" to "CC0-1.0, BSD-3-Clause",
-        "Open-Meteo: weather along the route, beside the clock and the dashboard's wind (through IDmate)" to "CC BY 4.0",
-        "Deutscher Wetterdienst: rain radar on the dashboard (through IDmate), Quelle: Deutscher Wetterdienst" to "GeoNutzV",
-        "RainViewer: rain radar where the DWD has none (through IDmate)" to "RainViewer terms",
-        "Heights: USGS 3DEP, SRTM, GMTED2010; NOAA ETOPO1; Copernicus EU-DEM (EU)" to "public sources",
-        "TomTom: traffic (own key)" to "TomTom terms",
-        "Valhalla: routing on the map server" to "MIT"),
+        LicenceRow("Noto Sans", "SIL OFL 1.1", R.string.licences_row_noto),
+        LicenceRow("© OpenStreetMap contributors", "ODbL 1.0", R.string.licences_row_osm),
+        LicenceRow("Protomaps basemaps", "CC0-1.0, BSD-3-Clause", R.string.licences_row_protomaps),
+        LicenceRow("Open-Meteo", "CC BY 4.0", R.string.licences_row_open_meteo),
+        LicenceRow("Deutscher Wetterdienst", "GeoNutzV", R.string.licences_row_dwd),
+        LicenceRow("RainViewer", "RainViewer", R.string.licences_row_rainviewer, R.string.licences_lic_terms),
+        LicenceRow("USGS 3DEP, SRTM, GMTED2010; NOAA ETOPO1; Copernicus EU-DEM (EU)", "", R.string.licences_row_heights, R.string.licences_lic_public),
+        LicenceRow("TomTom", "TomTom", R.string.licences_row_tomtom, R.string.licences_lic_terms),
+        LicenceRow("Valhalla", "MIT", R.string.licences_row_valhalla)),
 )
 
 @Composable
@@ -3164,7 +3153,9 @@ private fun LicencesDialog(onClose: () -> Unit) {
                 item { Text(stringResource(R.string.licences_intro), style = MaterialTheme.typography.bodyMedium) }
                 LICENCES.forEach { (head, rows) ->
                     item { Spacer(Modifier.height(12.dp)); Text(stringResource(head), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary) }
-                    rows.forEach { (what, licence) -> item {
+                    rows.forEach { row -> item {
+                        val what = row.nameRes?.let { stringResource(it, row.name) } ?: row.name
+                        val licence = row.licenceRes?.let { stringResource(it, row.licence) } ?: row.licence
                         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
                             Text(what, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
                             Spacer(Modifier.width(8.dp))

@@ -294,6 +294,7 @@ class VideoChannel(
             .setMode(VideoFocusMode.VIDEO_FOCUS_NATIVE).setReason(VideoFocusReason.LAUNCH_NATIVE).build())
     }
 
+    /** The counterpart of [requestNativeFocus]: asks the head unit to show the phone's picture again. Kept on purpose, not used yet. */
     fun requestProjectedFocus() {
         send(MediaMsg.VIDEO_FOCUS_REQUEST, VideoFocusRequestNotification.newBuilder()
             .setMode(VideoFocusMode.VIDEO_FOCUS_PROJECTED).setReason(VideoFocusReason.UNKNOWN).build())

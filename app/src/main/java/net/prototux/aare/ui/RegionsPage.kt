@@ -22,7 +22,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -53,7 +52,11 @@ internal fun RegionsPage() {
         val c = cat
         if (version + loads.finished.intValue < 0) return@Column     // read so that a change of the files on the device draws the state anew
         when {
-            failed -> Text(stringResource(if (net.prototux.aare.ui.car.navi.NaviServer.rejected.value) R.string.mapserver_rejected else R.string.regions_unreachable),
+            failed -> Text(stringResource(when {
+                    !RegionPacks.hasServer(ctx) -> R.string.regions_no_server
+                    net.prototux.aare.ui.car.navi.NaviServer.rejected.value -> R.string.mapserver_rejected
+                    else -> R.string.regions_unreachable
+                }),
                 color = MaterialTheme.colorScheme.error)
             c == null -> Text(stringResource(R.string.mapserver_checking))
             else -> {
@@ -103,6 +106,11 @@ private fun RegionList(singles: List<RegionPacks.Region>, mapDate: String, versi
         if (updates.isNotEmpty()) FilledTonalButton(onClick = { updates.forEach { loads.start(ctx, it) } }) {
             Text(stringResource(R.string.regions_update_all, size(updates.sumOf { it.bytes })))
         }
+    }
+    // the map's date on the server (the catalogue sends ISO), as for the whole package
+    runCatching { java.time.LocalDate.parse(mapDate).format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+        .withLocale(java.util.Locale.getDefault())) }.getOrNull()?.let {
+        Text(stringResource(R.string.regions_map_date, it), style = MaterialTheme.typography.labelLarge)
     }
     val collator = java.text.Collator.getInstance(java.util.Locale.getDefault())
     singles.groupBy { it.path.joinToString(" › ") }.toSortedMap(collator).forEach { (path, group) ->
@@ -172,7 +180,7 @@ private fun RegionRow(r: RegionPacks.Region, state: RegionPacks.State, running: 
 }
 
 @Composable
-private fun WholePackage(r: RegionPacks.Region, mapDate: String, compact: Boolean = false, changed: () -> Unit) {
+private fun WholePackage(r: RegionPacks.Region, mapDate: String, changed: () -> Unit) {
     val ctx = LocalContext.current
     val loads = RegionPacks.Loads
     val state = RegionPacks.state(ctx, r)
@@ -226,7 +234,7 @@ private fun WholePackage(r: RegionPacks.Region, mapDate: String, compact: Boolea
             if (r.id in loads.waiting) Text(stringResource(R.string.regions_waiting), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             loads.errors[r.id]?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            if (!compact) Text(stringResource(R.string.regions_choose_at_server), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.regions_choose_at_server), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -237,9 +245,9 @@ private fun WholePackage(r: RegionPacks.Region, mapDate: String, compact: Boolea
  * a card - or when the chosen one is missing.
  */
 @Composable
-internal fun StorageCard(busy: Boolean, kinds: List<String> = net.prototux.aare.Storage.MAP_KINDS, intro: Int = R.string.storage_intro,
-                         moveAsk: Int = R.string.storage_move_ask, changed: () -> Unit) {
+internal fun StorageCard(busy: Boolean, changed: () -> Unit) {
     val ctx = LocalContext.current
+    val kinds = net.prototux.aare.Storage.MAP_KINDS
     val tick = StorageMove.finished.intValue
     val vols = remember(tick) { net.prototux.aare.Storage.volumes(ctx) }
     val chosen = remember(tick) { net.prototux.aare.Storage.chosen(ctx, kinds.first()) }
@@ -253,7 +261,7 @@ internal fun StorageCard(busy: Boolean, kinds: List<String> = net.prototux.aare.
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(stringResource(R.string.storage_title), style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(intro), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.storage_intro), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (missing) Text(stringResource(R.string.storage_card_missing), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             vols.forEach { v ->
                 val pick = { if (v.id != chosen) { target = v; error = null } }
@@ -281,11 +289,11 @@ internal fun StorageCard(busy: Boolean, kinds: List<String> = net.prototux.aare.
                     is net.prototux.aare.Storage.Problem.NoRoom -> Text(stringResource(R.string.storage_no_room, size(problem.need), size(problem.free)),
                         color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                     null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(moveAsk, t.label, size(need)), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.storage_move_ask, t.label, size(need)), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { target = null }) { Text(stringResource(android.R.string.cancel)) }
                         FilledTonalButton(enabled = !busy, onClick = {
                             target = null
-                            StorageMove.start(need, { e -> ctx.getString(R.string.storage_move_failed, e.message ?: e.javaClass.simpleName) }, changed) { p ->
+                            StorageMove.start(need, { e -> StorageMove.describe(ctx, e) }, changed) { p ->
                                 net.prototux.aare.Storage.move(ctx, t, kinds, p)
                             }
                         }) { Text(stringResource(R.string.storage_move)) }

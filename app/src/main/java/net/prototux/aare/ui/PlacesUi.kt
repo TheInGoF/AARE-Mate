@@ -28,11 +28,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Home
@@ -65,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -105,6 +103,8 @@ internal fun PlacesPage() {
     var open by remember { mutableStateOf<String?>(null) }
     var addCategory by remember { mutableStateOf(false) }
     var addPlace by remember { mutableStateOf(false) }
+    // a list goes with all its places: asked first, as for the trip log and the regions
+    var deleteCategory by remember { mutableStateOf(false) }
     BackHandler(enabled = open != null) { open = null }
     val cat = book.categories.firstOrNull { it.id == open }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -163,7 +163,7 @@ internal fun PlacesPage() {
                 Icon(placeIcon(cat.icon), null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(10.dp))
                 Text(cat.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                IconButton(onClick = { book = Places.removeCategory(ctx, cat.id); open = null }) {
+                IconButton(onClick = { deleteCategory = true }) {
                     Icon(Icons.Rounded.Delete, stringResource(R.string.places_delete_category), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -229,6 +229,13 @@ internal fun PlacesPage() {
     }
     if (addCategory) CategoryDialog(onDone = { name, icon -> book = Places.addCategory(ctx, name, icon); addCategory = false }, onCancel = { addCategory = false })
     if (addPlace && cat != null) PlaceDialog(cat.id, onDone = { p -> book = Places.addPlace(ctx, p); addPlace = false }, onCancel = { addPlace = false })
+    if (deleteCategory && cat != null) AlertDialog(onDismissRequest = { deleteCategory = false },
+        title = { Text(stringResource(R.string.places_delete_category)) },
+        text = { Text(stringResource(R.string.places_delete_category_ask, cat.name,
+            book.places.count { it.category == cat.id }.let { n -> pluralStringResource(R.plurals.places_count, n, n) })) },
+        confirmButton = { TextButton(onClick = { book = Places.removeCategory(ctx, cat.id); open = null; deleteCategory = false }) {
+            Text(stringResource(R.string.places_delete_place)) } },
+        dismissButton = { TextButton(onClick = { deleteCategory = false }) { Text(stringResource(R.string.common_cancel)) } })
 }
 
 @Composable

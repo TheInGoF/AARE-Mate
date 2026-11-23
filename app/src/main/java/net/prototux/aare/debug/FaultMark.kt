@@ -17,6 +17,8 @@ import java.util.Locale
  */
 object FaultMark {
     private const val TAG = "AareFaultMark"
+    /** Marks kept: each holds megabytes of logcat, older ones go when a new one is made. */
+    private const val KEEP = 20
 
     fun capture(context: Context, state: String, done: (File?) -> Unit) {
         val app = context.applicationContext
@@ -37,6 +39,10 @@ object FaultMark {
             runCatching { File(dir, "network.txt").writeText(network(app)) }
             runCatching {
                 File(app.getExternalFilesDir(null), "cars").listFiles()?.forEach { it.copyTo(File(dir, "car-" + it.name), overwrite = true) }
+            }
+            // only the newest marks stay (the names sort by time)
+            runCatching {
+                dir.parentFile?.listFiles()?.filter { it.isDirectory }?.sortedByDescending { it.name }?.drop(KEEP)?.forEach { it.deleteRecursively() }
             }
             net.prototux.aare.DiagLog.add("fault marked: ${dir.name}")
             done(dir)

@@ -19,6 +19,8 @@ import java.util.zip.ZipOutputStream
 internal object MateTransfer {
     /** Preferences not taken: the web view's and the map library's own, the day's TomTom count, a trip in progress. */
     private val SKIP_PREFS = setOf("AwOriginVisitLoggerPrefs", "MapboxSharedPreferences", "WebViewChromiumPrefs", "tomtom_budget", "navi_resume", "storage")
+    /** Preference keys bound to this device: asked permissions, root granted here (not true on a new device). */
+    private val SKIP_KEYS = setOf("requested_permissions", "root_audio")
     /** Files and folders taken from the app's files directory. */
     private val FILES = listOf("places.json", "certs")
     /** Secrets of TokenVault, by name. */
@@ -52,7 +54,7 @@ internal object MateTransfer {
                     val o = JSONObject()
                     app.getSharedPreferences(name, Context.MODE_PRIVATE).all.forEach { (k, v) ->
                         // the encrypted secrets are carried in plain text below
-                        if (k.endsWith("_enc")) return@forEach
+                        if (k.endsWith("_enc") || k in SKIP_KEYS) return@forEach
                         o.put(k, when (v) {
                             is Boolean -> JSONObject().put("t", "b").put("v", v)
                             is Int -> JSONObject().put("t", "i").put("v", v)
@@ -119,10 +121,10 @@ internal object MateTransfer {
             while (true) {
                 val e = zip.nextEntry ?: break
                 tell(when {
-                    e.name.startsWith("files/$MAPS/") -> "Karte " + e.name.substringAfterLast('/')
-                    e.name.startsWith("voices/espeak-ng-data") -> "Aussprache-Regeln"
-                    e.name.startsWith("voices/") -> "Stimme " + (net.prototux.aare.speech.Voices.byId(e.name.removePrefix("voices/").substringBefore('/'))?.name ?: e.name.removePrefix("voices/").substringBefore('/'))
-                    e.name == "prefs.json" -> "Einstellungen"
+                    e.name.startsWith("files/$MAPS/") -> app.getString(R.string.transfer_item_map, e.name.substringAfterLast('/'))
+                    e.name.startsWith("voices/espeak-ng-data") -> app.getString(R.string.transfer_item_rules)
+                    e.name.startsWith("voices/") -> app.getString(R.string.transfer_item_voice, net.prototux.aare.speech.Voices.byId(e.name.removePrefix("voices/").substringBefore('/'))?.name ?: e.name.removePrefix("voices/").substringBefore('/'))
+                    e.name == "prefs.json" -> app.getString(R.string.transfer_item_settings)
                     else -> e.name.substringAfterLast('/')
                 })
                 // map packages go straight to their file (too large for memory)
@@ -151,6 +153,7 @@ internal object MateTransfer {
                             val o = all.getJSONObject(name)
                             val ed = app.getSharedPreferences(name, Context.MODE_PRIVATE).edit()
                             o.keys().forEach { k ->
+                                if (k in SKIP_KEYS) return@forEach
                                 val v = o.getJSONObject(k)
                                 when (v.getString("t")) {
                                     "b" -> ed.putBoolean(k, v.getBoolean("v"))

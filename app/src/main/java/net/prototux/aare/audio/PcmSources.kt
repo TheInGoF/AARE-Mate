@@ -350,7 +350,11 @@ class SuSource(private val context: Context, private val rate: Int, private val 
         val apk = context.applicationInfo.sourceDir
         val cmd = "CLASSPATH='$apk' app_process / ${SuAudioMain::class.java.name} $rate $channels"
         val p = runCatching { ProcessBuilder("su", "-c", cmd).start() }
-            .onFailure { Log.w(TAG, "su launch", it) }.getOrNull() ?: return false
+            .onFailure {
+                Log.w(TAG, "su launch", it)
+                // no su on this device (e.g. settings carried over from a rooted one): root capture is off again
+                net.prototux.aare.Settings(context).rootAudio = false
+            }.getOrNull() ?: return false
         process = p
         stream = p.inputStream
         // Drain stderr so a chatty app_process can't fill its pipe and stall the capture.

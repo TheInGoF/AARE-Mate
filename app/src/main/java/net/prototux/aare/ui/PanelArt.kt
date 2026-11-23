@@ -13,7 +13,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 
 /** What a home panel shows: a plain line drawing (wish O169: "kein icon sondern eine schlichte svg typ grafik"). */
-internal enum class PanelArt { PLACES, ROUTING, VIEWS, MUSIC, SOUND, VOICES, LISTEN, DASH, SETTINGS }
+internal enum class PanelArt { PLACES, ROUTING, MUSIC, SOUND, VOICES, LISTEN, DASH, SETTINGS }
 
 /**
  * The line drawings of the phone app's home panels, in one colour with a quieter second one, drawn on a 120 x 80 grid
@@ -58,13 +58,6 @@ internal fun PanelArtwork(art: PanelArt, line: Color, soft: Color, modifier: Mod
                 drawPath(path(104f to 50f, 104f to 30f, 114f to 34f, 104f to 38f), line, style = stroke)
                 drawLine(soft, p(12f, 72f), p(108f, 72f), w * 0.6f, StrokeCap.Round)
                 drawLine(line, p(12f, 72f), p(86f, 72f), w, StrokeCap.Round)
-            }
-            PanelArt.VIEWS -> {
-                // three screens stacked, the front one with a map line
-                drawRoundRect(soft, p(30f, 10f), Size(64f * k, 40f * k), androidx.compose.ui.geometry.CornerRadius(6f * k), style = thin)
-                drawRoundRect(soft, p(22f, 18f), Size(64f * k, 40f * k), androidx.compose.ui.geometry.CornerRadius(6f * k), style = thin)
-                drawRoundRect(line, p(14f, 26f), Size(64f * k, 40f * k), androidx.compose.ui.geometry.CornerRadius(6f * k), style = stroke)
-                drawPath(path(22f to 56f, 36f to 44f, 48f to 50f, 66f to 36f), line, style = thin)
             }
             PanelArt.SOUND -> {
                 // equaliser: sliders with knobs, a soft curve over them

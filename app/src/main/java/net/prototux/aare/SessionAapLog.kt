@@ -3,14 +3,6 @@ package net.prototux.aare
 import android.util.Log
 import net.prototux.aare.aap.AapLog
 
-/** Protocol logs go to logcat under "AareAap". */
-object AndroidAapLog : AapLog {
-    override fun d(msg: String) { Log.d("AareAap", msg) }
-    override fun i(msg: String) { Log.i("AareAap", msg) }
-    override fun w(msg: String, t: Throwable?) { Log.w("AareAap", msg, t) }
-    override fun e(msg: String, t: Throwable?) { Log.e("AareAap", msg, t) }
-}
-
 /**
  * The car session's protocol log. Always to logcat (tag "AareAap"); when [verbose] is on, every
  * line — including the per-frame debug trace — also goes to the in-app [DiagLog], so a reporter can
@@ -38,7 +30,7 @@ object SessionAapLog : AapLog {
         val line = synchronized(seen) {
             val s = seen.getOrPut(kind) { longArrayOf(0L, 0L) }
             if (s[0] != 0L && now - s[0] < REPEAT_MS) { s[1]++; null }
-            else { val out = if (s[1] > 0) "$msg   (${s[1]} gleichartige in der letzten Minute ausgelassen)" else msg; s[0] = now; s[1] = 0; out }
+            else { val out = if (s[1] > 0) "$msg   (${s[1]} similar lines left out in the last minute)" else msg; s[0] = now; s[1] = 0; out }
         } ?: return
         DiagLog.add(line)
     }

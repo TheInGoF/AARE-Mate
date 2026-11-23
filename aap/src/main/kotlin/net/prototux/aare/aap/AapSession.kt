@@ -407,7 +407,8 @@ class AapSession(
         headUnitVersion = major to minor
         // Like the official phone: 1.7 to anything up to 1.7, 6.1 to the newer GAL numbering.
         // Status is always success; feature gating follows the head unit's own version.
-        val (replyMajor, replyMinor) = if (major < 1 || (major == 1 && minor <= 7)) 1 to 7 else 6 to 1
+        val (replyMajor, replyMinor) = if (major < PROTOCOL_MAJOR || (major == PROTOCOL_MAJOR && minor <= PROTOCOL_MINOR))
+            PROTOCOL_MAJOR to PROTOCOL_MINOR else 6 to 1
         log.i("head unit protocol $major.$minor, answering $replyMajor.$replyMinor")
         val body = byteArrayOf(
             (replyMajor shr 8).toByte(), replyMajor.toByte(),
@@ -588,6 +589,7 @@ class AapSession(
     }
 
     companion object {
+        /** The classic protocol version answered to head units up to it (onVersionRequest). */
         const val PROTOCOL_MAJOR = 1
         const val PROTOCOL_MINOR = 7
 

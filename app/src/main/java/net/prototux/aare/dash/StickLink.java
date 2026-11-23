@@ -59,7 +59,7 @@ final class StickLink {
     private final Runnable mRetry = this::connect;
     private final Runnable mScanEnd = () -> {
         stopScan();
-        state("kein Stick gefunden (ist \"Live-Daten ueber Bluetooth\" am Stick eingeschaltet?)");
+        state(R.string.stick_none_found);
         mMain.postDelayed(mRetry, RETRY_MS * 4);
     };
 
@@ -69,8 +69,11 @@ final class StickLink {
         mChanged = changed;
     }
 
+    /** Android 12+: the Bluetooth runtime rights; before that the install-time Bluetooth rights and the location for the scan. */
     static String[] permissions() {
-        return new String[] { Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT };
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S)
+            return new String[] { Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT };
+        return new String[] { Manifest.permission.ACCESS_FINE_LOCATION };
     }
 
     static boolean permitted(Context c) {
@@ -119,15 +122,27 @@ final class StickLink {
         net.prototux.aare.DiagLog.INSTANCE.add("stick: " + text, null, "DASH");
     }
 
-    private void state(String text) {
-        log(text);
-        mTelemetry.note(SRC, text);
+    private android.content.res.Resources mEnglish;
+
+    /* the log in English whatever the device's language; the screen in the device's */
+    private String english(int id, Object... args) {
+        if (mEnglish == null) {
+            android.content.res.Configuration c = new android.content.res.Configuration(mCtx.getResources().getConfiguration());
+            c.setLocale(java.util.Locale.ENGLISH);
+            mEnglish = mCtx.createConfigurationContext(c).getResources();
+        }
+        return mEnglish.getString(id, args);
+    }
+
+    private void state(int id, Object... args) {
+        log(english(id, args));
+        mTelemetry.note(SRC, mCtx.getString(id, args));
         mChanged.run();
     }
 
-    private void fail(String text) {
-        log(text);
-        mTelemetry.error(SRC, text);
+    private void fail(int id, Object... args) {
+        log(english(id, args));
+        mTelemetry.error(SRC, mCtx.getString(id, args));
         mChanged.run();
     }
 
@@ -152,19 +167,21 @@ final class StickLink {
         unwatchBond();
         mBondWatch = new android.content.BroadcastReceiver() {
             @Override public void onReceive(Context c, android.content.Intent i) {
-                BluetoothDevice d = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                BluetoothDevice d = android.os.Build.VERSION.SDK_INT >= 33
+                        ? i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice.class)
+                        : i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                 if (d == null || g != mGatt || !d.getAddress().equals(g.getDevice().getAddress())) return;
                 int s = i.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE);
                 if (s == BluetoothDevice.BOND_BONDED) {
                     mBonding = false; unwatchBond();
-                    state(mCtx.getString(R.string.stick_paired));
+                    state(R.string.stick_paired);
                     subscribe(g);
                 } else if (s == BluetoothDevice.BOND_NONE
                         && i.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, -1) == BluetoothDevice.BOND_BONDING) {
                     /* only a pairing that was under way and ended without a key (an old one dropped is no failure) */
                     mBonding = false; unwatchBond();
                     sPairAskedAt = 0;
-                    fail(mCtx.getString(R.string.stick_pair_failed));
+                    fail(R.string.stick_pair_failed);
                     close();                                    /* no try of its own: the driver starts it again */
                 }
             }
@@ -201,8 +218,8 @@ final class StickLink {
     private void askServices(BluetoothGatt g) {
         if (mServicesAsked) return;
         mServicesAsked = true;
-        state("verbunden, lese Dienste …");
-        if (!g.discoverServices()) again("Dienste nicht lesbar");
+        state(R.string.stick_reading_services);
+        if (!g.discoverServices()) again(R.string.stick_services_unreadable);
     }
 
     /** Connected 25 s ago and still not subscribed: the old pairing is dropped and made anew, or the driver is told how. */
@@ -211,8 +228,8 @@ final class StickLink {
     private void stuck() {
         BluetoothGatt g = mGatt;
         if (g == null || mSubscribed || mBonding || !mRunning) return;
-        log("connected 25 s ago, still not subscribed (bond " + bond(g.getDevice().getBondState()) + ")");
-        if (!pairAllowed()) { fail(mCtx.getString(R.string.stick_no_data)); close(); mRunning = false; return; }
+        log("connected 25 s ago, still not subscribed (bond " + english(bond(g.getDevice().getBondState())) + ")");
+        if (!pairAllowed()) { fail(R.string.stick_no_data); close(); mRunning = false; return; }
         mGotData = false;
         noData();
     }
@@ -224,17 +241,17 @@ final class StickLink {
     private void noData() {
         BluetoothGatt g = mGatt;
         if (g == null || mGotData || !mRunning) return;
-        if (!pairAllowed()) { fail(mCtx.getString(R.string.stick_no_data)); return; }
+        if (!pairAllowed()) { fail(R.string.stick_no_data); return; }
         log("subscribed, but no data in 20 s - the old pairing is dropped and made anew");
         BluetoothDevice dev = g.getDevice();
-        if (!removeBond(dev)) { fail(mCtx.getString(R.string.stick_unpair_by_hand)); return; }
+        if (!removeBond(dev)) { fail(R.string.stick_unpair_by_hand); return; }
         /* once the old pairing is gone (BOND_NONE), a new one is asked for: the code dialog comes again */
         mMain.postDelayed(() -> {
             if (g != mGatt) return;
             mBonding = true;
             watchBond(g);
-            state(mCtx.getString(R.string.stick_pair_now));
-            if (!dev.createBond()) { mBonding = false; unwatchBond(); fail(mCtx.getString(R.string.stick_pair_failed)); close(); }
+            state(R.string.stick_pair_now);
+            if (!dev.createBond()) { mBonding = false; unwatchBond(); fail(R.string.stick_pair_failed); close(); }
         }, 1500);
     }
 
@@ -242,11 +259,17 @@ final class StickLink {
         mGotData = false;
         BluetoothGattService s = g.getService(SERVICE);
         BluetoothGattCharacteristic c = s == null ? null : s.getCharacteristic(TELEGRAM);
-        if (c == null) { again("Geraet bietet keine Live-Daten an"); return; }
+        if (c == null) { again(R.string.stick_no_live_data); return; }
         g.setCharacteristicNotification(c, true);
         BluetoothGattDescriptor d = c.getDescriptor(CCCD);
-        if (d == null) { again("Merkmal ohne Abo-Schalter"); return; }
-        g.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+        if (d == null) { again(R.string.stick_no_cccd); return; }
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            g.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+        } else {
+            /* before Android 13 the value goes with the descriptor */
+            d.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            g.writeDescriptor(d);
+        }
     }
 
     void start() {
@@ -292,12 +315,12 @@ final class StickLink {
         if (!mRunning) return;
         mMain.removeCallbacks(mRetry);
         if (!permitted(mCtx)) {
-            fail("Bluetooth-Berechtigung fehlt (Seite am Tablet: \"Stick suchen\")");
+            fail(R.string.stick_no_permission);
             return;
         }
         BluetoothAdapter ad = adapter();
         if (ad == null || !ad.isEnabled()) {
-            fail("Bluetooth ist aus");
+            fail(R.string.stick_bt_off);
             mMain.postDelayed(mRetry, RETRY_MS * 2);
             return;
         }
@@ -308,10 +331,10 @@ final class StickLink {
         }
         mScanner = ad.getBluetoothLeScanner();
         if (mScanner == null) {
-            fail("Bluetooth-Suche nicht moeglich");
+            fail(R.string.stick_scan_impossible);
             return;
         }
-        state("suche Stick …");
+        state(R.string.stick_searching);
         mScanning = true;
         mScanner.startScan(
                 Collections.singletonList(new ScanFilter.Builder().setServiceUuid(new ParcelUuid(SERVICE)).build()),
@@ -343,7 +366,7 @@ final class StickLink {
         @Override public void onScanFailed(int errorCode) {
             mScanning = false;
             mMain.removeCallbacks(mScanEnd);
-            fail("Bluetooth-Suche fehlgeschlagen (" + errorCode + ")");
+            fail(R.string.stick_scan_failed, errorCode);
             mMain.postDelayed(mRetry, RETRY_MS * 2);
         }
     };
@@ -351,12 +374,12 @@ final class StickLink {
     private void open(BluetoothDevice d) {
         close();
         mSubscribed = false;
-        state("verbinde mit " + d.getAddress() + " …");
+        state(R.string.stick_connecting, d.getAddress());
         mGatt = d.connectGatt(mCtx, false, mCallback, BluetoothDevice.TRANSPORT_LE);
     }
 
-    private void again(String why) {
-        fail(why);
+    private void again(int why, Object... args) {
+        fail(why, args);
         close();
         if (mRunning) mMain.postDelayed(mRetry, RETRY_MS);
     }
@@ -366,7 +389,7 @@ final class StickLink {
             mMain.post(() -> {
                 if (g != mGatt) return;
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
-                    state("verbunden, handle Nachrichtengroesse aus …");
+                    state(R.string.stick_mtu);
                     mServicesAsked = false;
                     if (!g.requestMtu(MTU)) askServices(g);
                     /* the answer to the size may never come (22.11.2026: "Er sagt bei dem Stick immer noch verbunden, handle
@@ -377,9 +400,9 @@ final class StickLink {
                     mMain.postDelayed(mStuck, 25_000);
                 } else if (mBonding) {
                     /* the pairing goes on without the connection; its end decides (watchBond) */
-                    log("Verbindung waehrend der Kopplung getrennt (Status " + status + ")");
+                    log("connection lost during the pairing (status " + status + ")");
                 } else {
-                    again("Verbindung getrennt (Status " + status + ")");
+                    again(R.string.stick_disconnected, status);
                 }
             });
         }
@@ -399,24 +422,24 @@ final class StickLink {
                 BluetoothGattCharacteristic c = s == null ? null : s.getCharacteristic(TELEGRAM);
                 if (c == null) {
                     forget(mCtx);                               /* falsches Geraet gemerkt: neu suchen */
-                    again("Geraet bietet keine Live-Daten an");
+                    again(R.string.stick_no_live_data);
                     return;
                 }
                 int bond = g.getDevice().getBondState();
                 if (bond != BluetoothDevice.BOND_BONDED) {
                     /* der Stick sendet erst nach der Kopplung - erst koppeln, dann abonnieren */
                     if (!pairAllowed()) {
-                        fail(mCtx.getString(R.string.stick_not_paired));
+                        fail(R.string.stick_not_paired);
                         close();
                         mRunning = false;                       /* waits for "Stick suchen" */
                         return;
                     }
                     mBonding = true;
                     watchBond(g);
-                    state(mCtx.getString(R.string.stick_pair_now));
+                    state(R.string.stick_pair_now);
                     if (bond == BluetoothDevice.BOND_NONE && !g.getDevice().createBond()) {
                         mBonding = false; unwatchBond();
-                        fail(mCtx.getString(R.string.stick_pair_failed));
+                        fail(R.string.stick_pair_failed);
                         close();
                     }
                     return;
@@ -431,23 +454,41 @@ final class StickLink {
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     mSubscribed = true;
                     mMain.removeCallbacks(mStuck);
-                    state("abonniert (MTU " + mMtu + ", " + bond(g.getDevice().getBondState()) + ")");
+                    int b = bond(g.getDevice().getBondState());
+                    /* the pairing's word in each one's language: English in the log, the device's on the screen */
+                    log(english(R.string.stick_subscribed, mMtu, english(b)));
+                    mTelemetry.note(SRC, mCtx.getString(R.string.stick_subscribed, mMtu, mCtx.getString(b)));
+                    mChanged.run();
                     mMain.removeCallbacks(mNoData);
                     mMain.postDelayed(mNoData, 20_000);
                 }
-                else again("Abonnieren abgelehnt (Status " + status + ")");
+                else again(R.string.stick_subscribe_refused, status);
             });
         }
 
+        /* Android 13 and later */
         @Override public void onCharacteristicChanged(BluetoothGatt g, BluetoothGattCharacteristic c, byte[] value) {
-            if (!mGotData) { mGotData = true; mMain.post(() -> log("first data from the stick")); }
-            String json = Cbor.toJson(value);
-            if (json == null || !mTelemetry.accept(json)) mTelemetry.error(SRC, "unlesbares Telegramm (" + value.length + " B)");
-            mChanged.run();
+            telegram(value);
+        }
+
+        /* before Android 13: the value with the characteristic */
+        @Override @SuppressWarnings("deprecation")
+        public void onCharacteristicChanged(BluetoothGatt g, BluetoothGattCharacteristic c) {
+            if (android.os.Build.VERSION.SDK_INT >= 33) return;      /* the overload above gets it */
+            byte[] value = c.getValue();
+            if (value != null) telegram(value);
         }
     };
 
-    private static String bond(int s) {
-        return s == BluetoothDevice.BOND_BONDED ? "gekoppelt" : s == BluetoothDevice.BOND_BONDING ? "Kopplung laeuft" : "nicht gekoppelt";
+    private void telegram(byte[] value) {
+        if (!mGotData) { mGotData = true; mMain.post(() -> log("first data from the stick")); }
+        String json = Cbor.toJson(value);
+        if (json == null || !mTelemetry.accept(json)) mTelemetry.error(SRC, mCtx.getString(R.string.stick_bad_telegram, value.length));
+        mChanged.run();
+    }
+
+    private static int bond(int s) {
+        return s == BluetoothDevice.BOND_BONDED ? R.string.stick_bond_bonded
+                : s == BluetoothDevice.BOND_BONDING ? R.string.stick_bond_bonding : R.string.stick_bond_none;
     }
 }

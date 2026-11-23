@@ -1,6 +1,8 @@
 package net.prototux.aare.trips
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,7 +25,8 @@ object TripWatch {
     private const val STEP_MS = 2_000L
     /** The stick's values older than this are not used for a sample. */
     private const val STICK_MS = 2 * 60_000L
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // a failure here (a full disk, a broken database) is logged, it must not end the app while driving
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e -> DiagLog.error("trip log: $e") })
     private var job: Job? = null
     private var detector: TripDetector? = null
 
@@ -77,6 +80,11 @@ object TripWatch {
 
     private fun handle(app: Context, store: TripStore, events: List<TripDetector.Event>) {
         if (events.isEmpty()) return
+        runCatching { save(store, events) }.onFailure { DiagLog.error("trip log: not saved - $it") }
+        if (events.any { it !is TripDetector.Event.TripStarted }) scope.launch { name(app) }
+    }
+
+    private fun save(store: TripStore, events: List<TripDetector.Event>) {
         for (e in events) when (e) {
             is TripDetector.Event.TripStarted -> DiagLog.add("trip log: trip started")
             is TripDetector.Event.TripEnded -> {
@@ -93,12 +101,14 @@ object TripWatch {
             }
             is TripDetector.Event.ChargeCompleted -> { store.complete(e.charge); DiagLog.add("trip log: cut charge completed from the level") }
         }
-        if (events.any { it !is TripDetector.Event.TripStarted }) scope.launch { name(app) }
     }
 
     /** Places of trips and charges without a name: the own place within [OWN_M], else the address from the map server. */
     suspend fun name(context: Context) {
-        val app = context.applicationContext
+        try { nameAll(context.applicationContext) } catch (e: CancellationException) { throw e } catch (e: Exception) { DiagLog.error("trip log: naming failed - $e") }
+    }
+
+    private suspend fun nameAll(app: Context) {
         val store = TripStore.get(app)
         val own = runCatching { net.prototux.aare.places.Places.load(app).places }.getOrDefault(emptyList())
         suspend fun nameOf(lat: Double?, lon: Double?): String? {

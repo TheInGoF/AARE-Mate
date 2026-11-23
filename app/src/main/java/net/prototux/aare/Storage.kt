@@ -24,17 +24,11 @@ internal object Storage {
     const val SPEECH = "sprache"
     /** Mate Musik's downloaded titles, lists and covers (System L-086, 22.11.2026: "Musik muss ich auch auf der externen SD-Karte speichern können"). */
     const val MUSIC = "musik"
-    /** Everything that moves with the chosen place. */
-    val KINDS = listOf(MAPS, SPEECH, MUSIC)
     /**
      * Two places of their own (23.11.2026: "Zusätzlich ein extra Speicherort einbauen, damit man die getrennt verlinken
      * kann"): the maps with the speech models (page "Offline-Karten"), the music on its own (page "Musik").
      */
     val MAP_KINDS = listOf(MAPS, SPEECH)
-    val MUSIC_KINDS = listOf(MUSIC)
-    /** The keys of a group's choice: the music has its own, the rest the old one. */
-    private fun key(kind: String) = if (kind == MUSIC) "volume_music" else "volume"
-    private fun rootKey(kind: String) = if (kind == MUSIC) "root_music" else "root"
     private const val TAG = "MateStorage"
     /** The largest file FAT32 takes (4 GiB - 1). */
     const val FAT32_MAX = 4L * 1024 * 1024 * 1024 - 1
@@ -134,9 +128,9 @@ internal object Storage {
         val target = to ?: internalDir(app, MUSIC)
         if (from.exists() && from.canonicalPath != target.canonicalPath) {
             target.mkdirs()
-            if (!target.canWrite()) throw IOException("not writable")
+            if (!target.canWrite()) throw MoveFailed(MoveFailed.Why.NOT_WRITABLE)
             val need = sizeOf(from)
-            if (need + 50L * 1024 * 1024 > target.usableSpace) throw IOException("room")
+            if (need + 50L * 1024 * 1024 > target.usableSpace) throw MoveFailed(MoveFailed.Why.NO_ROOM)
             transfer(listOf(from to target), progress)
         }
         val e = prefs(app).edit()
@@ -201,6 +195,11 @@ internal object Storage {
         class TooLarge(val bytes: Long) : Problem()
     }
 
+    /** Why a move stopped, for the page to word it (StorageMove.describe); nothing has changed then. */
+    class MoveFailed(val why: Why) : IOException(why.name) {
+        enum class Why { NO_ROOM, TOO_LARGE, NOT_WRITABLE, VERIFY }
+    }
+
     fun problem(c: Context, to: Volume, kinds: List<String> = MAP_KINDS): Problem? {
         val from = kinds.map { dir(c, it) }
         val big = from.maxOf { largest(it) }
@@ -224,21 +223,20 @@ internal object Storage {
     /**
      * Moves the maps and speech models to [to] and makes it the chosen place: everything is copied and checked (size,
      * and the SHA-256 kept beside a map file) before the old files go; on any error the copies are dropped and the old
-     * place stays chosen. Blocking - off the main thread.
+     * place stays chosen. Blocking - off the main thread. The music moves with [moveMusic] (its folder may be the driver's).
      */
     fun move(c: Context, to: Volume, kinds: List<String> = MAP_KINDS, progress: (Phase, Long, Long) -> Unit) {
+        require(MUSIC !in kinds) { "the music moves with moveMusic" }
         val app = c.applicationContext
         // the same check the page shows, here too: nothing is copied that cannot fit
-        problem(app, to, kinds)?.let { throw IOException(if (it is Problem.TooLarge) "FAT32" else "room") }
+        problem(app, to, kinds)?.let { throw MoveFailed(if (it is Problem.TooLarge) MoveFailed.Why.TOO_LARGE else MoveFailed.Why.NO_ROOM) }
         // the music followed the maps' place so far: it gets that place as its own before the maps move without it
-        if (MUSIC !in kinds) prefs(app).let { p -> if (!p.contains("volume_music"))
+        prefs(app).let { p -> if (!p.contains("volume_music"))
             p.edit().putString("volume_music", p.getString("volume", "") ?: "").putString("root_music", p.getString("root", null)).commit() }
         val pairs = kinds.map { dir(app, it) to target(app, to, it) }.filter { (a, b) -> a.exists() && a.canonicalPath != b.canonicalPath }
         transfer(pairs, progress)
-        val k = kinds.first()
-        prefs(app).edit().putString(key(k), to.id).putString(rootKey(k), to.root.path).commit()
+        prefs(app).edit().putString("volume", to.id).putString("root", to.root.path).commit()
         pairs.forEach { (a, _) -> a.deleteRecursively() }
-        if (MUSIC in kinds) net.prototux.aare.music.Offline.forgetDir()
         Log.i(TAG, "moved, the old files are gone")
     }
 
@@ -255,7 +253,7 @@ internal object Storage {
                     while (true) { val n = i.read(buf); if (n < 0) break; o.write(buf, 0, n); done += n; progress(Phase.COPY, done, total) }
                     o.fd.sync()
                 } }
-                if (dst.length() != src.length()) throw IOException("size")
+                if (dst.length() != src.length()) throw MoveFailed(MoveFailed.Why.VERIFY)
                 dst.setLastModified(src.lastModified())
             }
             // the map files are read back from the new place and checked against the checksum they were loaded with
@@ -264,7 +262,7 @@ internal object Storage {
             var checked = 0L
             for ((src, dst) in marked) {
                 val want = File(src.path + ".sha256").readText().trim()
-                if (sha256(dst) { checked += it; progress(Phase.CHECK, checked, checkTotal) } != want) throw IOException("checksum")
+                if (sha256(dst) { checked += it; progress(Phase.CHECK, checked, checkTotal) } != want) throw MoveFailed(MoveFailed.Why.VERIFY)
             }
         } catch (e: Exception) {
             Log.w(TAG, "move failed (${e.javaClass.simpleName}: ${e.message}), the copies go, nothing changed")

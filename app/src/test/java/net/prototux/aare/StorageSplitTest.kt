@@ -28,7 +28,7 @@ class StorageSplitTest {
         assertEquals("CARD-1", Storage.chosen(ctx, Storage.MUSIC))
         assertEquals(File(card, Storage.MUSIC), Storage.dir(ctx, Storage.MUSIC))
         // now the music on its own to the device: its file goes along
-        Storage.move(ctx, inner, Storage.MUSIC_KINDS) { _, _, _ -> }
+        Storage.moveMusic(ctx, null) { _, _, _ -> }
         assertEquals("", Storage.chosen(ctx, Storage.MUSIC))
         assertEquals("x", File(Storage.dir(ctx, Storage.MUSIC), "titel.mp3").readText())
     }
