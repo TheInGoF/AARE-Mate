@@ -71,6 +71,10 @@
     "say_message_none": "Mit %s ist in %s keine Unterhaltung offen, auf die ich antworten kann.",
     "say_message_none_any": "Mit %s ist keine Unterhaltung offen, auf die ich antworten kann.",
     "say_play_none": "%s habe ich in der Musik nicht gefunden.",
-    "say_music_off": "Mate Musik läuft gerade nicht."
+    "say_music_off": "Mate Musik läuft gerade nicht.",
+    "say_cannot_listen": "Ich kann gerade nicht zuhören. Mikrofon oder Sprachmodell fehlt.",
+    "say_no_contacts_right": "Ich darf deine Kontakte nicht lesen. Erlaube es in der Mate-App.",
+    "say_no_call_right": "Ich darf keine Anrufe starten. Erlaube es in der Mate-App.",
+    "say_call_failed": "Der Anruf an %s ging nicht."
   }
 }

@@ -19,9 +19,10 @@ object Calls {
     @Volatile var lastPlaced: Pair<String, Long>? = null
         private set
 
-    fun place(context: Context, number: String) {
+    /** Whether Android took the call (false without CALL_PHONE or when telephony refused it). */
+    fun place(context: Context, number: String): Boolean {
         lastPlaced = number to android.os.SystemClock.elapsedRealtime()
-        runCatching { context.getSystemService(TelecomManager::class.java).placeCall(Uri.fromParts("tel", number, null), Bundle()) }
+        return runCatching { context.getSystemService(TelecomManager::class.java).placeCall(Uri.fromParts("tel", number, null), Bundle()) }.isSuccess
     }
 
     fun answer(context: Context) {

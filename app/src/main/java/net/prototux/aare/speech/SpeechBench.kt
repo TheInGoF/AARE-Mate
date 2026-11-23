@@ -21,11 +21,9 @@ import java.util.concurrent.TimeUnit
 object SpeechBench {
     private const val TAG = "MateAsr"
 
-    val SENTENCES = listOf(
-        "Spiele Wizo.",
-        "Spiele das Album Jenseits von Eden von den Toten Hosen.",
-        "Anna schreibt: Ich bin in zehn Minuten da, soll ich noch etwas vom Bäcker mitbringen?",
-    )
+    /** The test sentences in the device's language (the one Whisper is asked to hear). */
+    fun sentences(context: Context): List<String> =
+        context.resources.getStringArray(net.prototux.aare.R.array.speech_bench_sentences).toList()
 
     class Row(val size: String, val threads: Int, val loadMs: Long, val sentence: Int, val seconds: Double, val ms: Long, val text: String) {
         val rtf get() = ms / 1000.0 / seconds
@@ -35,13 +33,13 @@ object SpeechBench {
 
     /** Runs everything on the calling thread (minutes for the larger models): call it off the main thread. */
     fun run(context: Context, progress: (String) -> Unit): List<Row> {
-        val waves = speak(context, SENTENCES, progress)
+        val waves = speak(context, sentences(context), progress)
         // Mate's own voice (when it is the device voice) spoke them: its model is let go before the recognizers load -
         // both in memory at once was too much for the device (18.11.2026: the app ended at the test sentences)
         LocalTts.release()
         val rows = ArrayList<Row>()
-        val out = StringBuilder("Messung ${java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY).format(java.util.Date())} – " +
-            "${android.os.Build.MODEL}, ${Runtime.getRuntime().availableProcessors()} Kerne\n")
+        val out = StringBuilder("Measurement ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT).format(java.util.Date())} - " +
+            "${android.os.Build.MODEL}, ${Runtime.getRuntime().availableProcessors()} cores\n")
         for (size in LocalAsr.installed(context)) for (threads in listOf(2, 4)) {
             progress(context.getString(net.prototux.aare.R.string.speech_bench_loading, size, threads))
             val t0 = SystemClock.elapsedRealtime()
@@ -54,7 +52,7 @@ object SpeechBench {
                     val text = LocalAsr.recognize(rec, w.samples, w.rate)
                     val row = Row(size, threads, loadMs, i, w.seconds, SystemClock.elapsedRealtime() - s, text)
                     rows += row
-                    val line = "whisper-$size ${threads}T laden ${loadMs} ms | Satz ${i + 1} (%.1f s): %d ms, RTF %.2f | %s".format(Locale.ROOT, row.seconds, row.ms, row.rtf, text)
+                    val line = "whisper-$size ${threads}T load ${loadMs} ms | sentence ${i + 1} (%.1f s): %d ms, RTF %.2f | %s".format(Locale.ROOT, row.seconds, row.ms, row.rtf, text)
                     Log.i(TAG, line); out.append(line).append('\n')
                 }
             } finally {
@@ -65,7 +63,7 @@ object SpeechBench {
         return rows
     }
 
-    /** The test sentences as sound, from the device's own (German) voice. */
+    /** The test sentences as sound, from the device's own voice in the device's language. */
     fun speak(context: Context, sentences: List<String>, progress: (String) -> Unit = {}): List<Wave> {
         progress(context.getString(net.prototux.aare.R.string.speech_bench_speaking))
         val ready = CountDownLatch(1)
@@ -74,7 +72,7 @@ object SpeechBench {
         tts = TextToSpeech(context.applicationContext) { status -> ok = status == TextToSpeech.SUCCESS; ready.countDown() }
         try {
             check(ready.await(15, TimeUnit.SECONDS) && ok) { "voice not ready" }
-            tts.language = Locale.GERMANY
+            tts.language = net.prototux.aare.Language.locale()
             val left = CountDownLatch(sentences.size)
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(id: String?) {}

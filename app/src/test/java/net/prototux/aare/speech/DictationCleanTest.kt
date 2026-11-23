@@ -13,6 +13,9 @@ class DictationCleanTest {
         assertEquals("", Dictation.clean("Untertitel der Amara.org-Community"))
         assertEquals("", Dictation.clean("Vielen Dank fürs Zuschauen!"))
         assertEquals("", Dictation.clean("♪ la la ♪"))
+        assertEquals("", Dictation.clean("Thank you for watching."))
+        assertEquals("", Dictation.clean("Subtitles by the Amara.org community"))
+        assertEquals("", Dictation.clean("Applause"))
     }
 
     @Test fun wordsStay() {

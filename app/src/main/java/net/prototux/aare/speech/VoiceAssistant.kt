@@ -95,7 +95,9 @@ object VoiceAssistant {
 
     private fun handle(ctx: Context, text: String?, hint: Hint) {
         val g = VoiceCommands.grammar()
-        if (text.isNullOrBlank()) { askFor = null; done(g.say("say_nothing"), false); return }
+        // null: no microphone or no model - not the same as silence
+        if (text == null) { askFor = null; done(g.say("say_cannot_listen"), false); return }
+        if (text.isBlank()) { askFor = null; done(g.say("say_nothing"), false); return }
         heard = text
         val ask = askFor
         if (ask != null) {
@@ -134,6 +136,8 @@ object VoiceAssistant {
             }
             Kind.PLAY -> play(ctx, c, g, retried = false)
             Kind.CALL -> {
+                if (!granted(ctx, android.Manifest.permission.READ_CONTACTS)) { done(g.say("say_no_contacts_right"), false); return }
+                if (!granted(ctx, android.Manifest.permission.CALL_PHONE)) { done(g.say("say_no_call_right"), false); return }
                 val who = contact(ctx, c.target)
                 if (who == null) done(g.say("say_no_contact", c.target), false)
                 else confirmCall(ctx, who, g)
@@ -156,12 +160,17 @@ object VoiceAssistant {
      */
     private fun confirmCall(ctx: Context, who: Pair<String, String>, g: VoiceCommands.Grammar) {
         pendingCall = {
-            net.prototux.aare.car.Calls.place(ctx, who.second)
-            Log.i(TAG, "call placed after the countdown")
-            // shown, not said again: the call's own sound starts now
-            answer = g.say("say_call", who.first); heard = ""
-            phase = Phase.DONE
-            main.postDelayed({ if (phase == Phase.DONE) phase = Phase.IDLE }, 4000)
+            if (!net.prototux.aare.car.Calls.place(ctx, who.second)) {
+                Log.w(TAG, "call could not be placed after the countdown")
+                heard = ""
+                done(g.say("say_call_failed", who.first), false)
+            } else {
+                Log.i(TAG, "call placed after the countdown")
+                // shown, not said again: the call's own sound starts now
+                answer = g.say("say_call", who.first); heard = ""
+                phase = Phase.DONE
+                main.postDelayed({ if (phase == Phase.DONE) phase = Phase.IDLE }, 4000)
+            }
         }
         answer = who.first
         phase = Phase.CONFIRM
@@ -262,6 +271,9 @@ object VoiceAssistant {
         val cat = book.categories.map { it to score(said, it.name) }.filter { it.second >= 0.85 }.maxByOrNull { it.second }?.first ?: return null
         return book.places.filter { it.category == cat.id }.singleOrNull()
     }
+
+    private fun granted(ctx: Context, permission: String) =
+        ctx.checkSelfPermission(permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
     /** A contact by name (spelling and sound alike): its name and number, a mobile one first. */
     private fun contact(ctx: Context, said: String): Pair<String, String>? = runCatching {

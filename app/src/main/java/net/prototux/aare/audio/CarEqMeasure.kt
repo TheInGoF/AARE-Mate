@@ -19,11 +19,11 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
- * Measuring the car (wish O50, stage 2): pink noise goes to the car's speakers through Mate, the phone's microphone
- * at the driver's seat listens, and the ten bands of [CarEq] get the correction that flattens what it heard.
+ * Measuring the car (wish O50, stage 2): sine sweeps (System L-005) go to the car's speakers through Mate, the phone's
+ * microphone at the driver's seat listens, and the ten bands of [CarEq] get the correction that flattens what it heard.
  *
- * Pink noise has the same energy in every octave, so in a perfect car each band would be heard equally loud; how far
- * a band sits above or below the middle is what the car (speakers, cabin) does to it. The correction takes back
+ * Each band is compared with the sweeps' own level in it, so in a perfect car each band would be heard as it was
+ * played; how far a band sits above or below the middle is what the car (speakers, cabin) does to it. The correction takes back
  * three quarters of that, raises no band by more than [CarEq.MAX_DB], and only ever lowers the outermost bands -
  * a phone microphone hears little at 31 Hz and 16 kHz, and boosting what it can't hear would only add distortion.
  */
@@ -173,28 +173,12 @@ object CarEqAnalysis {
     }
 }
 
-/** Pink noise (Paul Kellet's filter on white noise), about -18 dBFS; repeatable for tests. */
-class PinkNoise(seed: Long = 1) {
-    private val rnd = java.util.Random(seed)
-    private var b0 = 0.0; private var b1 = 0.0; private var b2 = 0.0; private var b3 = 0.0
-    private var b4 = 0.0; private var b5 = 0.0; private var b6 = 0.0
-
-    fun next(): Double {
-        val w = rnd.nextDouble() * 2 - 1
-        b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.96900 * b2 + w * 0.1538520
-        b3 = 0.86650 * b3 + w * 0.3104856; b4 = 0.55000 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.0168980
-        val p = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362
-        b6 = w * 0.115926
-        return p * 0.045
-    }
-}
-
 /**
- * One measuring run: [QUIET_S] seconds of listening to the background, then pink noise to the car while listening on.
+ * One measuring run: [QUIET_S] seconds of listening to the background, then [SWEEPS] sine sweeps to the car while listening on.
  * Takes the audio focus, so music pauses meanwhile; the sound filter stands aside ([CarEq.bypass]).
  */
 class CarEqMeasure(private val context: Context) {
-    enum class Phase { QUIET, NOISE, SWEEP, DONE }
+    enum class Phase { QUIET, SWEEP, DONE }
 
     @Volatile private var cancelled = false
     @Volatile private var stopNoise = false
@@ -292,7 +276,6 @@ class CarEqMeasure(private val context: Context) {
         const val QUIET_S = 2
         /** Time for the car to open its stream and the noise to fade in, not measured. */
         const val SETTLE_S = 2
-        const val MEASURE_S = 8
         /** L-005: three sweeps of 5 s, 1 s apart, averaged; 1 s after the last for the car's delay and the cabin's echo. */
         const val SWEEPS = 3
         const val SWEEP_S = 5.0

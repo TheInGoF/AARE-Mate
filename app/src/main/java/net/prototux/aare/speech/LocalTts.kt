@@ -57,7 +57,6 @@ object LocalTts {
         return made
     }
 
-    /** Speaks [text]; [onDone] runs when it has been heard (or failed). Returns at once. */
     /** O230 (17.11.2026, "nicht gestapelt"): a new sample stops the one playing and drops those waiting. */
     @Volatile private var sampleGen = 0
     @Volatile private var playing: AudioTrack? = null
@@ -69,6 +68,7 @@ object LocalTts {
         speak(context, text, voice, sampleOf = gen) {}
     }
 
+    /** Speaks [text]; [onDone] runs when it has been heard (or failed). Returns at once. */
     fun speak(context: Context, text: String, voice: Voices.Voice? = null, sampleOf: Int = 0, onDone: () -> Unit) {
         val app = context.applicationContext
         queue.execute {
@@ -153,10 +153,6 @@ object LocalTts {
         }
     }
 
-    /**
-     * The sentence callback for sherpa-onnx: its JNI side looks for exactly `invoke([F)Ljava/lang/Integer;` - a Kotlin
-     * lambda has only the bridge invoke(Object) and brought Mate down (SIGABRT, 17.11.2026). 1 = go on.
-     */
     /** The text in pieces at sentence ends and at ":" / ";" (kept with their piece). */
     /**
      * A sentence ends where a space or the end follows its mark - not inside "Fr.-Ebert-Str." or "2.7" (18.11.2026: an
@@ -229,7 +225,6 @@ object LocalTts {
                 var go = true
                 // each sentence at the music's target level, below full scale and with soft edges, as Mate's own speech
                 val feed = Stop { c -> go = go && chunk(net.prototux.aare.audio.Resample.tidy(net.prototux.aare.audio.Loudness.own(c, rate), rate)); go }
-                @Suppress("UNCHECKED_CAST")
                 for (piece in pieces(Pronounce.fix(text, v.lang))) { if (!go) break; generateInto(t, piece, feed) }
                 rate
             }.onFailure { Log.w(TAG, "speaking for another app failed", it) }.getOrNull()
@@ -245,7 +240,4 @@ object LocalTts {
     }
 
     fun release() = queue.execute { tts?.release(); tts = null }
-
-    /** [then] once what is queued now has been spoken. */
-    fun afterQueue(then: () -> Unit) = queue.execute(then)
 }

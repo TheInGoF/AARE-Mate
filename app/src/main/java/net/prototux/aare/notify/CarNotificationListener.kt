@@ -74,6 +74,9 @@ class Conversation(
  */
 class CarNotificationListener : NotificationListenerService() {
     private var tts: TextToSpeech? = null
+    /** Whether [tts] has finished starting; what comes before waits in [ttsPending] (main thread). */
+    private var ttsReady = false
+    private val ttsPending = ArrayList<String>()
     /** The newest message seen per notification key (bounded), so re-posts aren't shown again. */
     private val forwarded = object : LinkedHashMap<String, Conversation.Line>() {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Conversation.Line>?) = size > 256
@@ -360,7 +363,7 @@ class CarNotificationListener : NotificationListenerService() {
             net.prototux.aare.speech.LocalTts.speak(this, text) { speechEnds() }
             return
         }
-        fun say(t: TextToSpeech) {
+        fun say(t: TextToSpeech, text: String) {
             // The voice chosen in the settings: the one for a good connection (it may be computed by the engine's
             // server), or the one on the device when there is no internet or the reception is poor - decided for
             // each message, so that none waits for a server it cannot reach.
@@ -373,9 +376,21 @@ class CarNotificationListener : NotificationListenerService() {
             if (t.speak(text, TextToSpeech.QUEUE_ADD, Bundle(), "m${System.nanoTime()}") != TextToSpeech.SUCCESS) speechEnds()
         }
         val t = tts
-        if (t != null) { say(t); return }
-        tts = TextToSpeech(this) { status ->
-            if (status != TextToSpeech.SUCCESS) { Log.w(TAG, "no text-to-speech"); return@TextToSpeech }
+        if (t != null) { if (ttsReady) say(t, text) else ttsPending += text; return }
+        // what comes while the voice starts waits for it: spoken before it is ready, it was lost
+        ttsReady = false
+        ttsPending.clear(); ttsPending += text
+        // Android reports a missing engine from within the constructor, before [tts] is set
+        var failedAtOnce = false
+        val created = TextToSpeech(this) { status ->
+            if (status != TextToSpeech.SUCCESS) {
+                // not kept: the next message tries a new one
+                Log.w(TAG, "no text-to-speech")
+                val made = tts
+                if (made == null) { failedAtOnce = true; return@TextToSpeech }
+                made.shutdown(); tts = null; ttsPending.clear()
+                return@TextToSpeech
+            }
             val made = tts ?: return@TextToSpeech
             made.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
@@ -387,8 +402,11 @@ class CarNotificationListener : NotificationListenerService() {
                 override fun onError(utteranceId: String?) = speechEnds()
                 override fun onStop(utteranceId: String?, interrupted: Boolean) = speechEnds()
             })
-            say(made)
+            ttsReady = true
+            val waiting = ttsPending.toList(); ttsPending.clear()
+            waiting.forEach { say(made, it) }
         }
+        if (failedAtOnce) { created.shutdown(); ttsPending.clear() } else tts = created
     }
 
     /** A conversation update for the car screen. */

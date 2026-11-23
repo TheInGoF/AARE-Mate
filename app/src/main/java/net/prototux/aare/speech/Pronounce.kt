@@ -11,7 +11,6 @@ object Pronounce {
     /** A word of at least three letters ending in a kind of road: "Baumstraße", "Bahnhofsplatz", "Schillerring". */
     private val COMPOUND = Regex("""\b(\p{Lu}\p{Ll}{2,}?)($KINDS)\b""")
     private val ABBREVIATED = Regex("""\b(\p{L}+?)(str|Str)\.(?=\s|$|,)""")
-    private val KEEP = emptySet<String>()
 
     /**
      * Abbreviations of road names and signs said in full (18.11.2026: "Piper hat D-R Schumannplatz gelesen statt Doktor
@@ -88,10 +87,7 @@ object Pronounce {
         }
         t = ABBREVIATED.replace(t) { m -> m.groupValues[1] + "straße" }
         for ((short, full) in SHORT) t = short.replace(t, full)
-        t = COMPOUND.replace(t) { m ->
-            val whole = m.value
-            if (whole in KEEP) whole else m.groupValues[1] + "-" + m.groupValues[2].replaceFirstChar { it.uppercase() }
-        }
+        t = COMPOUND.replace(t) { m -> m.groupValues[1] + "-" + m.groupValues[2].replaceFirstChar { it.uppercase() } }
         return t
     }
 

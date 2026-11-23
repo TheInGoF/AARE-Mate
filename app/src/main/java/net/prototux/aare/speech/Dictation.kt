@@ -36,7 +36,9 @@ class Dictation(private val context: Context) {
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT).build()).build()
         // the model loads while the speaker talks
         var model: OfflineRecognizer? = null
-        val loader = Thread { model = Model.get(context) }.apply { start() }
+        val loader = Thread {
+            model = runCatching { Model.get(context) }.onFailure { Log.w(TAG, "model load failed", it) }.getOrNull()
+        }.apply { start() }
         val result = runCatching {
             am.requestAudioFocus(focus)
             val test = debugWave.also { debugWave = null }
@@ -212,8 +214,11 @@ class Dictation(private val context: Context) {
             return if (INVENTED.any { plain.startsWith(it) } || plain in NOISES) "" else t
         }
         private val INVENTED = listOf("untertitel", "vielen dank fürs zuschauen", "vielen dank für's zuschauen", "danke fürs zuschauen",
-            "bis zum nächsten mal", "copyright", "swr ", "zdf ")
-        private val NOISES = setOf("dynamische musik", "spannende musik", "ruhige musik", "applaus", "schreit", "gelächter")
+            "bis zum nächsten mal", "copyright", "swr ", "zdf ",
+            // English (base.en): the same habits
+            "subtitles by", "thank you for watching", "thanks for watching", "please subscribe", "see you next time")
+        private val NOISES = setOf("dynamische musik", "spannende musik", "ruhige musik", "applaus", "schreit", "gelächter",
+            "upbeat music", "dramatic music", "soft music", "calm music", "applause", "laughter", "laughing", "screaming")
 
         /** Debug builds only (tool debug_dictate_file): the next dictation hears this instead of the microphone. */
         @Volatile var debugWave: SpeechBench.Wave? = null

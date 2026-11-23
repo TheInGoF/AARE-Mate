@@ -19,8 +19,7 @@ class MateTtsService : TextToSpeechService() {
 
     @Volatile private var stopped = false
 
-    /** The chosen voice's language, the device's where none is chosen. */
-    private fun voiceLang(): String = LocalTts.chosen(this)?.lang ?: net.prototux.aare.Language.code
+    private fun voiceLang(): String = voiceLang(this)
 
     override fun onIsLanguageAvailable(lang: String?, country: String?, variant: String?): Int {
         val mine = voiceLang()
@@ -32,10 +31,7 @@ class MateTtsService : TextToSpeechService() {
         }
     }
 
-    override fun onGetLanguage(): Array<String> = when (voiceLang()) {
-        "en" -> arrayOf("eng", if (LocalTts.chosen(this)?.name?.contains("GB") == true) "GBR" else "USA", "")
-        else -> arrayOf("deu", "DEU", "")
-    }
+    override fun onGetLanguage(): Array<String> = iso3(this).let { (l, c) -> arrayOf(l, c, "") }
 
     override fun onLoadLanguage(lang: String?, country: String?, variant: String?): Int = onIsLanguageAvailable(lang, country, variant)
 
@@ -93,6 +89,15 @@ class MateTtsService : TextToSpeechService() {
         private const val TAG = "MateTts"
         /** The countries a language's voices answer for fully (ISO 3166 alpha-2 and alpha-3). */
         private val COUNTRIES = mapOf("de" to setOf("DE", "DEU"), "en" to setOf("US", "USA", "GB", "GBR"))
+
+        /** The chosen voice's language, the device's where none is chosen. */
+        fun voiceLang(context: android.content.Context): String = LocalTts.chosen(context)?.lang ?: net.prototux.aare.Language.code
+
+        /** The chosen voice's language and country as ISO 639-2 / 3166 alpha-3 ("eng" to "USA"). */
+        fun iso3(context: android.content.Context): Pair<String, String> = when (voiceLang(context)) {
+            "en" -> "eng" to if (LocalTts.chosen(context)?.name?.contains("GB") == true) "GBR" else "USA"
+            else -> "deu" to "DEU"
+        }
     }
 }
 
@@ -100,20 +105,24 @@ class MateTtsService : TextToSpeechService() {
 class MateTtsSample : android.app.Activity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
-        setResult(TextToSpeech.LANG_AVAILABLE, android.content.Intent().putExtra("sampleText",
-            "Hallo, hier spricht " + (LocalTts.chosen(this)?.name ?: "Mate") + ". In dreihundert Metern rechts abbiegen."))
+        // in the voice's own language, whatever the device's is
+        val conf = android.content.res.Configuration(resources.configuration)
+        conf.setLocale(java.util.Locale.forLanguageTag(MateTtsService.voiceLang(this)))
+        val text = createConfigurationContext(conf).getString(net.prototux.aare.R.string.tts_sample, LocalTts.chosen(this)?.name ?: "Mate")
+        setResult(TextToSpeech.LANG_AVAILABLE, android.content.Intent().putExtra("sampleText", text))
         finish()
     }
 }
 
-/** Android asks an engine whether its voice data is there (Settings, "Sprachdaten"): the German voice when Mate has one. */
+/** Android asks an engine whether its voice data is there (Settings, "Sprachdaten"): the chosen voice's language. */
 class MateTtsCheck : android.app.Activity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         val ok = LocalTts.available(this)
+        val voice = MateTtsService.iso3(this).let { (l, c) -> "$l-$c" }
         val data = android.content.Intent()
-            .putStringArrayListExtra(TextToSpeech.Engine.EXTRA_AVAILABLE_VOICES, if (ok) arrayListOf("deu-DEU") else arrayListOf())
-            .putStringArrayListExtra(TextToSpeech.Engine.EXTRA_UNAVAILABLE_VOICES, if (ok) arrayListOf() else arrayListOf("deu-DEU"))
+            .putStringArrayListExtra(TextToSpeech.Engine.EXTRA_AVAILABLE_VOICES, if (ok) arrayListOf(voice) else arrayListOf())
+            .putStringArrayListExtra(TextToSpeech.Engine.EXTRA_UNAVAILABLE_VOICES, if (ok) arrayListOf() else arrayListOf(voice))
         setResult(if (ok) TextToSpeech.Engine.CHECK_VOICE_DATA_PASS else TextToSpeech.Engine.CHECK_VOICE_DATA_FAIL, data)
         finish()
     }

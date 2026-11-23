@@ -111,12 +111,15 @@ class MicRouter(
             }
             val buf = ByteArray(640) // 20 ms
             rec.startRecording()
+            var broken = false
             while (phoneRunning) {
                 val n = rec.read(buf, 0, buf.size)
+                if (n < 0) { Log.w(TAG, "phone mic read $n"); broken = true; break }
                 if (n > 0) client?.sink?.invoke(buf, 0, n)
             }
             rec.stop()
             rec.release()
+            if (broken) phoneMicFailed(c)
         }, "aare-phone-mic").apply { start() }
     }
 
@@ -134,6 +137,7 @@ class MicRouter(
         if (client !== c) return
         client = null
         voiceSession(false)
+        MediaFade.mic(false)
         c.onStopped()
     }
 

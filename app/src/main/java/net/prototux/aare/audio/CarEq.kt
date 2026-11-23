@@ -74,14 +74,6 @@ object CarEq {
         }
         return total
     }
-
-    /** Ready-made settings for the phone app: name to the gain of each band. */
-    val PRESETS: List<Pair<String, FloatArray>> = listOf(
-        "flat" to FloatArray(10),
-        "bass" to floatArrayOf(5f, 4f, 3f, 1f, 0f, 0f, 0f, 0f, 0f, 0f),
-        "treble" to floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 1f, 2f, 3f, 3f),
-        "voice" to floatArrayOf(-4f, -3f, -1f, 0f, 1f, 2f, 3f, 2f, 0f, -1f),
-    )
 }
 
 /**

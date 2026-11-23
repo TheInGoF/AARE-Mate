@@ -65,6 +65,6 @@ class CarEqTest {
     }
 
     @Test fun presetsStayInRange() {
-        for ((_, g) in CarEq.PRESETS) for (v in g) assert(v >= CarEq.MIN_DB && v <= CarEq.MAX_DB)
+        for (p in CarSound.BUILT_IN) for (v in p.gains) assert(v >= CarEq.MIN_DB && v <= CarEq.MAX_DB)
     }
 }

@@ -353,6 +353,10 @@
   "say_message_none": "There is no open conversation with %s in %s that I can reply to.",
   "say_message_none_any": "There is no open conversation with %s that I can reply to.",
   "say_play_none": "I did not find %s in the music.",
-  "say_music_off": "Mate Music is not playing right now."
+  "say_music_off": "Mate Music is not playing right now.",
+  "say_cannot_listen": "I cannot listen right now. The microphone or the speech model is missing.",
+  "say_no_contacts_right": "I may not read your contacts. Allow it in the Mate app.",
+  "say_no_call_right": "I may not place calls. Allow it in the Mate app.",
+  "say_call_failed": "The call to %s did not go through."
  }
 }

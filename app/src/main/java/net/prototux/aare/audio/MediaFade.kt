@@ -34,16 +34,16 @@ object MediaFade {
     }
 
     /** A prompt is coming: down to [LOW] over [DOWN_MS]. */
-    fun duck() { SpokenPause.hold(); val now = SystemClock.elapsedRealtime(); from = level(now); to = LOW; since = now; span = DOWN_MS; duckedAt = now; upAt = 0L }
+    @Synchronized fun duck() { SpokenPause.hold(); val now = SystemClock.elapsedRealtime(); from = level(now); to = LOW; since = now; span = DOWN_MS; duckedAt = now; upAt = 0L }
 
     /**
      * The prompt is over: the music stays low until the car gives it back ([start], then up over [UP_MS]) - rising earlier
      * would only meet the car's own hard step - or by itself after [WAIT_CAR_MS].
      */
-    fun release() { SpokenPause.letGo(); if (to >= 1.0) return; upAt = SystemClock.elapsedRealtime() + WAIT_CAR_MS }
+    @Synchronized fun release() { SpokenPause.letGo(); if (to >= 1.0) return; upAt = SystemClock.elapsedRealtime() + WAIT_CAR_MS }
 
     /** The car gave the music back after a prompt: a soft start even when nothing of Mate's own lowered it. */
-    fun start() { val now = SystemClock.elapsedRealtime(); from = if (to < 1.0) level(now) else LOW; to = 1.0; since = now; span = UP_MS; upAt = 0L }
+    @Synchronized fun start() { val now = SystemClock.elapsedRealtime(); from = if (to < 1.0) level(now) else LOW; to = 1.0; since = now; span = UP_MS; upAt = 0L }
 
     // The microphone (18.11.2026: "Die Whisper-Erkennung erkennt ja auch Musik ... er muss schon, wenn das Mikrofon
     // angeht, die Musik runterfahren. Sonst ist das unmachbar"): while Mate listens, everything on the media channel is
@@ -70,9 +70,6 @@ object MediaFade {
         if (to == micTo) { if (on) micSince = now - MIC_DOWN_MS; return }
         micFrom = micLevel(now); micTo = to; micSince = now; micSpan = if (on) MIC_DOWN_MS else MIC_UP_MS
     }
-
-    /** Whether the media channel is being held silent for the microphone right now. */
-    val micOpen: Boolean get() = micTo < 1.0
 
     /** The gain the last block ended with: the next one starts there (System I-055). */
     @Volatile private var lastGain = 1.0
