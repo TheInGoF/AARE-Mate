@@ -203,7 +203,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     fun show(route: uniffi.ferrostar.Route) {
         val raw = route.geometry.map { Position(longitude = it.lng, latitude = it.lat) }
         val drawn = NaviRoute.smooth(raw)
-        routeJson = NaviRoute(drawn, route.distance / 1000, 0.0).geoJson()
+        routeJson = NaviRoute(drawn).geoJson()
         destination = raw.lastOrNull()
         plannedKm = route.distance / 1000
         Log.i(TAG, "line smoothed: ${raw.size} -> ${drawn.size} points")
@@ -283,7 +283,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val o = routeOptions.getOrNull(i) ?: return
         chosen = i; planned = o.route; preview = o.preview; show(o.route)
         altJson = routeOptions.filterIndexed { k, _ -> k != i }.takeIf { it.isNotEmpty() }?.let { others ->
-            org.json.JSONObject().put("type", "FeatureCollection").put("features", org.json.JSONArray(others.map { org.json.JSONObject(NaviRoute(NaviRoute.smooth(raw(it.route)), 0.0, 0.0).geoJson()) })).toString()
+            org.json.JSONObject().put("type", "FeatureCollection").put("features", org.json.JSONArray(others.map { org.json.JSONObject(NaviRoute(NaviRoute.smooth(raw(it.route))).geoJson()) })).toString()
         }
     }
     /**
@@ -311,7 +311,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val plan = c.charging
         val pct = plan?.arrivePercent ?: if (car != null && wh != null) car.socPercent - wh / car.capacityWh * 100 else null
         return RouteOption(c.kind, r, Preview(name, r.distance / 1000, r.steps.sumOf { it.duration } / 60.0 + (plan?.stayMinutes ?: 0.0),
-            wh?.let { it / 1000 }, pct, pct != null && pct < NaviCharge.RESERVE_PERCENT, plan?.stops.orEmpty(),
+            wh?.let { it / 1000 }, pct, pct != null && pct < NaviCharge.reservePercent(context), plan?.stops.orEmpty(),
             planRows(r, own, plan?.stops.orEmpty(), destination, pct), pending = pendingCharge))
     }
     /**
@@ -417,8 +417,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     } })
             }.onFailure { e ->
                     Log.w(TAG, "route: $e")
-                    // said in words instead of planning for ever: token refused, server out of reach, or no way there
-                    planError = context.getString(when {
+                    // said in words instead of planning for ever: token refused, server out of reach, or no way there;
+                    // routes already shown stay without it (the preview shows the error above them now, Navi I-052f)
+                    if (routeOptions.isEmpty()) planError = context.getString(when {
                         NaviServer.rejected.value -> net.prototux.aare.R.string.mate_navi_token_rejected
                         e is java.io.IOException || e.cause is java.io.IOException -> net.prototux.aare.R.string.mate_navi_route_offline
                         else -> net.prototux.aare.R.string.mate_navi_route_none
@@ -486,7 +487,12 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val chargers = NaviStops.inOrder(line, chargers0.map { it.at }).map { p -> chargers0.first { it.at == p } }
         scope.launch {
             val r = runCatching { session.planOne(o.kind, from, to, NaviStops.inOrder(line, via + chargers.map { it.at }), RouteOptions.of(net.prototux.aare.Settings(context))) }
-                .onFailure { Log.w(TAG, "charging: $what: $it") }.getOrNull() ?: return@launch
+                .onFailure { e ->
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    Log.w(TAG, "charging: $what: $e")
+                    // said, and the countdown goes on with the plan as it was (Navi I-052f)
+                    planError = context.getString(net.prototux.aare.R.string.mate_navi_stops_change_failed); holdStart = false
+                }.getOrNull() ?: return@launch
             val rules = ChargePlanner.Rules.of(net.prototux.aare.Settings(context))
             val plan = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                 ChargePlanner.replay(ChargePlanner.track(r, car, heights = NaviKeep.heights, weather = NaviKeep.weather), car, car.socPercent, chargers, rules)
@@ -494,9 +500,10 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             val wh = NaviCharge.energyWh(r.steps, null, car)
             val prev = o.preview
             val updated = RouteOption(o.kind, r, Preview(prev.name, r.distance / 1000, r.steps.sumOf { it.duration } / 60.0 + plan.stayMinutes,
-                wh / 1000, plan.arrivePercent, plan.arrivePercent < NaviCharge.RESERVE_PERCENT, plan.stops,
+                wh / 1000, plan.arrivePercent, plan.arrivePercent < NaviCharge.reservePercent(context), plan.stops,
                 planRows(r, pendingOwn, plan.stops, pending?.name.orEmpty(), plan.arrivePercent), removed))
             if (panel !is NaviStep.Preview) return@launch
+            planError = null
             routeOptions = routeOptions.toMutableList().also { it[chosen] = updated }
             pick(chosen)
             chargeLog("charging: $what: " + plan.stops.joinToString { "%s %d kW %.0f%%->%.0f%% %.0f min".format(it.charger.network ?: "other", it.charger.kw, it.arrivePercent, it.leavePercent, it.chargeMinutes) }
@@ -721,7 +728,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     /**
      * System L-092: other chargers for one stop of the running trip - the chosen networks near it (25 km before to 10 km
      * after), still reachable: the level on arrival there, counted from the car's level now and what the way to the stop
-     * takes per km, at least [NaviCharge.CHARGER_WARN_PERCENT]; none behind the car.
+     * takes per km, at least the driver's least level at a charger ([NaviCharge.chargerWarnPercent]); none behind the car.
      */
     fun guidedOptions(ch: Charger): List<NaviTripPlan.Option> {
         val r = guided ?: return emptyList()
@@ -736,7 +743,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             ChargePlanner.Rules.of(net.prototux.aare.Settings(context)), max = 60)
             .filter { atM + it.shiftM > driven + 1_000 }
             .map { a -> NaviTripPlan.Option(a.charger, a.shiftM, stop.arrivePercent - a.shiftM / 1000 * perKm) }
-            .filter { (it.arrivePercent ?: 100.0) >= NaviCharge.CHARGER_WARN_PERCENT }
+            .filter { (it.arrivePercent ?: 100.0) >= NaviCharge.chargerWarnPercent(context) }
     }
 
     /** System L-092: one stop of the running trip at another charger - the other stops stay, the route goes over the new one. */
@@ -875,7 +882,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         NaviDebug.addStop = { lat, lon, name -> scope.launch { purpose = Purpose.STOP
             choose(net.prototux.aare.places.Places.Place("mate-test-stop", "mate-test", name, "", lat, lon)) } }
         NaviDebug.live = { scope.launch { if (guiding) end() else { panel = NaviStep.None; dropPreview(); routeJson = null; drawnLine = emptyList() }; testDrive = false; Log.i(TAG, "test: live position") } }
-        onDispose { NaviDebug.missTurn = null; NaviDebug.goTo = null; NaviDebug.openSearch = null; NaviDebug.live = null }
+        onDispose { NaviDebug.missTurn = null; NaviDebug.goTo = null; NaviDebug.openSearch = null; NaviDebug.live = null; NaviDebug.addStop = null }
     }
     val nav by session.state.collectAsState()
     val carState by net.prototux.aare.car.CarData.state.collectAsState()
@@ -1601,7 +1608,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             NaviStep.Lists -> {
                 val home = book.places.firstOrNull { it.home }
                 val pinned = book.places.filter { it.pinned && !it.home }
-                fun category(word: String) { NaviDebug.searchQuery = word; panel = NaviStep.Search }
+                fun category(kind: NaviCategories.Kind) { NaviSearchStart.kept = ""; NaviSearchStart.category = kind; panel = NaviStep.Search }
                 val tiles = buildList {
                     if (pins.isNotEmpty()) add(HubTile(androidx.compose.material.icons.Icons.Rounded.History, context.getString(net.prototux.aare.R.string.mate_navi_recent)) {
                         panel = NaviStep.Recent
@@ -1617,9 +1624,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                         pinned.map { p -> HubTile(androidx.compose.material.icons.Icons.Rounded.PushPin, p.name) { choose(p) } }
                     val kinds = listOf(
                         HubTile(androidx.compose.material.icons.Icons.Rounded.Bolt, context.getString(net.prototux.aare.R.string.mate_navi_cat_chargers)) {
-                            category(context.getString(net.prototux.aare.R.string.mate_navi_cat_chargers)) },
+                            category(NaviCategories.Kind.CHARGER) },
                         HubTile(androidx.compose.material.icons.Icons.Rounded.Wc, context.getString(net.prototux.aare.R.string.mate_navi_cat_rest)) {
-                            category(context.getString(net.prototux.aare.R.string.mate_navi_cat_rest)) },
+                            category(NaviCategories.Kind.REST) },
                         // Google's further kinds, the nearest by the map server's reverse search (O228)
                         HubTile(androidx.compose.material.icons.Icons.Rounded.Restaurant, context.getString(net.prototux.aare.R.string.mate_navi_cat_food)) {
                             NaviSearchStart.tag = "amenity:restaurant"; panel = NaviStep.Search },
@@ -1643,8 +1650,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 onBack = { panel = NaviStep.Lists }, onClose = { panel = NaviStep.None }) }
             is NaviStep.Options -> NaviPanel(panelMod) { NaviRouteOptions(onBack = {
                     val back = st.back
-                    // a preview is planned again with what is avoided now
-                    if (back is NaviStep.Preview) choose(back.place) else panel = back
+                    // a preview is planned again with what is avoided now, keeping the own stops it had (Navi I-052b)
+                    if (back is NaviStep.Preview) choose(back.place, if (purpose == Purpose.STOP) null else pendingOwn) else panel = back
                 }, onClose = { panel = NaviStep.None; dropPreview() }) }
             is NaviStep.Preview -> NaviPanel(panelMod) { NaviPreview(preview, planError, st.place.name, routeOptions.map { it.kind to it.preview }, chosen, countdown,
                 alternatives = { ch ->
@@ -1690,7 +1697,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             val picked = NaviSpeedSource.pick(CarFixes.gpsSpeedMs(), CarFixes.ageMs(), sats?.value?.inUse,
                 sats?.let { System.currentTimeMillis() - it.atMillis } ?: Long.MAX_VALUE, fix?.takeIf { it.hasAccuracy() }?.accuracy, carSpeed)
             val speedFrom = if (NaviDebug.speedKmh != null || simSpeed != null) null else picked?.second
-            val kmh = (NaviDebug.speedKmh ?: simSpeed ?: picked?.first ?: trip.userLocation.speed?.value ?: glide?.smoothSpeedMs?.let { it / SIM_WARP })?.let { it * 3.6 }
+            val kmh = (NaviDebug.speedKmh ?: simSpeed ?: picked?.first ?: trip.userLocation.speed?.value ?: glide?.smoothSpeedMs)?.let { it * 3.6 }
             // the battery on arrival above it (O170): once per position is enough
             // with the charge of the planned stops not reached yet: a charger still among the waypoints ahead (also after a
             // new route) - before, the tile showed 0 % and the plus pole on a route that charges twice (16.11.2026)
@@ -1705,7 +1712,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 if (rollNow != null && car != null && g != null) {
                     val driven = g.distance - trip.progress.distanceRemaining
                     val p = rollNow.levelAt(driven, car.socPercent, rollNow.endM) + charged
-                    NaviCharge.Arrival(p, p < NaviCharge.RESERVE_PERCENT, spread = rollNow.spreadAt(driven, car.socPercent, rollNow.endM))
+                    NaviCharge.Arrival(p, p < NaviCharge.reservePercent(context), spread = rollNow.spreadAt(driven, car.socPercent, rollNow.endM))
                 } else NaviCharge.arrival(context, trip.remainingSteps, trip.progress.distanceToNextManeuver, charged)
             }
             SideEffect { arrivalNow = arrival }
@@ -1720,7 +1727,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 if (next != null && rollNow != null && car != null && driven != null && rollNow.alongM(next.charger) > driven) {
                     val at = rollNow.alongM(next.charger)
                     val p = rollNow.levelAt(driven, car.socPercent, at)
-                    NaviCharge.Arrival(p, p < NaviCharge.CHARGER_WARN_PERCENT, atCharger = true, spread = rollNow.spreadAt(driven, car.socPercent, at))
+                    NaviCharge.Arrival(p, p < NaviCharge.chargerWarnPercent(context), atCharger = true, spread = rollNow.spreadAt(driven, car.socPercent, at))
                 } else if (mark != null && driven != null && mark.metres > driven)
                     NaviCharge.arrivalAtCharger(context, trip.remainingSteps, trip.progress.distanceToNextManeuver, mark.metres - driven) ?: arrival
                 else arrival
@@ -1778,7 +1785,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                             ahead, aheadCharger, jamLeft) { panel = NaviStep.Plan }
                     }
                 }
-                // O193/O194: the speed cameras and the tone over the limit come from NaviKeep, shown or not
+                // O193/O194: the tone over the limit comes from NaviKeep, shown or not
             }
         }
         // the route as a strip (18.11.2026): at a quarter of the screen instead of the map (drawn last, below), at full
@@ -1846,13 +1853,13 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         if (nextIncident != null && drivenNow != null) NaviTrafficHint(nextIncident, nextIncident.alongM - drivenNow,
             hintMod)
         // F3: the hint when the plan no longer fits the battery, top right
-        if (atStop == null && nextIncident == null) chargeCheck?.takeIf { it.verdict != NaviChargeWatch.Verdict.OK && it.verdict != chargeCheckLeft && panel == NaviStep.None && trip != null }?.let { c ->
+        if (atStop == null && nextIncident == null) chargeCheck?.takeIf { it.verdict != chargeCheckLeft && panel == NaviStep.None && trip != null }?.let { c ->
             NaviChargeHint(c, hintMod,
                 onReplan = { chargeCheckLeft = c.verdict; target?.let { purpose = Purpose.NEW; choose(it) } },
                 onDismiss = { chargeCheckLeft = c.verdict })
         }
         // N-019 step 1: warm the battery now, top right, below the other hints (it waits while one of them shows)
-        val chargeHintShown = chargeCheck?.let { it.verdict != NaviChargeWatch.Verdict.OK && it.verdict != chargeCheckLeft } == true
+        val chargeHintShown = chargeCheck?.let { it.verdict != chargeCheckLeft } == true
         if (atStop == null && nextIncident == null && fasterNow == null && !offRoute && !chargeHintShown && panel == NaviStep.None && trip != null)
             preheat?.takeIf { it.first !== preheatLeft }?.let { (c, a) -> NaviPreheatHint(a, hintMod) { preheatLeft = c } }
         // what is left: distance, time, arrival (wish of 16.11.2026), bottom right
@@ -1867,7 +1874,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         // Bedienfeld die Copyrights … Da müssten die oben angezeigt werden"): at the bottom only where nothing covers it -
         // no title strip and no controls laid over the map's bottom edge; otherwise at the top, left of the route strip
         val bottomCovered = strip || net.prototux.aare.host.templates.LocalCarBottomInset.current > 0.dp
-        Text(if (trafficShown) "$OSM_CREDIT · $TOMTOM_CREDIT" else OSM_CREDIT, color = Mate.textFaint, style = MaterialTheme.typography.labelSmall,
+        Text(if (trafficShown) "$OSM_CREDIT · " + androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_tomtom_credit) else OSM_CREDIT, color = Mate.textFaint, style = MaterialTheme.typography.labelSmall,
             modifier = if (bottomCovered) Modifier.align(Alignment.TopEnd).padding(end = if (slimStrip) STRIP_ROOM else 16.dp, top = 2.dp)
                 else Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 12.dp))
         // a quarter of the screen: the route strip over the map
@@ -1887,20 +1894,15 @@ private const val TAG = "MateNavi"
 private val TEST_FROM = Position(longitude = 13.3762, latitude = 52.5096)
 /** The test trip's start: [TEST_FROM], or the place a test set (debug_navi_from, test builds only). */
 private fun testFrom(): Position = NaviDebug.from ?: TEST_FROM
-private val TEST_TO = Position(longitude = 13.3501, latitude = 52.5145)
 private const val SIM_WARP = 3
-/** After the driver moved or zoomed the map, how long until it follows the car again (wish: "nach 5-10s zum auto zurück"). */
-/** How close the map comes to a stop picked in the trip plan (System L-089). */
 /** No stop moved this long after a route set on purpose, and a move said only after [ROLL_SAY_AFTER_MS] (System I-094). */
 private const val ROLL_CALM_MS = 120_000L
 private const val ROLL_SAY_AFTER_MS = 300_000L
+/** How close the map comes to a stop picked in the trip plan (System L-089). */
 private const val PLAN_LOOK_ZOOM = 17.0
+/** After the driver moved or zoomed the map, how long until it follows the car again (wish: "nach 5-10s zum auto zurück"). */
 private const val RESUME_FOLLOW_MS = 6000L
 
-/**
- * The charging plan's lines for the diagnosis log too (17.11.2026: Hamburg from 99 % - beyond the range - planned no
- * stop; the exported log must say why, logcat is not at hand in the car).
- */
 /** How long the charging plan waits for the map server's heights, the weather and IDmate's rain (then without them). */
 private const val HEIGHTS_WAIT_MS = 12_000L
 /** What the slim route strip at the right edge takes, the hint cards keep clear of it. */
@@ -1910,6 +1912,10 @@ private const val MEASURED_MIN_PERCENT = 3.0
 private const val WEATHER_WAIT_MS = 8_000L
 private const val RAIN_WAIT_MS = 5_000L
 
+/**
+ * The charging plan's lines for the diagnosis log too (17.11.2026: Hamburg from 99 % - beyond the range - planned no
+ * stop; the exported log must say why, logcat is not at hand in the car).
+ */
 private fun chargeLog(msg: String, level: net.prototux.aare.DiagLog.Level? = null) { Log.i("MateNavi", msg); net.prototux.aare.DiagLog.add(msg, level) }
 /** A glide back to the car that has not finished by then counts as done. */
 private const val RETURN_MAX_MS = 3000L
@@ -1946,7 +1952,6 @@ private fun pointAt(line: List<Position>, m: Double): Position {
     return line.last()
 }
 
-/** O237: the jam's sign, "+4 min" in white on the map's jam red, as Google's; nothing for an empty [text]. */
 /** The guiding veil (L-047): its source and layer in the style, under the first label layer (withVeil, NaviStyleTest). */
 internal const val VEIL_ID = "fuehrung-schleier"
 private const val VEIL_NONE = """{"type":"FeatureCollection","features":[]}"""
@@ -1956,6 +1961,7 @@ private const val VEIL_WORLD = """{"type":"Feature","properties":{},"geometry":{
 /** How strongly the other roads step back while guiding (L-047): the land's colour over the base map. */
 private const val GUIDE_VEIL = 0.35f
 
+/** O237: the jam's sign, "+4 min" in white on the map's jam red, as Google's; nothing for an empty [text]. */
 private fun jamSign(text: String, night: Boolean): androidx.compose.ui.graphics.ImageBitmap {
     if (text.isEmpty()) return android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
     val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
@@ -1999,9 +2005,6 @@ private fun mapFps() = if (naviFpsSetting == "video") net.prototux.aare.car.proj
 private var naviFpsSetting = "30"
 
 internal const val OSM_CREDIT = "© OpenStreetMap"
-internal const val TOMTOM_CREDIT = "Verkehr © TomTom"
-
-/** The tiles of the test server; later the tile server's address from the settings. */
 
 /** The width of the template turn card (host/templates/MapUi.kt panelWidth). */
 private fun cardWidth(max: androidx.compose.ui.unit.Dp) = (max * 0.42f).coerceIn(320.dp, 480.dp).coerceAtMost(max)
@@ -2119,7 +2122,6 @@ private class Glide(private val track: NaviTrack) {
     private var shownS = -1.0
     private var cam: Double? = null
     private var lastAt = 0L
-    var shownAt = 0L
     var speedMs: Double? = null
         private set
     /** The car's real speed for the camera (N6), set by the screen each frame (the simulation runs faster). */

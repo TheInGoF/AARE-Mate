@@ -41,6 +41,8 @@ class NaviCategoriesTest {
         assertEquals(NaviCategories.Kind.CHARGER, NaviCategories.asked("Ladesäule"))
         assertEquals(NaviCategories.Kind.CHARGER, NaviCategories.asked("lader"))
         assertEquals(NaviCategories.Kind.REST, NaviCategories.asked("rastplaz"))
+        assertEquals(NaviCategories.Kind.CHARGER, NaviCategories.asked("chargers"))
+        assertEquals(NaviCategories.Kind.REST, NaviCategories.asked("services"))
         assertNull(NaviCategories.asked("Hamburg"))
         assertNull(NaviCategories.asked("Ladenburg Marktplatz"))
     }

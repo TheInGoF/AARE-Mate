@@ -1,15 +1,11 @@
 package net.prototux.aare.ui.car.navi
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import org.maplibre.spatialk.geojson.Position
-import java.net.HttpURLConnection
-import java.net.URL
 
-/** A route of the own Valhalla: its line and what the trip takes. */
-internal class NaviRoute(val line: List<Position>, val km: Double, val minutes: Double) {
+/** A route of the own Valhalla as drawn: its line. */
+internal class NaviRoute(val line: List<Position>) {
     /** The line as a GeoJSON feature for a MapLibre source. */
     fun geoJson(): String {
         val coords = JSONArray()
@@ -89,52 +85,6 @@ internal class NaviRoute(val line: List<Position>, val km: Double, val minutes: 
         private fun meters(a: Position, b: Position): Double {
             val k = 111_320.0
             return Math.hypot((b.latitude - a.latitude) * k, (b.longitude - a.longitude) * k * Math.cos(Math.toRadians(a.latitude)))
-        }
-
-        /** The routing service; until the server is rebuilt the build PC's Valhalla through `adb reverse tcp:8002 tcp:8002`. */
-        const val DEV_VALHALLA = "http://127.0.0.1:8002"
-
-        /** A car route from [from] to [to] (Valhalla /route, German), or null when the service cannot be reached. */
-        suspend fun fetch(from: Position, to: Position, base: String = DEV_VALHALLA): NaviRoute? = withContext(Dispatchers.IO) {
-            runCatching {
-                val body = JSONObject()
-                    .put("locations", JSONArray().put(loc(from)).put(loc(to)))
-                    .put("costing", "auto").put("units", "kilometers").put("language", net.prototux.aare.Language.tag())
-                val c = URL("$base/route").openConnection() as HttpURLConnection
-                c.connectTimeout = 5000; c.readTimeout = 20000
-                c.requestMethod = "POST"; c.doOutput = true
-                c.setRequestProperty("Content-Type", "application/json")
-                c.outputStream.use { it.write(body.toString().toByteArray()) }
-                val trip = JSONObject(c.inputStream.bufferedReader().use { it.readText() }).getJSONObject("trip")
-                val line = ArrayList<Position>()
-                val legs = trip.getJSONArray("legs")
-                for (i in 0 until legs.length()) line += decodePolyline6(legs.getJSONObject(i).getString("shape"))
-                val s = trip.getJSONObject("summary")
-                NaviRoute(line, s.getDouble("length"), s.getDouble("time") / 60.0)
-            }.onFailure { android.util.Log.w("MateNavi", "route: $it") }.getOrNull()
-        }
-
-        private fun loc(p: Position) = JSONObject().put("lat", p.latitude).put("lon", p.longitude)
-
-        /** Valhalla's line format: Google's polyline encoding with six decimals. */
-        fun decodePolyline6(s: String): List<Position> {
-            val out = ArrayList<Position>(s.length / 4)
-            var i = 0; var lat = 0L; var lon = 0L
-            fun next(): Long {
-                var result = 0L; var shift = 0
-                while (true) {
-                    val b = s[i++].code - 63
-                    result = result or ((b and 0x1f).toLong() shl shift)
-                    shift += 5
-                    if (b < 0x20) break
-                }
-                return if (result and 1L != 0L) (result shr 1).inv() else result shr 1
-            }
-            while (i < s.length) {
-                lat += next(); lon += next()
-                out += Position(longitude = lon / 1e6, latitude = lat / 1e6)
-            }
-            return out
         }
     }
 }

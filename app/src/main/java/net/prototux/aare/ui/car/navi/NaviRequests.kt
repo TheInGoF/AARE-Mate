@@ -32,7 +32,10 @@ internal object NaviRequests {
         // google.navigation: carries its parameters right after the colon, geo: after a '?'
         val query = if (scheme == "google.navigation" && '?' !in rest) rest else rest.substringAfter('?', "")
         val params = query.split('&').mapNotNull { p ->
-            p.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0].lowercase() to java.net.URLDecoder.decode(it[1], "UTF-8") }
+            p.split('=', limit = 2).takeIf { it.size == 2 }?.let {
+                // a broken escape ("50%", "%G1") from another app must not crash Mate: keep the raw value then
+                it[0].lowercase() to runCatching { java.net.URLDecoder.decode(it[1], "UTF-8") }.getOrDefault(it[1])
+            }
         }.toMap()
         val q = params["q"] ?: if (scheme == "google.navigation") params["ll"] else null
         q?.let { text -> LAT_LON.find(text)?.let { m -> return point(m.groupValues[1], m.groupValues[2], m.groupValues[3]) } }

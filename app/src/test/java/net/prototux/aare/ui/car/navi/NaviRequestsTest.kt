@@ -26,6 +26,11 @@ class NaviRequestsTest {
         assertNull(NaviRequests.fromUri(""))
         assertNull(NaviRequests.fromUri("geo:0,0?q="))
     }
+
+    @Test fun brokenEscapeKeptRaw() {
+        assertEquals("50%", NaviRequests.fromUri("geo:0,0?q=50%")!!.query)
+        assertEquals("%G1", NaviRequests.fromUri("geo:0,0?q=%G1")!!.query)
+    }
 }
 
 /** The same name close together once, in another town kept. */

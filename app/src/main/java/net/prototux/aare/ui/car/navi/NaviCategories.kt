@@ -14,8 +14,9 @@ internal object NaviCategories {
     class Found(val at: Position, val metres: Double, val charger: Charger? = null, val rest: NaviRest.Stop? = null)
 
     private val WORDS = mapOf(
-        Kind.CHARGER to listOf("lader", "laden", "ladesaule", "ladestation", "schnelllader", "supercharger", "ladepunkt"),
-        Kind.REST to listOf("rastplatz", "raststatte", "rasthof", "rastanlage", "pause"))
+        Kind.CHARGER to listOf("lader", "laden", "ladesaule", "ladestation", "schnelllader", "supercharger", "ladepunkt",
+            "charger", "chargers", "charging", "chargepoint"),
+        Kind.REST to listOf("rastplatz", "raststatte", "rasthof", "rastanlage", "pause", "reststop", "restarea", "services"))
 
     /** The category a typed text asks for, if it is one of its words (forgiving typos). */
     fun asked(query: String): Kind? {

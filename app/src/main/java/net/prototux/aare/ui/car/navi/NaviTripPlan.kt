@@ -189,16 +189,20 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
         Text(stringResource(R.string.mate_navi_plan_start), style = MaterialTheme.typography.titleMedium, color = Mate.text, modifier = Modifier.weight(1f))
         if (nowPercent != null) Text(pct(nowPercent), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Mate.text)
     }
-    var list by androidx.compose.runtime.remember(rows) { androidx.compose.runtime.mutableStateOf(rows) }
     var dragKey by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    // while a row is held the plan stays as it was taken (Navi I-052d: recomputed every 50 m while driving, the gesture
+    // went on with a list no longer shown); the gesture starts anew with the rows shown
+    var held by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(rows) }
+    val shown = if (dragKey != null) held else rows
+    var list by androidx.compose.runtime.remember(shown) { androidx.compose.runtime.mutableStateOf(shown) }
     var dragY by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-    val sortable = rows.count { it.kind == NaviTripPlan.Kind.OWN && it.at != null } >= 2
+    val sortable = shown.count { it.kind == NaviTripPlan.Kind.OWN && it.at != null } >= 2
     val stepPx = with(androidx.compose.ui.platform.LocalDensity.current) { (88.dp + LEG_H + 4.dp).toPx() }
     // one key per row of the plan, kept while rows move (two charging stops of one network have the same name - the
     // same key brought Mate down, 17.11.2026)
-    val keys = androidx.compose.runtime.remember(rows) { java.util.IdentityHashMap<NaviTripPlan.Row, String>().apply { rows.forEachIndexed { i, r -> put(r, "$i") } } }
+    val keys = androidx.compose.runtime.remember(shown) { java.util.IdentityHashMap<NaviTripPlan.Row, String>().apply { shown.forEachIndexed { i, r -> put(r, "$i") } } }
     fun key(r: NaviTripPlan.Row) = keys[r] ?: r.hashCode().toString()
-    val startedAt = androidx.compose.runtime.remember(rows) { System.currentTimeMillis() }
+    val startedAt = androidx.compose.runtime.remember(shown) { System.currentTimeMillis() }
     LazyColumn(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items(list, key = { key(it) }) { r ->
             val dragging = dragKey == key(r)
@@ -225,9 +229,9 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                 .fillMaxWidth().heightIn(min = 88.dp).clip(RoundedCornerShape(18.dp)).background(if (dragging || isSelected) Mate.surfaceHigh else Mate.surface)
                 .then(if (isSelected) Modifier.border(2.dp, Mate.accent, RoundedCornerShape(18.dp)) else Modifier)
                 .then(if (onPick != null && place != null) Modifier.clickable { onPick(r) } else Modifier)
-                .then(if (!canDrag) Modifier else Modifier.pointerInput(key(r)) {
+                .then(if (!canDrag) Modifier else Modifier.pointerInput(key(r), shown) {
                     detectDragGesturesAfterLongPress(
-                        onDragStart = { dragKey = key(r); dragY = 0f },
+                        onDragStart = { held = shown; dragKey = key(r); dragY = 0f },
                         onDrag = { ch, d ->
                             ch.consume()
                             dragY += d.y
@@ -246,10 +250,10 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                         onDragEnd = {
                             dragKey = null; dragY = 0f
                             val order = list.filter { it.kind == NaviTripPlan.Kind.OWN && it.at != null }.map { it.at!! to it.name }
-                            val before = rows.filter { it.kind == NaviTripPlan.Kind.OWN && it.at != null }.map { it.at!! to it.name }
+                            val before = shown.filter { it.kind == NaviTripPlan.Kind.OWN && it.at != null }.map { it.at!! to it.name }
                             if (order != before) onReorder(order)
                         },
-                        onDragCancel = { dragKey = null; dragY = 0f; list = rows })
+                        onDragCancel = { dragKey = null; dragY = 0f; list = shown })
                 })
                 .padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 // a charging stop: its network's logo (O210); the others in a slot of the same width, so the names line up

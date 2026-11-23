@@ -10,21 +10,28 @@ import org.maplibre.spatialk.geojson.Position
 
 /**
  * The map server's search (Photon behind the gate, /suche - server handover 16.11.2026): for now the way back from a
- * place to its address. Without a server address the build PC's Photon through `adb reverse tcp:2322`.
+ * place to its address. Without a server address the build PC's Photon through `adb reverse tcp:2322` (test builds only).
  */
 internal object NaviSearch {
     private const val DEV_PHOTON = "http://127.0.0.1:2322"
 
-    private fun base(context: Context) =
-        net.prototux.aare.Settings(context).mapServer.ifBlank { null }?.let { it + NaviServer.SEARCH_PATH } ?: DEV_PHOTON
+    /** Null without a map server outside test builds (Navi I-053e: no asking localhost in a release). */
+    private fun base(context: Context): String? =
+        net.prototux.aare.Settings(context).mapServer.ifBlank { null }?.let { it + NaviServer.SEARCH_PATH }
+            ?: DEV_PHOTON.takeIf { net.prototux.aare.BuildConfig.DEBUG }
+
+    /** How far, as the hits' lines show it: metres in [step]s below a kilometre, else kilometres with one decimal. */
+    internal fun distanceText(m: Double, step: Int): String =
+        if (m < 1000) "${(m / step).toInt() * step} m" else String.format(java.util.Locale.getDefault(), "%.1f km", m / 1000)
 
     /**
      * The address of [at] as the car's lists show it (O172, 16.11.2026: "Ort - Straße Hausnummer"), e.g.
      * "Berlin – Potsdamer Platz 1"; null when the server cannot be reached or knows nothing there.
      */
     suspend fun address(context: Context, at: Position): String? = withContext(Dispatchers.IO) {
+        val b = base(context) ?: return@withContext null
         runCatching {
-            val url = (base(context) + "/reverse").toHttpUrl().newBuilder()
+            val url = (b + "/reverse").toHttpUrl().newBuilder()
                 .addQueryParameter("lat", "%.6f".format(java.util.Locale.ROOT, at.latitude))
                 .addQueryParameter("lon", "%.6f".format(java.util.Locale.ROOT, at.longitude))
                 .addQueryParameter("lang", net.prototux.aare.Language.code).build()
@@ -62,10 +69,6 @@ internal object NaviSearch {
         else own + server.orEmpty().filter { s -> own.none { ChargerIndex.distanceM(it.at, s.at) < 50 } }
 
     /**
-     * Places for what was typed (Photon /api, German), the nearest to [near] first (Photon weighs by the car's place);
-     * empty when nothing is found, null when the server cannot be reached.
-     */
-    /**
      * The same name within [SAME_PLACE_M] once (16.11.2026: "Hamburg Hauptbahnhof" five times - its entrances and stops in
      * OpenStreetMap), the first, the best match, kept; the same name in another town stays.
      */
@@ -91,10 +94,9 @@ internal object NaviSearch {
         } else null
 
     private suspend fun searchOnce(context: Context, query: String, near: Position?): List<Hit>? = withContext(Dispatchers.IO) {
-        if (net.prototux.aare.Settings(context).mapServer.isBlank() && !net.prototux.aare.BuildConfig.DEBUG) {
-            lastFailure = Failure.NO_SERVER; return@withContext null }
+        val b = base(context) ?: run { lastFailure = Failure.NO_SERVER; return@withContext null }
         runCatching {
-            val url = (base(context) + "/api").toHttpUrl().newBuilder()
+            val url = (b + "/api").toHttpUrl().newBuilder()
                 .addQueryParameter("q", query).addQueryParameter("lang", net.prototux.aare.Language.code).addQueryParameter("limit", "6").apply {
                     near?.let {
                         addQueryParameter("lat", "%.5f".format(java.util.Locale.ROOT, it.latitude))
@@ -135,8 +137,10 @@ internal object NaviSearch {
      * by distance, not by name: the forward search with "restaurant" found places named so, even in Greece (17.11.2026).
      */
     suspend fun nearby(context: Context, tag: String, near: Position): List<Hit>? = withContext(Dispatchers.IO) {
+        // the reason of a failure for the panel, as the text search gives it (Navi I-052l)
+        val b = base(context) ?: run { lastFailure = Failure.NO_SERVER; return@withContext null }
         runCatching {
-            val url = (base(context) + "/reverse").toHttpUrl().newBuilder()
+            val url = (b + "/reverse").toHttpUrl().newBuilder()
                 .addQueryParameter("lat", "%.5f".format(java.util.Locale.ROOT, near.latitude))
                 .addQueryParameter("lon", "%.5f".format(java.util.Locale.ROOT, near.longitude))
                 .addQueryParameter("radius", "10").addQueryParameter("osm_tag", tag)
@@ -144,7 +148,8 @@ internal object NaviSearch {
             NaviServer.client(context).newCall(Request.Builder().url(url).build()).execute().use { r ->
                 val raw = r.body.string()
                 android.util.Log.i("MateNavi", "nearby $tag: HTTP ${r.code}, ${raw.length} bytes")
-                if (!r.isSuccessful) return@runCatching null
+                if (!r.isSuccessful) { lastFailure = Failure.SERVER; lastCode = r.code; return@runCatching null }
+                lastFailure = null
                 val a = JSONObject(raw).optJSONArray("features") ?: return@runCatching emptyList()
                 (0 until a.length()).mapNotNull { i ->
                     val f = a.optJSONObject(i) ?: return@mapNotNull null
@@ -155,10 +160,13 @@ internal object NaviSearch {
                     val name = s("name") ?: return@mapNotNull null
                     val street = s("street")?.let { listOfNotNull(it, s("housenumber")).joinToString(" ") }
                     val m = ChargerIndex.distanceM(near, at)
-                    val far = if (m < 1000) "${(m / 50).toInt() * 50} m" else "%.1f km".format(java.util.Locale.GERMANY, m / 1000)
+                    val far = distanceText(m, 50)
                     Hit(name, listOfNotNull(far, street).joinToString(" · "), at)
                 }.sortedBy { ChargerIndex.distanceM(near, it.at) }
             }
+        }.onFailure { e ->
+            lastFailure = if (e is java.io.IOException) Failure.NO_CONNECTION else Failure.SERVER
+            android.util.Log.w("MateNavi", "nearby $tag failed: $e")
         }.getOrNull()
     }
 

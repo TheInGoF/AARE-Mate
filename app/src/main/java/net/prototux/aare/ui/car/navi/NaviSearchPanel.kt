@@ -81,7 +81,9 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviSearchPanel(near
     var searching by remember { mutableStateOf(false) }
     var corrected by remember { mutableStateOf<String?>(null) }
     // F6 step 3: a category chosen (by its button or its word) - its nearest, found on the device
-    var category by remember { mutableStateOf<NaviCategories.Kind?>(null) }
+    // a category tile hands its kind over directly, whatever its label says in the language shown (Navi I-052a)
+    val startKind = remember { NaviSearchStart.category.also { NaviSearchStart.category = null } }
+    var category by remember { mutableStateOf(startKind) }
     LaunchedEffect(category) {
         val k = category ?: return@LaunchedEffect
         val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { categories(k) }
@@ -119,7 +121,7 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviSearchPanel(near
     // the keyboard folds away once a category is chosen or the words were spoken - the hits get the room, as in Google
     // Maps; a tap on the field brings it back (16.11.2026: the keyboard covered all but two chargers)
     // a text handed over (spoken, another app) shows its hits first, as after speaking
-    var keysShown by remember { mutableStateOf(NaviDebug.searchQuery.isNullOrBlank()) }
+    var keysShown by remember { mutableStateOf(NaviDebug.searchQuery.isNullOrBlank() && startKind == null) }
     // F6: speaking instead of typing - the device's own recognition (as the messenger's dictation), the words become the
     // search; allowed while driving, the typing pauses do not apply to it
     var voice by remember { mutableStateOf(VoiceState.IDLE) }
@@ -246,7 +248,7 @@ private fun CategoryButton(icon: androidx.compose.ui.graphics.vector.ImageVector
 
 /** A category's find as a hit: who and how strong / what it is called, how far (ahead on the route or around). */
 private fun categoryHit(context: android.content.Context, f: NaviCategories.Found, along: Boolean): NaviSearch.Hit {
-    val km = if (f.metres < 1000) "${(f.metres / 100).toInt() * 100} m" else String.format(java.util.Locale.getDefault(), "%.1f km", f.metres / 1000)
+    val km = NaviSearch.distanceText(f.metres, 100)
     val far = context.getString(if (along) R.string.mate_navi_cat_ahead else R.string.mate_navi_cat_away, km)
     val name = f.charger?.let { c -> (ChargeNetworks.name(c.network) ?: c.operator.ifBlank { context.getString(R.string.mate_navi_charger) }) + " · ${c.kw} kW" }
         ?: f.rest?.let { r -> r.name.ifBlank { context.getString(if (r.services) R.string.mate_navi_cat_services else R.string.mate_navi_cat_rest_area) } }
@@ -259,6 +261,8 @@ private enum class VoiceState { IDLE, LISTEN, THINK }
 /** O228: a tile menu's microphone - the search opens listening. */
 internal object NaviSearchStart {
     @Volatile var voice = false; @Volatile var tag: String? = null
+    /** A category tile's kind, shown at once without a typed word. */
+    @Volatile var category: NaviCategories.Kind? = null
     /** What was typed, kept while the search panel is closed some other way than by X (Navi I-033). */
     @Volatile var kept = ""
 }

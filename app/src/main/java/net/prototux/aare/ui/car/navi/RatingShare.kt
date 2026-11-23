@@ -41,18 +41,22 @@ internal object RatingShare {
             .apply { v.network?.let { put("netz", it) } }
             .apply { if (v.rating > 0) put("sterne", v.rating); if (v.power > 0) put("leistung", v.power) }
             .apply { if (v.price > 0) put("preis", v.price); if (v.worked > 0) put("funktion", v.worked) }
-        p.edit().putString("wait:$key", "$sig|$body").apply()
+        synchronized(this) { p.edit().putString("wait:$key", "$sig|$body").apply() }
         flush(c)
     }
+
+    // one sender for all: sends one after the other, each reading what waits when its turn comes (Navi I-052e)
+    private val sender = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "rating-share") }
 
     /** Sends what waits, off the main thread. */
     fun flush(c: Context) {
         val app = c.applicationContext
         val settings = net.prototux.aare.Settings(app)
         if (!settings.shareRatings || settings.mapServer.isBlank()) return
-        val waiting = prefs(app).all.filterKeys { it.startsWith("wait:") }.mapValues { it.value as? String }.filterValues { it != null }
-        if (waiting.isEmpty()) return
-        Thread({
+        if (prefs(app).all.keys.none { it.startsWith("wait:") }) return
+        sender.execute {
+            val waiting = prefs(app).all.filterKeys { it.startsWith("wait:") }.mapValues { it.value as? String }.filterValues { it != null }
+            if (waiting.isEmpty()) return@execute
             val url = settings.mapServer.trimEnd('/') + PATH
             var sent = 0
             for ((k, v) in waiting) {
@@ -62,12 +66,19 @@ internal object RatingShare {
                         .execute().use { it.code == 201 }
                 }.getOrDefault(false)
                 val key = k.removePrefix("wait:")
-                if (ok) { prefs(app).edit().remove(k).putString("sent:$key", sig).apply(); sent++ }
+                // a rating changed meanwhile stays waiting for the next turn: only what was sent is taken out
+                if (ok) {
+                    synchronized(this) {
+                        val p = prefs(app)
+                        if (p.getString(k, null) == v) p.edit().remove(k).putString("sent:$key", sig).apply()
+                    }
+                    sent++
+                }
                 Log.i(TAG, "rating " + (if (ok) "shared" else "kept for later"))
                 if (!ok) break
             }
             net.prototux.aare.DiagLog.add("charge ratings: $sent of ${waiting.size} to the map server, " +
                 "${prefs(app).all.keys.count { it.startsWith("wait:") }} still waiting", area = "CHARGE")
-        }, "rating-share").start()
+        }
     }
 }

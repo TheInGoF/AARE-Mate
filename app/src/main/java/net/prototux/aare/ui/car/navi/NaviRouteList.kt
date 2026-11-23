@@ -68,20 +68,24 @@ internal fun NaviRouteList(rows: List<NaviTripPlan.Row>, removed: List<Charger>,
                            onOpened: () -> Unit, onReplace: (Charger, Charger) -> Unit, onRemove: (Charger) -> Unit,
                            onRestore: (Charger) -> Unit, onRemoveAll: () -> Unit, onRecalc: () -> Unit,
                            onReorder: (List<Pair<Position, String>>) -> Unit) {
-    var open by remember(rows) { mutableStateOf<Charger?>(null) }
-    var list by remember(rows) { mutableStateOf(rows) }
     var dragKey by remember { mutableStateOf<Int?>(null) }
+    // while a row is held the list stays as it was taken (Navi I-052d: a charging plan arriving meanwhile replaced the
+    // rows under the gesture); the gesture starts anew with the rows shown
+    var held by remember { mutableStateOf(rows) }
+    val shown = if (dragKey != null) held else rows
+    var open by remember(shown) { mutableStateOf<Charger?>(null) }
+    var list by remember(shown) { mutableStateOf(shown) }
     var dragY by remember { mutableFloatStateOf(0f) }
     // each row's height while laid out, to know when a held row has passed the next one
-    val heights = remember(rows) { mutableStateMapOf<Int, Int>() }
+    val heights = remember(shown) { mutableStateMapOf<Int, Int>() }
     val gap = with(androidx.compose.ui.platform.LocalDensity.current) { 10.dp.toPx() }
     // a key per row that stays while rows move: its place in the list as planned
-    val keys = remember(rows) { java.util.IdentityHashMap<NaviTripPlan.Row, Int>().apply { rows.forEachIndexed { i, r -> put(r, i) } } }
+    val keys = remember(shown) { java.util.IdentityHashMap<NaviTripPlan.Row, Int>().apply { shown.forEachIndexed { i, r -> put(r, i) } } }
     fun key(r: NaviTripPlan.Row) = keys[r] ?: -1
     // the destination too (19.11.2026: "das Ziel müsste man ja wohl auch greifen können und verschieben können, dass dann
     // das Zwischenziel zum Endziel wird"): whatever stands last after the move is the destination
     fun movable(r: NaviTripPlan.Row) = (r.kind == NaviTripPlan.Kind.OWN || r.kind == NaviTripPlan.Kind.DESTINATION) && r.at != null
-    val sortable = rows.count(::movable) >= 2
+    val sortable = shown.count(::movable) >= 2
 
     Text(stringResource(R.string.mate_navi_route_list), style = MaterialTheme.typography.labelLarge, color = Mate.textDim)
     Spacer(Modifier.size(8.dp))
@@ -97,9 +101,9 @@ internal fun NaviRouteList(rows: List<NaviTripPlan.Row>, removed: List<Charger>,
                     .background(if (dragging) Mate.surfaceHigh else Mate.surface)
                     .then(if (r.kind == NaviTripPlan.Kind.CHARGE && r.charger != null)
                         Modifier.clickable { open = if (open === r.charger) null else r.charger; onOpened() } else Modifier)
-                    .then(if (!canDrag) Modifier else Modifier.pointerInput(k) {
+                    .then(if (!canDrag) Modifier else Modifier.pointerInput(k, shown) {
                         detectDragGesturesAfterLongPress(
-                            onDragStart = { dragKey = k; dragY = 0f; onOpened() },
+                            onDragStart = { held = shown; dragKey = k; dragY = 0f; onOpened() },
                             onDrag = { ch, d ->
                                 ch.consume()
                                 dragY += d.y
@@ -122,9 +126,9 @@ internal fun NaviRouteList(rows: List<NaviTripPlan.Row>, removed: List<Charger>,
                             onDragEnd = {
                                 dragKey = null; dragY = 0f
                                 val order = list.filter(::movable).map { it.at!! to it.name }
-                                if (order != rows.filter(::movable).map { it.at!! to it.name }) onReorder(order)
+                                if (order != shown.filter(::movable).map { it.at!! to it.name }) onReorder(order)
                             },
-                            onDragCancel = { dragKey = null; dragY = 0f; list = rows })
+                            onDragCancel = { dragKey = null; dragY = 0f; list = shown })
                     })
                     .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (r.kind == NaviTripPlan.Kind.CHARGE) NetworkLogo(r.network, 30.dp, boltTint = Mate.warn)
@@ -144,7 +148,7 @@ internal fun NaviRouteList(rows: List<NaviTripPlan.Row>, removed: List<Charger>,
                             NaviTripPlan.Kind.FERRY -> ferryDetail(r)
                         }
                         if (detail != null) Text(detail, style = MaterialTheme.typography.bodySmall,
-                            color = if (r.kind == NaviTripPlan.Kind.DESTINATION && (r.arrivePercent ?: 100.0) < NaviCharge.RESERVE_PERCENT) Mate.warn else Mate.textDim, maxLines = 2)
+                            color = if (r.kind == NaviTripPlan.Kind.DESTINATION && (r.arrivePercent ?: 100.0) < NaviCharge.reservePercent(androidx.compose.ui.platform.LocalContext.current)) Mate.warn else Mate.textDim, maxLines = 2)
                         if (r.overLimit) Text(stringResource(R.string.mate_navi_charge_over, net.prototux.aare.Settings(androidx.compose.ui.platform.LocalContext.current).chargeMaxLevel),
                             style = MaterialTheme.typography.bodySmall, color = Mate.warn)
                     }

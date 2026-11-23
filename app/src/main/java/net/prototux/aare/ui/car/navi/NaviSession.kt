@@ -8,6 +8,8 @@ import com.stadiamaps.ferrostar.core.location.NavigationLocationProvider
 import com.stadiamaps.ferrostar.core.location.SimulatedLocationProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
@@ -37,18 +39,21 @@ import java.time.Instant
  * else the phone's - NaviLiveLocation), simulated along the route only for tests (the desk window, the test hooks);
  * pictures are taken of simulated drives only.
  */
-internal class NaviSession(private val scope: CoroutineScope, private val valhalla: String = NaviRoute.DEV_VALHALLA, private val http: OkHttpClient = OkHttpClient(),
+internal class NaviSession(parent: CoroutineScope, private val valhalla: String, private val http: OkHttpClient = OkHttpClient(),
                            val routeOptions: RouteOptions = RouteOptions(), val live: NaviLiveLocation? = null) {
+    /** The session's own child of [parent]: ended by [close] when the session is made anew. */
+    private val job = SupervisorJob(parent.coroutineContext.job)
+    private val scope = CoroutineScope(parent.coroutineContext + job)
     val simulated = SimulatedLocationProvider(scope)
     /**
      * F2 step 3: points on closed roads that the routes keep away from (Valhalla's exclude_locations) - set from TomTom's
      * closures along the planned routes; kept for the charging replans of the same trip.
      * Declared first: the core below is made from options() when the session is (it read null - the crash of 17.11. 05:12).
      */
-    var closures: List<Position> = emptyList()
+    @Volatile var closures: List<Position> = emptyList()
     /** The closed stretches the last planning found on its routes (shown on the map, O220) and the areas kept from. */
     var closureLines: List<List<Position>> = emptyList(); private set
-    private var closureAreas: List<List<Position>> = emptyList()
+    @Volatile private var closureAreas: List<List<Position>> = emptyList()
 
 
     /** Ferrostar's switch between the real position and the simulation. */
@@ -231,13 +236,6 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
         return "straight on past: ${step.instruction}"
     }
 
-    /** Plans a route from [from] over [via] (stops on the way) to [to], for the preview; starts nothing. */
-    suspend fun plan(from: Position, to: Position, via: List<Position> = emptyList()): Route {
-        val here = UserLocation(GeographicCoordinate(from.latitude, from.longitude), 5.0, null, Instant.now(), null)
-        val points = (via + listOf(to)).map { Waypoint(GeographicCoordinate(it.latitude, it.longitude), WaypointKind.BREAK, null) }
-        return withContext(Dispatchers.IO) { core.getRoutes(here, points) }.first()
-    }
-
     /** What the driver chooses between (O180): the fastest, an economical one (fast too), an alternative. */
     enum class Kind { FAST, ECO, ALT }
     class Choice(val kind: Kind, val route: Route, val charging: ChargePlanner.Plan? = null)
@@ -267,8 +265,10 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
 
     /** One core per set of options (Ferrostar takes them when it is made); the guidance stays on [core]. */
     private val planners = HashMap<String, FerrostarCore>()
-    private fun planner(json: String) = planners.also { if (it.size > 12 && json !in it) it.clear() }.getOrPut(json) {
-        FerrostarCore(WellKnownRouteProvider.Valhalla("$valhalla/route", "auto", json), OkHttpClientProvider(routeHttp), positions, config, null)
+    private fun planner(json: String) = synchronized(planners) {
+        planners.also { if (it.size > 12 && json !in it) it.clear() }.getOrPut(json) {
+            FerrostarCore(WellKnownRouteProvider.Valhalla("$valhalla/route", "auto", json), OkHttpClientProvider(routeHttp), positions, config, null)
+        }
     }
 
     /** The routes to choose from: fast (and Valhalla's alternatives), economical; same routes only once. */
@@ -419,20 +419,14 @@ internal class NaviSession(private val scope: CoroutineScope, private val valhal
         _route.value = route
     }
 
-    /** Plans the route from [from] to [to] and starts the guidance on it; the simulated car sets off at the start. */
-    suspend fun start(from: Position, to: Position): Route {
-        val here = UserLocation(GeographicCoordinate(from.latitude, from.longitude), 5.0, null, Instant.now(), null)
-        // Ferrostar asks the routing service on the calling thread: not on the main thread
-        val routes = withContext(Dispatchers.IO) {
-            core.getRoutes(here, listOf(Waypoint(GeographicCoordinate(to.latitude, to.longitude), WaypointKind.BREAK, null)))
-        }
-        val route = routes.first()
-        simulated.setRoute(route, LocationBias.None)
-        core.startNavigation(route, config)
-        return route
-    }
-
     fun stop() { core.stopNavigation(); _route.value = null }
+
+    /** The session is done with (made anew): the guidance stopped, its collectors ended, the planning cores let go. */
+    fun close() {
+        stop()
+        job.cancel()
+        synchronized(planners) { planners.clear() }
+    }
 
     /**
      * The trip ends as arrived, here and now (18.11.2026: the car has come to a stop near the destination): the steps

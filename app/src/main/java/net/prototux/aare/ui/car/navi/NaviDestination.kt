@@ -29,12 +29,8 @@ import androidx.compose.material.icons.rounded.SortByAlpha
 import androidx.compose.material.icons.rounded.AddLocationAlt
 import androidx.compose.material.icons.rounded.EvStation
 import androidx.compose.runtime.remember
-import androidx.compose.material.icons.rounded.PushPin
-import androidx.compose.material.icons.rounded.Home
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.rounded.Navigation
-import androidx.compose.material.icons.rounded.Route
-import androidx.compose.material.icons.rounded.EditLocationAlt
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -56,7 +52,6 @@ import androidx.compose.ui.unit.dp
 import net.prototux.aare.R
 import net.prototux.aare.places.Places
 import net.prototux.aare.ui.car.Mate
-import net.prototux.aare.ui.placeIcon
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -90,65 +85,6 @@ internal fun PanelHeader(title: String, onBack: (() -> Unit)?, onClose: () -> Un
 private fun RoundButton(icon: ImageVector, label: String, size: Dp, onClick: () -> Unit) {
     Box(Modifier.size(size).clip(CircleShape).background(Mate.plate).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(icon, label, tint = Mate.text, modifier = Modifier.size(size * 0.5f))
-    }
-}
-
-/** First: the lists as tiles, search above them. */
-@Composable
-internal fun NaviLists(book: Places.Book, recent: Int, title: String, onSearch: () -> Unit, onOptions: () -> Unit, onRecent: () -> Unit, onList: (Places.Category) -> Unit, onClose: () -> Unit, onPlace: (Places.Place) -> Unit = {}) {
-    PanelHeader(title, null, onClose)
-    Spacer(Modifier.size(16.dp))
-    Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(18.dp)).background(Mate.surface).clickable(onClick = onSearch)
-        .padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Rounded.Search, null, tint = Mate.textDim, modifier = Modifier.size(30.dp))
-        Spacer(Modifier.width(14.dp))
-        Text(stringResource(R.string.mate_navi_search), style = MaterialTheme.typography.titleMedium, color = Mate.textDim)
-    }
-    // one tap to the places driven to most (as Google Maps' "Zuhause" and "Arbeit"): home first, then the pinned ones,
-    // three at most (16.11.2026, O211 "schnell und unkompliziert")
-    val quick = remember(book) { (listOfNotNull(book.places.firstOrNull { it.home }) + book.places.filter { it.pinned && !it.home }).take(3) }
-    if (quick.isNotEmpty()) {
-        Spacer(Modifier.size(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            quick.forEach { p ->
-                Row(Modifier.weight(1f).heightIn(min = 72.dp).clip(RoundedCornerShape(18.dp)).background(Mate.accentContainer)
-                    .clickable { onPlace(p) }.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (p.home) Icons.Rounded.Home else Icons.Rounded.PushPin, null, tint = Mate.accent, modifier = Modifier.size(28.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text(if (p.home) stringResource(R.string.mate_navi_home) else p.name, style = MaterialTheme.typography.titleMedium,
-                        color = Mate.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
-    }
-    Spacer(Modifier.size(12.dp))
-    RouteOptionsButton(Modifier.fillMaxWidth(), onOptions)
-    Spacer(Modifier.size(16.dp))
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // the destinations reached of late - their pins show on the map only here (wish of 16.11.2026)
-        if (recent > 0) item("recent") {
-            Row(Modifier.fillMaxWidth().heightIn(min = 84.dp).clip(RoundedCornerShape(18.dp)).background(Mate.surface).clickable(onClick = onRecent)
-                .padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).clip(CircleShape).background(Mate.accentContainer), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.History, null, tint = Mate.accent, modifier = Modifier.size(30.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                Text(stringResource(R.string.mate_navi_recent), Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, color = Mate.text)
-                Text("$recent", style = MaterialTheme.typography.titleMedium, color = Mate.textDim)
-            }
-        }
-        items(book.categories, key = { it.id }) { c ->
-            val n = book.places.count { it.category == c.id }
-            Row(Modifier.fillMaxWidth().heightIn(min = 84.dp).clip(RoundedCornerShape(18.dp)).background(Mate.surface).clickable { onList(c) }
-                .padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(52.dp).clip(CircleShape).background(Mate.accentContainer), contentAlignment = Alignment.Center) {
-                    Icon(placeIcon(c.icon), null, tint = Mate.accent, modifier = Modifier.size(30.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                Text(c.name, Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, color = Mate.text)
-                Text("$n", style = MaterialTheme.typography.titleMedium, color = Mate.textDim)
-            }
-        }
     }
 }
 
@@ -249,6 +185,11 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviPreview(p: Previ
         Spacer(Modifier.size(20.dp))
         CancelButton(Modifier.heightIn(min = 72.dp), onClick = onCancel)
         return
+    }
+    // a change of the stops that could not be planned (Navi I-052f): said above the plan, which stays as it was
+    if (error != null) {
+        Text(error, style = MaterialTheme.typography.titleMedium, color = Mate.warn)
+        Spacer(Modifier.size(12.dp))
     }
     // the middle scrolls when it is taller than the screen allows (with charging stops it is: 16.11.2026 "buttons unten
     // gequetscht. kann man nicht hoch schieben"); the header and the buttons stay where they are
@@ -405,20 +346,6 @@ internal fun NaviDestinationButton(modifier: Modifier, onClick: () -> Unit) {
     }
 }
 
-/** The menu while guiding (from the tile with what is left): end, another destination, a stop on the way. */
-@Composable
-internal fun NaviMenu(target: String?, onEnd: () -> Unit, onChange: () -> Unit, onStop: () -> Unit, onClose: () -> Unit, onPlan: (() -> Unit)? = null) {
-    PanelHeader(target ?: stringResource(R.string.mate_navi_menu), null, onClose)
-    Spacer(Modifier.size(16.dp))
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // O209: all stops ahead at a glance, first - only when there are stops besides the destination
-        if (onPlan != null) MenuRow(Icons.Rounded.Route, stringResource(R.string.mate_navi_plan), Mate.text, onPlan)
-        MenuRow(Icons.Rounded.AddLocationAlt, stringResource(R.string.mate_navi_menu_stop), Mate.text, onStop)
-        MenuRow(Icons.Rounded.EditLocationAlt, stringResource(R.string.mate_navi_menu_change), Mate.text, onChange)
-        MenuRow(Icons.Rounded.Close, stringResource(R.string.mate_navi_menu_end), Mate.danger, onEnd)
-    }
-}
-
 @Composable
 private fun MenuRow(icon: ImageVector, label: String, color: Color, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 80.dp).clip(RoundedCornerShape(18.dp)).background(Mate.surface).clickable(onClick = onClick)
@@ -440,8 +367,9 @@ internal fun NaviRecent(pins: List<NaviPins.Pin>, onPick: (NaviPins.Pin) -> Unit
     fun whenText(t: Long): String {
         val d = java.time.Instant.ofEpochMilli(t).atZone(java.time.ZoneId.systemDefault())
         val days = java.time.temporal.ChronoUnit.DAYS.between(d.toLocalDate(), java.time.LocalDate.now())
-        val time = d.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm", l))
-        return when (days) { 0L -> "$today, $time"; 1L -> "$yesterday, $time"; else -> d.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy", l)) }
+        val time = net.prototux.aare.ui.Clock.format(t)
+        return when (days) { 0L -> "$today, $time"; 1L -> "$yesterday, $time"
+            else -> d.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.SHORT).withLocale(l)) }
     }
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // keyed by place in the list: older pins were all saved with the same time (a duplicate key brought Mate down)
