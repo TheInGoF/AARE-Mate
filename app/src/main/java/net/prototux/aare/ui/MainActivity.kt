@@ -430,6 +430,9 @@ private fun Home() {
                         Page.MUSIC -> {
                             item { MusicCard(refresh) }
                             item { MusicOfflineCard(refresh) }
+                            // its own place for the downloads (23.11.2026: "ein extra Speicherort … damit man die getrennt verlinken kann")
+                            item { StorageCard(busy = false, kinds = net.prototux.aare.Storage.MUSIC_KINDS, intro = R.string.storage_intro_music,
+                                moveAsk = R.string.storage_move_ask_music) {} }
                             item { MusicChoiceCard() }
                         }
                         Page.BAR -> {

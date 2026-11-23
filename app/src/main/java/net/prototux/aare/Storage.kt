@@ -26,6 +26,15 @@ internal object Storage {
     const val MUSIC = "musik"
     /** Everything that moves with the chosen place. */
     val KINDS = listOf(MAPS, SPEECH, MUSIC)
+    /**
+     * Two places of their own (23.11.2026: "Zusätzlich ein extra Speicherort einbauen, damit man die getrennt verlinken
+     * kann"): the maps with the speech models (page "Offline-Karten"), the music on its own (page "Musik").
+     */
+    val MAP_KINDS = listOf(MAPS, SPEECH)
+    val MUSIC_KINDS = listOf(MUSIC)
+    /** The keys of a group's choice: the music has its own, the rest the old one. */
+    private fun key(kind: String) = if (kind == MUSIC) "volume_music" else "volume"
+    private fun rootKey(kind: String) = if (kind == MUSIC) "root_music" else "root"
     private const val TAG = "MateStorage"
     /** The largest file FAT32 takes (4 GiB - 1). */
     const val FAT32_MAX = 4L * 1024 * 1024 * 1024 - 1
@@ -38,8 +47,14 @@ internal object Storage {
     // a file of its own, not "settings": a transfer to another device must not carry the card's UUID along
     private fun prefs(c: Context) = c.applicationContext.getSharedPreferences("storage", Context.MODE_PRIVATE)
 
-    /** The chosen place's id ("" = the device's storage). */
-    fun chosen(c: Context): String = prefs(c).getString("volume", "") ?: ""
+    /** The chosen place's id ("" = the device's storage) of the maps and speech models. */
+    fun chosen(c: Context): String = chosen(c, MAPS)
+
+    /** The chosen place of [kind]'s group; the music follows the maps' place until it has one of its own. */
+    fun chosen(c: Context, kind: String): String {
+        val p = prefs(c)
+        return (if (kind == MUSIC && p.contains("volume_music")) p.getString("volume_music", "") else p.getString("volume", "")) ?: ""
+    }
 
     /** The device's own folder of [kind] - where the files always lay before L-080. */
     fun internalDir(c: Context, kind: String): File = when (kind) {
@@ -50,14 +65,19 @@ internal object Storage {
 
     /** The folder of [kind] in the chosen place (on a card even while it is out - see [cardMissing]). */
     fun dir(c: Context, kind: String): File {
-        val id = chosen(c)
+        val id = chosen(c, kind)
         if (id.isEmpty()) return internalDir(c, kind)
-        val root = volumes(c).firstOrNull { it.id == id }?.root ?: prefs(c).getString("root", null)?.let(::File)
+        val p = prefs(c)
+        val savedRoot = if (kind == MUSIC && p.contains("volume_music")) p.getString("root_music", null) else p.getString("root", null)
+        val root = volumes(c).firstOrNull { it.id == id }?.root ?: savedRoot?.let(::File)
         return if (root != null) File(root, kind) else internalDir(c, kind)
     }
 
     /** A card is chosen but not there (taken out, not mounted): its maps and voices are missing until it is back. */
-    fun cardMissing(c: Context): Boolean = chosen(c).let { id -> id.isNotEmpty() && volumes(c).none { it.id == id } }
+    fun cardMissing(c: Context): Boolean = cardMissing(c, MAPS)
+
+    /** As [cardMissing], for [kind]'s group. */
+    fun cardMissing(c: Context, kind: String): Boolean = chosen(c, kind).let { id -> id.isNotEmpty() && volumes(c).none { it.id == id } }
 
     /** The device's storage first, then each card that is mounted. */
     fun volumes(c: Context): List<Volume> {
@@ -108,8 +128,8 @@ internal object Storage {
         class TooLarge(val bytes: Long) : Problem()
     }
 
-    fun problem(c: Context, to: Volume): Problem? {
-        val from = KINDS.map { dir(c, it) }
+    fun problem(c: Context, to: Volume, kinds: List<String> = MAP_KINDS): Problem? {
+        val from = kinds.map { dir(c, it) }
         val big = from.maxOf { largest(it) }
         if (to.fat32 && big > FAT32_MAX) return Problem.TooLarge(big)
         val need = from.sumOf { sizeOf(it) }
@@ -121,7 +141,7 @@ internal object Storage {
     /** Whether a file of [bytes] fits where [kind] lies (FAT32 on a card), for loading a new map or model. */
     fun takes(c: Context, kind: String, bytes: Long): Boolean {
         if (bytes <= FAT32_MAX) return true
-        val id = chosen(c)
+        val id = chosen(c, kind)
         return id.isEmpty() || volumes(c).firstOrNull { it.id == id }?.fat32 != true
     }
 
@@ -133,11 +153,14 @@ internal object Storage {
      * and the SHA-256 kept beside a map file) before the old files go; on any error the copies are dropped and the old
      * place stays chosen. Blocking - off the main thread.
      */
-    fun move(c: Context, to: Volume, progress: (Phase, Long, Long) -> Unit) {
+    fun move(c: Context, to: Volume, kinds: List<String> = MAP_KINDS, progress: (Phase, Long, Long) -> Unit) {
         val app = c.applicationContext
         // the same check the page shows, here too: nothing is copied that cannot fit
-        problem(app, to)?.let { throw IOException(if (it is Problem.TooLarge) "FAT32" else "room") }
-        val pairs = KINDS.map { dir(app, it) to target(app, to, it) }.filter { (a, b) -> a.exists() && a.canonicalPath != b.canonicalPath }
+        problem(app, to, kinds)?.let { throw IOException(if (it is Problem.TooLarge) "FAT32" else "room") }
+        // the music followed the maps' place so far: it gets that place as its own before the maps move without it
+        if (MUSIC !in kinds) prefs(app).let { p -> if (!p.contains("volume_music"))
+            p.edit().putString("volume_music", p.getString("volume", "") ?: "").putString("root_music", p.getString("root", null)).commit() }
+        val pairs = kinds.map { dir(app, it) to target(app, to, it) }.filter { (a, b) -> a.exists() && a.canonicalPath != b.canonicalPath }
         val files = pairs.flatMap { (a, b) -> a.walkTopDown().filter { it.isFile }.map { it to File(b, it.relativeTo(a).path) }.toList() }
         val total = files.sumOf { it.first.length() }
         Log.i(TAG, "move to ${if (to.internal) "device storage" else "card"}: ${files.size} files, $total bytes")
@@ -166,9 +189,10 @@ internal object Storage {
             pairs.forEach { (_, b) -> b.deleteRecursively() }
             throw e
         }
-        prefs(app).edit().putString("volume", to.id).putString("root", to.root.path).commit()
+        val k = kinds.first()
+        prefs(app).edit().putString(key(k), to.id).putString(rootKey(k), to.root.path).commit()
         pairs.forEach { (a, _) -> a.deleteRecursively() }
-        net.prototux.aare.music.Offline.forgetDir()
+        if (MUSIC in kinds) net.prototux.aare.music.Offline.forgetDir()
         Log.i(TAG, "moved, the old files are gone")
     }
 

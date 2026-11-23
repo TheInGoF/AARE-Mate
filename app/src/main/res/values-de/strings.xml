@@ -1094,12 +1094,14 @@
     <string name="regions_delete_ask">%1$s (%2$s) wird vom Gerät gelöscht. Wieder ankreuzen lädt es neu.</string>
     <string name="regions_speed">%1$s MB/s · %2$s von %3$s</string>
     <string name="storage_title">Speicherort</string>
-    <string name="storage_intro">Offline-Karten, Sprachmodelle und geladene Musik können auf der Speicherkarte liegen. Wählst du einen anderen Ort, ziehen sie dorthin um; sie werden geprüft, bevor die alten Kopien gelöscht werden.</string>
+    <string name="storage_intro">Offline-Karten und Sprachmodelle können auf der Speicherkarte liegen (die Musik hat ihren eigenen Speicherort auf der Seite Musik). Wählst du einen anderen Ort, ziehen sie dorthin um; sie werden geprüft, bevor die alten Kopien gelöscht werden.</string>
+    <string name="storage_intro_music">Wohin geladene Musik gespeichert wird – unabhängig vom Speicherort der Offline-Karten. Wählst du einen anderen Ort, zieht die Musik dorthin um; sie wird geprüft, bevor die alten Kopien gelöscht werden.</string>
+    <string name="storage_move_ask_music">Musik nach „%1$s“ umziehen (%2$s)?</string>
     <string name="storage_card">Speicherkarte (%1$s)</string>
     <string name="storage_card_plain">Speicherkarte</string>
     <string name="storage_internal">Interner Speicher</string>
     <string name="storage_free">%1$s frei von %2$s</string>
-    <string name="storage_move_ask">Karten, Sprachmodelle und Musik nach „%1$s“ umziehen (%2$s)?</string>
+    <string name="storage_move_ask">Karten und Sprachmodelle nach „%1$s“ umziehen (%2$s)?</string>
     <string name="storage_move">Umziehen</string>
     <string name="storage_copying">Kopiere – %1$s von %2$s</string>
     <string name="storage_checking">Prüfe – %1$s von %2$s</string>

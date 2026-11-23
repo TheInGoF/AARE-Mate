@@ -237,13 +237,14 @@ private fun WholePackage(r: RegionPacks.Region, mapDate: String, compact: Boolea
  * a card - or when the chosen one is missing.
  */
 @Composable
-private fun StorageCard(busy: Boolean, changed: () -> Unit) {
+internal fun StorageCard(busy: Boolean, kinds: List<String> = net.prototux.aare.Storage.MAP_KINDS, intro: Int = R.string.storage_intro,
+                         moveAsk: Int = R.string.storage_move_ask, changed: () -> Unit) {
     val ctx = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var tick by remember { mutableIntStateOf(0) }
     val vols = remember(tick) { net.prototux.aare.Storage.volumes(ctx) }
-    val chosen = remember(tick) { net.prototux.aare.Storage.chosen(ctx) }
-    val missing = remember(tick) { net.prototux.aare.Storage.cardMissing(ctx) }
+    val chosen = remember(tick) { net.prototux.aare.Storage.chosen(ctx, kinds.first()) }
+    val missing = remember(tick) { net.prototux.aare.Storage.cardMissing(ctx, kinds.first()) }
     var moving by remember { mutableStateOf<Triple<net.prototux.aare.Storage.Phase, Long, Long>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var target by remember { mutableStateOf<net.prototux.aare.Storage.Volume?>(null) }
@@ -252,7 +253,7 @@ private fun StorageCard(busy: Boolean, changed: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(stringResource(R.string.storage_title), style = MaterialTheme.typography.titleMedium)
-            Text(stringResource(R.string.storage_intro), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(intro), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (missing) Text(stringResource(R.string.storage_card_missing), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             vols.forEach { v ->
                 val pick = { if (v.id != chosen) { target = v; error = null } }
@@ -272,21 +273,21 @@ private fun StorageCard(busy: Boolean, changed: () -> Unit) {
             if (busy && moving == null) Text(stringResource(R.string.storage_busy), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val t = target
             if (t != null && moving == null) {
-                val problem = remember(t, tick) { net.prototux.aare.Storage.problem(ctx, t) }
-                val need = remember(t, tick) { net.prototux.aare.Storage.KINDS.sumOf { net.prototux.aare.Storage.bytes(ctx, it) } }
+                val problem = remember(t, tick) { net.prototux.aare.Storage.problem(ctx, t, kinds) }
+                val need = remember(t, tick) { kinds.sumOf { net.prototux.aare.Storage.bytes(ctx, it) } }
                 when (problem) {
                     is net.prototux.aare.Storage.Problem.TooLarge -> Text(stringResource(R.string.storage_fat32, size(problem.bytes)),
                         color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                     is net.prototux.aare.Storage.Problem.NoRoom -> Text(stringResource(R.string.storage_no_room, size(problem.need), size(problem.free)),
                         color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                     null -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.storage_move_ask, t.label, size(need)), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(moveAsk, t.label, size(need)), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         TextButton(onClick = { target = null }) { Text(stringResource(android.R.string.cancel)) }
                         FilledTonalButton(enabled = !busy, onClick = {
                             moving = Triple(net.prototux.aare.Storage.Phase.COPY, 0L, need)
                             scope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                 var shown = 0L
-                                val r = runCatching { net.prototux.aare.Storage.move(ctx, t) { ph, d, a ->
+                                val r = runCatching { net.prototux.aare.Storage.move(ctx, t, kinds) { ph, d, a ->
                                     val now = android.os.SystemClock.elapsedRealtime()
                                     if (now - shown > 500 || d == a) { shown = now; moving = Triple(ph, d, a) }
                                 } }

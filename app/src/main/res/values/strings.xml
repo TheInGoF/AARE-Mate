@@ -1105,12 +1105,14 @@
     <string name="regions_delete_ask">%1$s (%2$s) will be deleted from this device. Ticking it again loads it anew.</string>
     <string name="regions_speed">%1$s MB/s · %2$s of %3$s</string>
     <string name="storage_title">Storage place</string>
-    <string name="storage_intro">Offline maps, speech models and downloaded music can lie on the memory card. Choosing another place moves them there; they are checked before the old copies go.</string>
+    <string name="storage_intro">Offline maps and speech models can lie on the memory card (the music has a place of its own on the Music page). Choosing another place moves them there; they are checked before the old copies go.</string>
+    <string name="storage_intro_music">Where downloaded music is kept - apart from the offline maps place. Choose another place and the music moves there; it is checked before the old copies go.</string>
+    <string name="storage_move_ask_music">Move the music to "%1$s" (%2$s)?</string>
     <string name="storage_card">Memory card (%1$s)</string>
     <string name="storage_card_plain">Memory card</string>
     <string name="storage_internal">Device storage</string>
     <string name="storage_free">%1$s free of %2$s</string>
-    <string name="storage_move_ask">Move maps, speech models and music to “%1$s” (%2$s)?</string>
+    <string name="storage_move_ask">Move maps and speech models to “%1$s” (%2$s)?</string>
     <string name="storage_move">Move</string>
     <string name="storage_copying">Copying – %1$s of %2$s</string>
     <string name="storage_checking">Checking – %1$s of %2$s</string>
