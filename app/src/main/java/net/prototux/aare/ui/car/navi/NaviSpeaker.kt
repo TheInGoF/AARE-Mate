@@ -153,8 +153,9 @@ internal class NaviSpeaker(context: Context) {
                 // few seconds late, an instruction less so; the phone's voice only when the device's really brings nothing.
                 val wait = if (queue == TextToSpeech.QUEUE_FLUSH) WAIT_MS else WAIT_WARNING_MS
                 if (android.os.SystemClock.uptimeMillis() - t0 < wait) { main.postDelayed({ check() }, 100); return }
-                net.prototux.aare.DiagLog.add("voice: the device's voice was not ready in ${wait / 1000} s, the phone's said \"${words.take(40)}\"")
-                phone(words, queue, id)
+                // System I-092 ("soll alles über Piper gehen"): no phone's voice in between any more - one voice throughout; an
+                // announcement the device's voice could not make in time is left out (the next one comes in its voice)
+                net.prototux.aare.DiagLog.warn("voice: the device's voice was not ready in ${wait / 1000} s - left out, not said with the phone's voice: \"${words.take(40)}\"", "VOICE")
             }
             check(); return
         }
@@ -214,8 +215,8 @@ internal class NaviSpeaker(context: Context) {
 
     companion object {
         private const val TAG = "MateNavi"
-        private const val WAIT_MS = 6_000L
-        private const val WAIT_WARNING_MS = 20_000L
+        private const val WAIT_MS = 10_000L
+        private const val WAIT_WARNING_MS = 45_000L
         private const val REBIND_MS = 20_000L
         /** [Mode.BRIEF]: the turn is said at its first announcement within this distance. */
         const val BRIEF_M = 1_500.0

@@ -20,6 +20,8 @@ internal object NaviKokoro {
      */
     const val AHEAD = 36
     private val worker = Executors.newSingleThreadExecutor()
+    /** Texts asked for now (said or warned): kept in front when a new list replaces the queue (System I-092). */
+    private val urgent = HashSet<String>()
     private val cache = object : LinkedHashMap<String, Pair<FloatArray, Int>>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<FloatArray, Int>>?) = size > KEEP
     }
@@ -46,8 +48,14 @@ internal object NaviKokoro {
         val app = context.applicationContext
         synchronized(this) {
             val add = texts.distinct().filter { it !in cache && it != current }
-            if (first) add.asReversed().forEach { t -> todo.remove(t); todo.addFirst(t) }
-            else { todo.clear(); todo.addAll(add) }
+            if (first) { add.asReversed().forEach { t -> todo.remove(t); todo.addFirst(t) }; urgent.addAll(add) }
+            else {
+                // System I-092 (23.11.2026: "diese Ladestopp-Änderung, die kommt über den Standard TTS, nicht über Piper"): a new
+                // route's list replaced the whole queue - a waiting urgent one (a warning, the first words of a new route)
+                // went with it, was never computed, and the phone's voice said it. The urgent ones stay in front.
+                val keep = todo.filter { it in urgent }
+                todo.clear(); todo.addAll(keep); todo.addAll(add.filter { it !in keep })
+            }
             if (!running && todo.isNotEmpty()) { running = true; worker.execute { work(app) } }
         }
     }
@@ -63,7 +71,7 @@ internal object NaviKokoro {
                 val t = synchronized(this) { todo.removeFirstOrNull().also { current = it } } ?: return
                 val r = runCatching { net.prototux.aare.speech.LocalTts.render(app, t, RENDER_MAX_S) }
                     .onFailure { Log.w(TAG, "voice: rendering \"${t.take(40)}\" failed", it) }.getOrNull()
-                synchronized(this) { current = null; if (r != null) cache[t] = r }
+                synchronized(this) { current = null; urgent.remove(t); if (r != null) cache[t] = r }
             }
         } finally {
             synchronized(this) { current = null; running = false }
