@@ -167,7 +167,7 @@ private fun idmateColors() = darkColorScheme(
  * in front and opens the switcher, the time and the phone's status. With the driver on the right
  * the patch sits in the right corner and its order is mirrored.
  *
- * The switcher shows the areas (dashboard, navigation, music, messages) and the entry to the app
+ * The switcher ("Bereiche") shows the areas (dashboard, navigation, audio, messenger, cinema) and the entry to the app
  * overview as tiles above the controls. An area only shows when there is something behind it; the
  * dashboard opens the IDmate car app when it is installed, AARE's own dashboard otherwise.
  *
@@ -800,9 +800,9 @@ private fun areas(
         show(null)
         if (idmate != null) open(idmate) else actions.goHome()
     }
-    // Navigation: an installed navigation app (ABRP first).
+    // Navigation: the chosen navigation app; Mate Navi is built in, so the area is there without any other one.
     val navi = naviApp(naviList, choice)
-    // One navigation app wins. With several installed, a long press on the tile opens the choice.
+    // One navigation app wins. With several installed, a swipe up on the tile shows the choice.
     val naviAll = if (naviList.size < 2) emptyList() else naviList.map { app ->
         Choice(app, app.id == navi?.id) { choice.pickNavi(app.packageName); open(app) }
     }

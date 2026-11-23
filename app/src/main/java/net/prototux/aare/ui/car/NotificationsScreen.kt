@@ -3,7 +3,6 @@ package net.prototux.aare.ui.car
 import android.text.format.DateUtils
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,12 +26,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import net.prototux.aare.R
 import net.prototux.aare.media.Pill
 import net.prototux.aare.media.Placeholder
@@ -81,20 +77,6 @@ internal fun NotificationsScreen(ui: CarUiState, modifier: Modifier) {
                         n.actions.forEach { (label, act) -> Pill(label, selected = false, onClick = act) }
                     }
                 }
-            }
-        }
-    }
-}
-
-/** The bell next to the clock, with the number of unseen notifications. */
-@Composable
-internal fun NotificationBell(ui: CarUiState, onClick: () -> Unit) {
-    Box(Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(Icons.Rounded.Notifications, stringResource(R.string.notif_title), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
-        if (ui.unseen > 0) {
-            Box(Modifier.align(Alignment.TopEnd).size(18.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error),
-                contentAlignment = Alignment.Center) {
-                Text(if (ui.unseen > 9) stringResource(R.string.notif_unseen_overflow) else "${ui.unseen}", color = Color.White, fontSize = 10.sp)
             }
         }
     }

@@ -51,9 +51,6 @@ class DefaultMediaHub(context: Context, scope: CoroutineScope) : MediaHub {
 
     override val apps: StateFlow<List<MediaApp>> = discovery.apps
 
-    /** False while we lack notification access, i.e. only our own connection is tracked. */
-    val sessionAccess: StateFlow<Boolean> = tracker.available
-
     override val playback: StateFlow<PlaybackInfo?> = _playback.asStateFlow()
 
     init {

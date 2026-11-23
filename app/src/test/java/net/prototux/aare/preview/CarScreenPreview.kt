@@ -412,7 +412,7 @@ class CarScreenPreview {
             CompositionLocalProvider(LocalDensity provides car(1f)) {
                 Column(Modifier.fillMaxSize().padding(top = 130.dp, bottom = 130.dp, start = 16.dp, end = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     listOf(false, true).forEach { right ->
-                        val tiles = listOf(net.prototux.aare.ui.car.navi.HubTile(Icons.Rounded.Search, "Zwischenhalt hinzufügen") {},
+                        val tiles = listOf(net.prototux.aare.ui.car.navi.HubTile(Icons.Rounded.Search, "Zwischenziel hinzufügen") {},
                             net.prototux.aare.ui.car.navi.HubTile(Icons.Rounded.Search, "Ziel ändern") {})
                         net.prototux.aare.ui.car.navi.NaviHub("Musterstadt", tiles, Modifier.weight(1f), null, {}, {}, {}, right)
                     }
@@ -588,7 +588,7 @@ class CarScreenPreview {
         val now = System.currentTimeMillis()
 
         val rows = listOf(
-            net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.OWN, "Halt", now + 25 * 60_000L, 38_000.0),
+            net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.OWN, "Zwischenziel", now + 25 * 60_000L, 38_000.0),
             net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.CHARGE, "Ionity · 350 kW", now + 95 * 60_000L, 160_000.0, 14.0, 70.0, 22.0),
             net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.DESTINATION, "Ziel", now + 210 * 60_000L, 290_000.0, arrivePercent = 21.0),
         )
@@ -668,7 +668,7 @@ class CarScreenPreview {
     private fun tripRows(): List<net.prototux.aare.ui.car.navi.NaviTripPlan.Row> {
         val now = System.currentTimeMillis()
         return listOf(
-            net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.OWN, "Halt", now + 25 * 60_000L, 38_000.0),
+            net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.OWN, "Zwischenziel", now + 25 * 60_000L, 38_000.0),
             net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.CHARGE, "Ionity · 350 kW", now + 95 * 60_000L, 160_000.0, 14.0, 70.0, 22.0),
             net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.DESTINATION, "Ziel", now + 210 * 60_000L, 290_000.0, arrivePercent = 21.0))
     }

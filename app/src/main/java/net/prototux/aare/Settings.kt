@@ -220,11 +220,6 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("ignore_driving", false)
         set(v) = prefs.edit { putBoolean("ignore_driving", v) }
 
-    /** The weather next to the clock (from Open-Meteo, with an approximate position). */
-    var showWeather: Boolean
-        get() = prefs.getBoolean("show_weather", true)
-        set(v) = prefs.edit { putBoolean("show_weather", v) }
-
     /** The next calendar event on the dashboard. */
     var showCalendar: Boolean
         get() = prefs.getBoolean("show_calendar", true)
@@ -294,13 +289,6 @@ class Settings(context: Context) {
     var carDataApp: Boolean
         get() = prefs.getBoolean("car_data_app", false)
         set(v) = prefs.edit { putBoolean("car_data_app", v) }
-    /** Where the user dragged the in-call bar on the car screen (px offset from the top centre). */
-    var callBarOffsetX: Float
-        get() = prefs.getFloat("call_bar_x", 0f)
-        set(v) = prefs.edit { putFloat("call_bar_x", v) }
-    var callBarOffsetY: Float
-        get() = prefs.getFloat("call_bar_y", 0f)
-        set(v) = prefs.edit { putFloat("call_bar_y", v) }
 
     /** While connected, the car's GPS becomes the phone's location (needs AARE as mock location app). */
     var carGpsForPhone: Boolean
@@ -327,6 +315,11 @@ class Settings(context: Context) {
     var faultMarkButton: Boolean
         get() = prefs.getBoolean("fault_mark_button", true)
         set(v) = prefs.edit { putBoolean("fault_mark_button", v) }
+
+    /** "Mate Debug" among the car's apps (System N-039, Erweitert › Testen): on during the test drives; off hides it. */
+    var debugApp: Boolean
+        get() = prefs.getBoolean("debug_app", true)
+        set(v) = prefs.edit { putBoolean("debug_app", v) }
 
     /** Show incoming messages as banners on the car screen. */
     var messageBanners: Boolean

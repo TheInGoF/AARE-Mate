@@ -5,7 +5,7 @@
     <string name="mirror_locked_placeholder">The phone screen is paused while the phone is locked. Unlock the phone to show it.</string>
     <string name="mirror_driving_no_accessibility">The phone screen is paused while driving. To show navigation apps while driving, turn on Mate in the phone\'s accessibility settings: it tells Mate which app is open.</string>
     <string name="mirror_driving_nav_only">The phone screen is paused while driving. It shows navigation apps only.</string>
-    <string name="mirror_need_car_audio">Turn on Car audio in Mate on the phone, and choose Entire screen when Android asks: the phone screen uses the same permission.</string>
+    <string name="mirror_need_car_audio">Turn on \u201cSound in the car\u201d in Mate on the phone, and choose Entire screen when Android asks: the phone screen uses the same permission.</string>
     <string name="mirror_need_accessibility">To use the phone from the car, turn on Mate in the phone\'s accessibility settings.</string>
 
     <!-- common: shared across screens -->
@@ -26,14 +26,14 @@
     <string name="common_something_went_wrong">Something went wrong</string>
 
     <!-- setup: MainActivity home/settings screens -->
-    <string name="setup_page_car_screen_title">Car screen</string>
-    <string name="setup_page_car_screen_subtitle">Colors, size, animations, dashboard, phone screen</string>
+    <string name="setup_page_car_screen_title">Look</string>
+    <string name="setup_page_car_screen_subtitle">Colors, size, other apps, animations, title strip, passenger mode</string>
     <string name="setup_page_apps_title">Apps</string>
     <string name="setup_page_apps_subtitle">Which apps show in the car</string>
     <string name="setup_page_connection_title">Connection</string>
     <string name="setup_page_connection_subtitle">Wireless, video quality, your cars</string>
     <string name="setup_page_advanced_title">Advanced</string>
-    <string name="setup_page_advanced_subtitle">Head unit server, certificates, log</string>
+    <string name="setup_page_advanced_subtitle">Head unit server, certificates, log, testing</string>
     <string name="setup_page_car_data_title">Car data</string>
     <string name="setup_page_car_data_subtitle">Live speed, gear and sensors from the car</string>
 
@@ -111,10 +111,9 @@
     <string name="places_set_home">This is my home</string>
     <string name="places_unset_home">Not my home any more</string>
     <string name="places_wallbox">Wallbox at home</string>
-    <string name="places_wallbox_sub">Then a route home may arrive with the lower value of Route planning</string>
+    <string name="places_wallbox_sub">Then a route home may arrive with the lower value of Route options</string>
     <string name="mate_navi_exit">Exit %1$s</string>
     <string name="mate_navi_next_in">%1$s in %2$s</string>
-    <string name="car_data_show_in_car_title">Show on the car screen</string>
     <string name="car_data_show_in_car_subtitle">Add a diagnostics app in the car for this live data</string>
 
     <!-- vehicles: per-car overrides from vehicles.json -->
@@ -185,7 +184,6 @@
     <string name="setup_choice_ev_source">Where Maps gets the car from</string>
     <string name="setup_ev_source_google">Vehicle saved in Maps</string>
     <string name="setup_ev_source_mate">Mate\'s model</string>
-    <string name="setup_ev_source_off">No electric car</string>
     <string name="setup_ev_google_hint">Save your car once in Google Maps on this device (profile picture → Settings → Your vehicles). Maps then plans charging stops with Google\'s data for that car; you tell Maps the state of charge on the car screen.</string>
     <string name="setup_choice_ev_battery">The car (VW ID.7)</string>
     <string name="setup_ev_state">Maps is told: battery %1$d kWh at %2$d %%, consumption from the last trips %3$s kWh/100 km.</string>
@@ -206,9 +204,6 @@
     <string name="setup_choice_colors_auto">Car\'s day/night</string>
     <string name="setup_choice_dark">Dark</string>
     <string name="setup_choice_light">Light</string>
-    <string name="setup_section_dashboard">Dashboard</string>
-    <string name="setup_toggle_weather_title">Weather</string>
-    <string name="setup_toggle_weather_subtitle">Next to the clock, from Open-Meteo (it gets an approximate position, about 10 km)</string>
     <string name="setup_toggle_calendar_title">Next calendar event</string>
     <string name="setup_toggle_calendar_subtitle">Under the music, with a shortcut to navigate to its place</string>
     <string name="setup_section_driving">Driving</string>
@@ -223,7 +218,7 @@
     <string name="setup_app_kind_generic">Car app</string>
     <string name="setup_app_group_media">Media</string>
     <string name="setup_app_kind_media">Music, podcasts, radio</string>
-    <string name="setup_app_group_messaging">Messaging</string>
+    <string name="setup_app_group_messaging">Messenger</string>
     <string name="setup_app_kind_messaging">Messages from its notifications</string>
     <string name="setup_app_group_aare">Mate</string>
     <string name="setup_section_unsupported_apps">Android Auto apps Mate can\'t show</string>
@@ -238,9 +233,6 @@
     <string name="setup_toggle_verbose_log_subtitle">Record the full head-unit protocol trace in this log, to attach to a bug report. Logs a lot; leave it off otherwise.</string>
     <string name="setup_about_versions">Mate %1$s · based on AARE %2$s · AARE changes looked through up to %3$s</string>
     <string name="setup_about_text">Mate %1$s, a fork of AARE · GPL-3.0-or-later · Not affiliated with Google. Android Auto is a trademark of Google LLC.</string>
-    <string name="setup_switch_passenger">Passenger mode: no driving restrictions (the driver must not use the screen)</string>
-    <string name="setup_switch_message_notifications">Message notifications</string>
-    <string name="setup_switch_audio_next_connection">Phone audio in the car (next connection)</string>
     <string name="setup_nothing_to_open">This phone has no app that can open this</string>
 
     <!-- cert: certificate management -->
@@ -272,9 +264,9 @@
 
     <!-- msg: messaging settings -->
     <string name="msg_settings_title">Messages</string>
-    <string name="msg_page_subtitle">Banners and reading aloud</string>
+    <string name="msg_page_subtitle">Pop-up, preview, groups, reading aloud, do not disturb</string>
     <string name="msg_check_notification_access_subtitle">Needed to see messages in the car</string>
-    <string name="msg_toggle_banners_title">Show message notifications</string>
+    <string name="msg_toggle_banners_title">Pop-up for new messages</string>
     <string name="msg_toggle_banners_subtitle">A banner on the car screen for each new message</string>
     <string name="msg_toggle_group_title">Group messages</string>
     <string name="msg_toggle_group_subtitle">Also show messages from group conversations</string>
@@ -293,8 +285,8 @@
     <string name="msg_autoreply_default">I\'m driving right now, I\'ll answer later.</string>
 
     <!-- audio: car audio settings -->
-    <string name="audio_settings_title">Car audio</string>
-    <string name="audio_page_subtitle">How the phone\'s sound reaches the car</string>
+    <string name="audio_settings_title">Sound in the car</string>
+    <string name="audio_page_subtitle">Phone audio in the car, ways, ringtone, music while reading aloud</string>
     <string name="audio_toggle_enable_title">Phone audio in the car</string>
     <string name="audio_toggle_enable_subtitle">Music, podcasts, the assistant and, depending on the method, navigation voice</string>
     <string name="audio_using_method">Using: %1$s</string>
@@ -314,23 +306,21 @@
     <string name="audio_shizuku_install_hint">Install Shizuku, start it (wireless debugging, once per reboot), then come back here.</string>
     <string name="audio_playback_ready">Ready. Media only: no navigation voice, some apps opt out, and the phone keeps playing too.</string>
     <string name="audio_playback_not_ready">Works everywhere, with limits: media only, no navigation voice. Android asks to capture the screen: choose Entire screen (also used by the phone screen).</string>
-    <string name="audio_notice_setup_hint">Open Mate on the phone and set up car audio to hear the phone in the car</string>
+    <string name="audio_notice_setup_hint">Open Mate on the phone and set up “Sound in the car” to hear the phone in the car</string>
 
     <!-- phone: phone screen feature -->
     <string name="phone_section_title">Phone screen</string>
-    <string name="phone_toggle_enable_title">Phone screen in the car</string>
-    <string name="phone_toggle_enable_subtitle">The phone\'s own screen, for apps Mate can\'t host (Google Maps, Waze). Paused while the phone is locked, and while driving unless a navigation app is guiding. Not offered on the head unit server unless enabled there</string>
     <string name="phone_check_touch_title">Touch on the phone screen</string>
     <string name="phone_check_touch_subtitle">Turn on Mate in Accessibility. Sideloaded apps may first need \"Allow restricted settings\" in Mate\'s app info</string>
-    <string name="phone_hint_touch_capture">The picture uses the screen-capture permission (Car audio page, choose Entire screen).</string>
+    <string name="phone_hint_touch_capture">The picture uses the screen-capture permission (page “Sound in the car”, choose Entire screen).</string>
     <string name="phone_app_row_subtitle">The phone\'s own screen, for apps Mate can\'t host</string>
 
     <!-- standalone: launching ordinary phone apps on the car screen (Shizuku, parked only) -->
-    <string name="standalone_section_title">Apps on the car screen (advanced)</string>
+    <string name="standalone_section_title">Cinema</string>
     <string name="standalone_section_warning">These are not Android Auto apps: Mate shows their normal phone screen, only while parked, and needs Shizuku. Use at your own risk.</string>
-    <string name="standalone_toggle_title">Launch phone apps on the car screen</string>
+    <string name="standalone_toggle_title">Switch on cinema (phone apps on the car screen)</string>
     <string name="standalone_toggle_subtitle">Pick the apps below. Shown only when parked.</string>
-    <string name="standalone_need_shizuku">Needs Shizuku. Set it up in Audio settings, then come back.</string>
+    <string name="standalone_need_shizuku">Needs Shizuku. Set it up on the page “Sound in the car”, then come back.</string>
     <string name="standalone_not_native">Not an Android Auto app · parked use</string>
     <string name="standalone_starting">Starting…</string>
     <string name="standalone_paused_driving">Only when parked: gear in P, the car standing still.</string>
@@ -368,7 +358,7 @@
     <string name="notif_cert_download_failed">Couldn\'t download the certificate: %1$s</string>
     <string name="notif_status_connecting_wirelessly">Connecting wirelessly…</string>
     <string name="notif_status_not_connected">Not connected</string>
-    <string name="notif_keeping_consent_suffix">%1$s · keeping the screen-capture consent for car audio (Stop releases it)</string>
+    <string name="notif_keeping_consent_suffix">%1$s · keeping the screen-capture consent for the sound in the car (Stop releases it)</string>
     <string name="notif_cert_changed_title">Head unit certificate changed</string>
     <string name="notif_new_head_unit_title">New head unit</string>
     <string name="notif_trust_warning">Only trust a head unit you are connected to right now</string>
@@ -401,7 +391,6 @@
     <string name="notif_title">Notifications</string>
     <string name="notif_clear_all">Clear all</string>
     <string name="notif_new_message_placeholder">New message</string>
-    <string name="notif_unseen_overflow">9+</string>
 
     <!-- dash: car shell / dashboard chrome -->
     <string name="dash_menu_apps">Apps</string>
@@ -502,7 +491,6 @@
     <string name="phone_call_fallback_name">Call</string>
     <string name="phone_action_decline">Decline</string>
     <string name="phone_action_answer">Answer</string>
-    <string name="phone_in_call_elapsed">%1$s · %2$s</string>
     <string name="dash_event_today">Today</string>
     <string name="dash_latest_label">Latest</string>
     <string name="cluster_arrival_time">Arrival %1$s</string>
@@ -597,19 +585,12 @@
     <string name="keyboard_resting_for">Pause · %1$d s</string>
     <string name="media_action_enqueue">Play after this</string>
     <string name="music_error_server">The music server at home doesn\u2019t answer. There is internet \u2013 try again later.</string>
-    <string name="music_error_setup">Music isn\u2019t connected yet: on the phone, under Apps, open \u201cMusic (Plex)\u201d.</string>
+    <string name="music_error_setup">Music isn\u2019t connected yet: in the phone app, under Music, open “Music (Plex)”.</string>
     <string name="media_action_back10">Back 10 seconds</string>
     <string name="media_action_forward30">Forward 30 seconds</string>
     <string name="fault_mark_action">Mark fault</string>
-    <string name="setup_toggle_fault_mark_title">\u201cMark fault\u201d in the switcher</string>
-    <string name="setup_toggle_fault_mark_subtitle">At the bottom right of the switcher (tap the area button): keeps log and state for finding faults.</string>
-    <string name="tts_section">Speech for prompts</string>
-    <string name="tts_check_title">Voice of the navigation prompts</string>
-    <string name="tts_check_mate">Mate\'s voices are the tablet\'s speech output.</string>
-    <string name="tts_check_google">Speech Services by Google are in use - choose and download a natural voice there.</string>
-    <string name="tts_check_other">Another speech engine is set: choose \u201cSpeech Services by Google\u201d in the settings.</string>
-    <string name="tts_check_missing">\u201cSpeech Services by Google\u201d are missing: install them from the Play Store, then choose them here.</string>
-    <string name="tts_check_open">Open</string>
+    <string name="setup_toggle_fault_mark_title">“Mark fault” in the areas</string>
+    <string name="setup_toggle_fault_mark_subtitle">At the bottom right of the areas (tap the area\u2019s name): keeps log and state for finding faults.</string>
     <string name="fault_mark_title">Fault marked</string>
     <string name="fault_mark_done">Log and state are kept - for looking at later on the tablet under marks/.</string>
     <string name="fault_mark_failed">Keeping it failed.</string>
@@ -625,7 +606,7 @@
     <string name="music_error_offline">No internet connection: music from the server needs a network.</string>
     <string name="music_error_portal">The Wi\u2011Fi is waiting for a confirmation: on the tablet, tap \u201cSign in to network\u201d, then music works.</string>
     <string name="music_error_wifi_no_internet">The Wi\u2011Fi has no internet. Choose another network or confirm the Wi\u2011Fi\u2019s sign-in on the tablet.</string>
-    <string name="music_error_login">The Plex sign-in has expired: on the phone, under Apps, connect \u201cMusic (Plex)\u201d again.</string>
+    <string name="music_error_login">The Plex sign-in has expired: in the phone app, under Music, connect “Music (Plex)” again.</string>
     <string name="music_tab_genres">Genres</string>
     <string name="music_all_tracks">All tracks A–Z</string>
     <string name="music_shuffle_artist">everything by this artist, shuffled anew each time</string>
@@ -637,8 +618,8 @@
     <string name="music_repeat_all">Repeating all</string>
     <string name="music_repeat_one">Repeating this track</string>
     <string name="media_rating_stars">%1$d stars</string>
-    <string name="dash_title_section">Title beside the controls</string>
-    <string name="dash_title_hint">While something plays, a slim strip beside the controls names it: artist · album · title. Not in the music area itself.</string>
+    <string name="dash_title_section">Title beside the bar</string>
+    <string name="dash_title_hint">While something plays, a slim strip beside the bar names it: artist · album · title. Not in the area Audio itself.</string>
     <string name="dash_title_music">Music</string>
     <string name="dash_title_music_sub">artist, album and title</string>
     <string name="dash_title_books">Audio books</string>
@@ -718,20 +699,16 @@
     <string name="stick_off">Do not use stick</string>
     <string name="dbg_src_car">Car only</string>
     <string name="stick_state_off">Not in use</string>
-    <string name="mate_group_mate">Mate – the car screen</string>
-    <string name="mate_group_system">System – connection and sound</string>
     <string name="mate_page_dashboard">Dashboard</string>
-    <string name="mate_page_dashboard_sub">Connect the IDmate server and the stick</string>
+    <string name="mate_page_dashboard_sub">Connection and stick, kind of car, calendar</string>
     <string name="mate_page_navi">Navigation</string>
-    <string name="mate_page_navi_sub">Which navigation app fills the area</string>
+    <string name="mate_page_navi_sub">Navigation app, speed limit, charging stops, frame rate</string>
     <string name="mate_page_music">Music</string>
-    <string name="mate_page_music_sub">Plex server, default app, apps shown beside it</string>
-    <string name="mate_page_bar">Controls</string>
-    <string name="mate_page_bar_sub">Title strip, \u201cMark fault\u201d</string>
+    <string name="mate_page_music_sub">Mate Music, offline playlists, music folder, music apps</string>
     <string name="mate_navi_title">Navigation app</string>
-    <string name="mate_navi_hint">One app fills the navigation area. In the car: swipe up on \u201cNavi\u201d in the switcher. An app that refuses Mate is stepped over while another works.</string>
+    <string name="mate_navi_hint">One app fills the navigation area. In the car: swipe up on \u201cNavi\u201d in the areas. An app that refuses Mate is stepped over while another works.</string>
     <string name="mate_music_title">Music apps</string>
-    <string name="mate_music_hint">The default app opens with \u201cMusik\u201d. Apps ticked on the right come up in the car with a swipe up on \u201cMusik\u201d in the switcher, e.g. an audio book and a podcast app; all of them when none is ticked.</string>
+    <string name="mate_music_hint">The default app opens with \u201cAudio\u201d. Apps ticked on the right come up in the car with a swipe up on \u201cAudio\u201d in the areas, e.g. an audio book and a podcast app; all of them when none is ticked.</string>
     <string name="mate_music_col_default">Default</string>
     <string name="mate_music_col_pinned">Always shown</string>
     <string name="mate_choice_none">No such app is installed.</string>
@@ -756,7 +733,7 @@
     <string name="music_level_boost_hint">Plex measures against \u221218 LUFS. Higher is louder; tracks quieter than the target stay as they are. Applies from the next track, for the other sources (switch below) at once.</string>
     <string name="msg_spoken">%1$s writes: %2$s</string>
     <string name="mate_page_sound">Sound</string>
-    <string name="mate_page_sound_sub">Equalizer for the car\'s speakers</string>
+    <string name="mate_page_sound_sub">Equalizer, measurement, presets, even volume</string>
     <string name="sound_section_filter">Sound filter</string>
     <string name="sound_toggle_title">Use the sound filter</string>
     <string name="sound_toggle_subtitle">Works on everything Mate sends to the car: its own music, audiobooks, other apps. Navigation prompts stay as they are.</string>
@@ -833,7 +810,7 @@
     <string name="speech_section_models">Speech recognition</string>
     <string name="speech_models">On the device: %1$s. Everything is computed here, nothing goes online.</string>
     <string name="speech_no_models">No speech model on the device yet.</string>
-    <string name="speech_models_where">Models go into the app\'s folder: Android/data/app.idmate.mate/files/sprache/whisper-&lt;model&gt; (e.g. whisper-base, whisper-base.en).</string>
+    <string name="speech_models_where">Models go into Mate\'s storage place, in the folder sprache/whisper-&lt;model&gt; (e.g. whisper-base, whisper-base.en).</string>
     <string name="speech_section_bench">Speed</string>
     <string name="speech_bench_hint">The device\'s voice speaks three test sentences, each model recognizes them with 2 and 4 threads. A real-time factor below 1 is faster than spoken. Takes a few minutes depending on the model.</string>
     <string name="speech_bench_start">Measure the speed</string>
@@ -861,9 +838,6 @@
     <string name="rec_photo">Photo %1$d</string>
     <string name="rec_stop">Stop</string>
     <string name="rec_hint">Press Record, then do the steps in the car window, \u201cPhoto\u201d after each step, \u201cStop\u201d at the end. Recorded are touches on the car screen, keys and what the apps answer.</string>
-    <string name="combustion_section">Vehicle</string>
-    <string name="combustion_title">Combustion car</string>
-    <string name="combustion_subtitle">No dashboard and no electric-car data: Mate shows navigation, music, messages and apps only and starts with navigation.</string>
     <string name="navi_voice_button">Destination</string>
     <string name="navi_voice_listening">Speak …</string>
     <string name="speech_model_row">Whisper %1$s · %2$d MB</string>
@@ -912,7 +886,7 @@
     <string name="mate_panel_places">Places</string>
     <string name="mate_panel_places_sub">Address lists for the navigation: work, home and your own</string>
     <string name="mate_panel_settings">Settings</string>
-    <string name="mate_panel_settings_sub">Mate and the system: navigation, music, connection, apps</string>
+    <string name="mate_panel_settings_sub">Car screen, navigation, audio, speech, messenger, system</string>
     <string name="mate_panel_places_soon">The address lists follow in the next step.</string>
     <string name="places_category_work">Work</string>
     <string name="places_category_home">Home</string>
@@ -932,13 +906,13 @@
     <plurals name="places_count"><item quantity="one">%d place</item><item quantity="other">%d places</item></plurals>
     <string name="mate_navi_destination">Destination</string>
     <string name="mate_navi_pick_go">Navigate there</string>
-    <string name="mate_navi_pick_stop">As a stop on the way</string>
+    <string name="mate_navi_pick_stop">As a waypoint</string>
     <string name="mate_navi_pick_charge_here">Charge here (fixed charging stop)</string>
     <string name="mate_navi_pick_charger_info">%1$d kW · %2$d points</string>
     <string name="mate_navi_home">Home</string>
     <string name="mate_navi_resume">Continue</string>
     <string name="mate_navi_resume_forget">Forget the trip</string>
-    <string name="mate_navi_destination_stop">Stop</string>
+    <string name="mate_navi_destination_stop">Waypoint</string>
     <string name="mate_navi_destination_change">New destination</string>
     <string name="mate_navi_search">Search by keyboard or voice</string>
     <string name="mate_navi_list_empty">No places in this list yet - add them in the phone app under Places.</string>
@@ -951,11 +925,11 @@
     <string name="mate_navi_planning">Planning the route…</string>
     <string name="mate_navi_start">Start navigation</string>
     <string name="mate_navi_menu">Navigation</string>
-    <string name="mate_navi_menu_stop">Add a stop</string>
+    <string name="mate_navi_menu_stop">Add a waypoint</string>
     <string name="mate_navi_menu_change">Change destination</string>
     <string name="mate_navi_menu_end">End navigation</string>
     <string name="mate_navi_plan">Trip plan</string>
-    <string name="mate_navi_plan_add_stop">Add stop</string>
+    <string name="mate_navi_plan_add_stop">Waypoint</string>
     <string name="mate_navi_plan_change">Change destination</string>
     <string name="mate_navi_plan_more">Menu</string>
     <string name="mate_navi_plan_start">Here, now</string>
@@ -972,7 +946,7 @@
     <string name="mate_navi_at_charger">Charge to %1$d %% · about %2$d min</string>
     <string name="mate_navi_at_charger_after">then %1$s to %2$s</string>
     <string name="mate_navi_at_charger_say">Charging stop reached. Charge to %1$d percent, about %2$d minutes.</string>
-    <string name="mate_navi_plan_stop">Stop</string>
+    <string name="mate_navi_plan_stop">Waypoint</string>
     <string name="mate_navi_plan_charge">arrive %1$s · charge %2$d min · leave %3$s</string>
     <string name="mate_navi_plan_destination">%1$s on arrival</string>
     <string name="mate_navi_plan_ferry">Ferry · %1$d km at sea · %2$s, no energy used</string>
@@ -1040,11 +1014,10 @@
     <string name="navi_fps_video">As the video (30/60)</string>
     <string name="navi_fps_hint">Default 30: calm and frugal. “As the video” is for tests – the tablet does not keep 60 evenly. Applies when Mate Navi opens next.</string>
     <string name="mate_navi_cancel">Cancel</string>
-    <string name="mate_navi_end_route">End route</string>
     <string name="mate_navi_route_fast">Fast</string>
     <string name="mate_navi_route_eco">Economical</string>
     <string name="mate_navi_route_alt">Alternative</string>
-    <string name="navi_avoid_title">Mate Navi\'s routes</string>
+    <string name="navi_avoid_title">Avoid</string>
     <string name="navi_avoid_ferries">Avoid ferries</string>
     <string name="navi_avoid_ferries_sub">Only when there is no other way</string>
     <string name="navi_avoid_motorways">Avoid motorways</string>
@@ -1127,8 +1100,8 @@
     <string name="mate_navi_voice_think">Recognising …</string>
     <string name="mate_navi_search_for">Results for “%1$s”</string>
     <string name="mate_navi_charge_over">Above your %1$d %% – no other charger reaches on</string>
-    <string name="mate_panel_routing">Route planning</string>
-    <string name="mate_panel_routing_sub">What routes avoid, charging on the way</string>
+    <string name="mate_panel_routing">Route options</string>
+    <string name="mate_panel_routing_sub">Avoid, traffic, charging on the way, networks</string>
     <string name="routing_charge_title">Charging on the way</string>
     <string name="routing_min_charger">At least on reaching a charger</string>
     <string name="routing_min_destination">At least on reaching the destination</string>
@@ -1145,7 +1118,7 @@
     <string name="routing_visits_title">Chargers visited</string>
     <string name="transfer_title">Transfer settings</string>
     <string name="transfer_sub">Save and restore, e.g. for a new Mate installation</string>
-    <string name="transfer_intro">Saves all of Mate\'s settings to one file: places, route planning, chargers visited, sound, views, Plex, map server and the car certificate. In the new Mate installation choose “Restore” here. Offline maps optionally too (takes longer, needs that much free space).</string>
+    <string name="transfer_intro">Saves all of Mate\'s settings to one file: places, route options, chargers visited, sound, views, Plex, map server and the car certificate. In the new Mate installation choose “Restore” here. Offline maps optionally too (takes longer, needs that much free space).</string>
     <string name="transfer_save">Save …</string>
     <string name="transfer_maps">Take the offline maps along (%1$s)</string>
     <string name="transfer_busy">Working … %1$s</string>
@@ -1212,7 +1185,7 @@
     <string name="car_category_iot">Smart home</string>
     <string name="car_category_weather">Weather</string>
     <string name="car_category_calling">Calling</string>
-    <string name="car_category_messaging">Messaging</string>
+    <string name="car_category_messaging">Messenger</string>
     <string name="car_category_video">Video</string>
     <string name="car_category_feature_cluster">Instrument cluster</string>
     <string name="car_category_media">Media</string>
@@ -1227,7 +1200,7 @@
     <string name="voice_all_apps_hint">For every app (Better Route Planner, Google Maps …): in the tablet\'s settings under text-to-speech choose „Mate voices (Kokoro, Piper)“ as the preferred engine. Then every app speaks with the voice chosen here. Kokoro needs 2–3 s to the first sound; for other apps\' turn prompts Thorsten (Piper) is quicker.</string>
     <string name="voice_all_apps_open">Open the tablet\'s text-to-speech</string>
     <string name="mate_page_voices">Voices</string>
-    <string name="mate_page_voices_sub">Which voice Mate, Mate Navi, messages and every app speak with</string>
+    <string name="mate_page_voices_sub">Which voice Mate, Mate Navi, Messenger and every app speak with</string>
     <string name="transfer_now">Now: %1$s</string>
     <string name="voice_engine_delete">Delete</string>
     <string name="transfer_voices">Take the own Kokoro voices along (%1$s)</string>
@@ -1262,10 +1235,6 @@
     <string name="cinema_apps">Apps</string>
     <string name="mate_navi_plan_remove_charge">Remove charging stop</string>
     <string name="mate_navi_plan_no_charging">Continue without charging stops</string>
-    <string name="mate_hub_audio">Audio</string>
-    <string name="mate_hub_audio_sub">Music and sound</string>
-    <string name="mate_hub_speech">Speech</string>
-    <string name="mate_hub_speech_sub">Voices and speech recognition</string>
     <string name="mate_panel_dash_start">Start dashboard</string>
     <string name="mate_panel_dash_start_sub">Mate\'s car screen on this device</string>
     <string name="idmate_views">Views</string>
@@ -1278,9 +1247,9 @@
     <string name="views_app_current">As set now</string>
     <string name="idmate_drop_split">Split here</string>
     <string name="idmate_drop_replace">Replace here</string>
-    <string name="idmate_drop_no">Navigation and music only</string>
+    <string name="idmate_drop_no">Navigation and audio only</string>
     <string name="views_animations">Animations on the car screen</string>
-    <string name="views_animations_sub">An app taken in the hand and laid into a split, the split opening, its share changing, the switcher folding. Off if the tablet stutters.</string>
+    <string name="views_animations_sub">An app taken in the hand and laid into a split, the split opening, its share changing, the areas folding. Off if the tablet stutters.</string>
     <string name="voice_listening">Listening …</string>
     <string name="voice_thinking">Understanding …</string>
     <string name="voice_service_label">Mate speech recognition</string>
@@ -1389,8 +1358,8 @@
     <string name="power_opt_text">Android slows Mate down when the screen is off – the sound to the car may then crackle. Allow Mate to run without battery optimisation.</string>
     <string name="power_opt_button">Allow</string>
     <string name="debug_tone_later">Tone in 15 s (switch the screen off meanwhile)</string>
-    <string name="cinema_missing_off">Phone apps in the car are switched off. Switch them on in the Mate app under Apps → Apps on the car screen.</string>
-    <string name="cinema_missing_none">No app chosen for the cinema yet. Choose them in the Mate app under Apps → Apps on the car screen.</string>
+    <string name="cinema_missing_off">The cinema is switched off. Switch it on in the Mate app under Settings → Apps → Cinema.</string>
+    <string name="cinema_missing_none">No app chosen for the cinema yet. Choose them in the Mate app under Settings → Apps → Cinema.</string>
     <string name="cinema_missing_permission">Shizuku runs but has not allowed Mate yet. Open the Mate app on the tablet and allow Shizuku.</string>
     <string name="cinema_missing_start">Shizuku is not started. After every restart of the tablet tap “Start” in the Shizuku app.</string>
     <string name="cinema_missing_install">The cinema needs Shizuku. Install Shizuku on the tablet and start it.</string>
@@ -1422,7 +1391,7 @@
     <string name="logbook_how">A trip starts as soon as the car leaves P and ends once it has stood in P this long. Distance and route come from the car\'s GPS, battery level and charging from the telemetry stick.</string>
     <string name="logbook_grace">A trip ends after … in P</string>
     <string name="logbook_minutes">%d min</string>
-    <string name="logbook_stick">Connect the stick: home page → Dashboard → \"Connect the dashboard\" → Telemetry stick → \"Find stick\". Without the stick, battery level, consumption and charges are missing.</string>
+    <string name="logbook_stick">Connect the stick: Settings → Dashboard → \"Connect the dashboard\" → Telemetry stick → \"Find stick\". Without the stick, battery level, consumption and charges are missing.</string>
     <string name="logbook_trips">Trips (%d)</string>
     <string name="logbook_charges">Charges (%d)</string>
     <string name="logbook_no_trips">No trip yet. They appear after the first trip with the car connected.</string>
@@ -1489,7 +1458,7 @@
     <string name="licences_row_noto">%1$s (map lettering)</string>
     <string name="licences_row_osm">%1$s: map, routes, places, service areas, chargers</string>
     <string name="licences_row_protomaps">%1$s: map style</string>
-    <string name="licences_row_open_meteo">%1$s: weather along the route, beside the clock and the dashboard\'s wind (through IDmate)</string>
+    <string name="licences_row_open_meteo">%1$s: weather along the route and the dashboard\'s wind (through IDmate)</string>
     <string name="licences_row_dwd">%1$s: rain radar on the dashboard (through IDmate), Quelle: Deutscher Wetterdienst</string>
     <string name="licences_row_rainviewer">%1$s: rain radar where the DWD has none (through IDmate)</string>
     <string name="licences_row_heights">Heights: %1$s</string>
@@ -1563,4 +1532,25 @@
         <item>Anna writes: I will be there in ten minutes, shall I bring something from the bakery?</item>
     </string-array>
     <string name="stick_permission_denied_location">Without the location permission Mate cannot search for the stick (Android before 12 needs it for Bluetooth searches). Allow it in the app settings.</string>
+
+    <!-- the settings in their themes (System N-039) -->
+    <string name="settings_group_car_screen">Car screen</string>
+    <string name="settings_group_navigation">Navigation</string>
+    <string name="settings_group_audio">Audio</string>
+    <string name="settings_group_speech">Speech</string>
+    <string name="settings_group_messenger">Messenger</string>
+    <string name="settings_group_system">System</string>
+    <string name="routing_traffic_title">Traffic</string>
+    <string name="vehicle_kind_title">Kind of car</string>
+    <string name="vehicle_kind_ev">Electric</string>
+    <string name="vehicle_kind_ice">Combustion</string>
+    <string name="vehicle_kind_hint">Combustion: without the dashboard and the values of an electric car and without charging stops in Google Maps – Mate shows Navi, Audio, Messenger and Apps and starts with the Navi.</string>
+    <string name="testing_section">Testing</string>
+    <string name="testing_debug_app_title">“Mate Debug” in the apps</string>
+    <string name="testing_debug_app_subtitle">The app Mate Debug in the car\u2019s app list, for the test drives.</string>
+    <string name="music_check_notification_access_subtitle">Needed to see and control other music apps in the car (title, pause, next)</string>
+    <string name="sound_level_section">Volume</string>
+    <string name="duck_section">Music while reading aloud</string>
+    <string name="speech_models_storage">Whether they lie on the memory card is chosen under Settings → Navigation → Offline maps → Storage place.</string>
+    <string name="first_restore_done_title">Restore</string>
 </resources>

@@ -10,43 +10,13 @@ import android.location.LocationManager
 import android.provider.CalendarContract
 import android.util.Log
 import net.prototux.aare.R
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.Locale
-
-/** The weather where the car is, for the rail. */
-data class Weather(val temperature: Int, val unit: String, val code: Int, val day: Boolean)
 
 /** The next calendar event, for the dashboard. */
 data class NextEvent(val title: String, val startMs: Long, val allDay: Boolean, val location: String)
 
-/**
- * What Android Auto shows around the map: the weather and the next calendar event. The weather
- * comes from Open-Meteo (no account, no Google), asked for an approximate position only.
- */
+/** What Android Auto shows around the map: the next calendar event, and the phone's position when the car sends none. */
 object DashboardInfo {
     private const val TAG = "AareDashboard"
-
-    /** Blocking: call off the main thread. */
-    fun weather(location: Location): Weather? = runCatching {
-        // ~10 km is plenty for the weather, and says less about where the car is.
-        val lat = "%.1f".format(Locale.ROOT, location.latitude)
-        val lon = "%.1f".format(Locale.ROOT, location.longitude)
-        val fahrenheit = Locale.getDefault().country in setOf("US", "LR", "MM")
-        val url = URL("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
-            "&current=temperature_2m,weather_code,is_day" + if (fahrenheit) "&temperature_unit=fahrenheit" else "")
-        val c = url.openConnection() as HttpURLConnection
-        c.connectTimeout = 8_000
-        c.readTimeout = 8_000
-        try {
-            val current = JSONObject(c.inputStream.bufferedReader().use { it.readText() }).getJSONObject("current")
-            Weather(Math.round(current.getDouble("temperature_2m")).toInt(), if (fahrenheit) "°F" else "°", current.getInt("weather_code"),
-                current.optInt("is_day", 1) == 1)
-        } finally {
-            c.disconnect()
-        }
-    }.onFailure { Log.i(TAG, "weather: ${it.message}") }.getOrNull()
 
     /** The phone's last known position, when the car doesn't send one. */
     @SuppressLint("MissingPermission")

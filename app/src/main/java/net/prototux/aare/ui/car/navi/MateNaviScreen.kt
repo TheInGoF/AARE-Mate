@@ -1748,11 +1748,11 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 // not while a panel is open: the menu has its own "Navigation beenden" (16.11.2026: "beenden oder beenden. ist auch doppelt")
                 androidx.compose.animation.AnimatedVisibility(controlsShown && panel == NaviStep.None, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CancelButton(Modifier.heightIn(min = 64.dp), label = net.prototux.aare.R.string.mate_navi_end_route) { end() }
+                        CancelButton(Modifier.heightIn(min = 64.dp), label = net.prototux.aare.R.string.mate_navi_menu_end) { end() }
                         Spacer(Modifier.width(12.dp))
                         // back to the car at once, without waiting for the glide back
                         if (!following) { RecenterButton { touchedAt = 0L }; Spacer(Modifier.width(12.dp)) }
-                        // the voice on or off (F4, as Google's loudspeaker button), beside "Route beenden" at the driver's side
+                        // the voice on or off (F4, as Google's loudspeaker button), beside "Navigation beenden" at the driver's side
                         VoiceButton(voiceMode) { voiceMode = voiceMode.next(); speaker.mode = voiceMode }
                     }
                 }

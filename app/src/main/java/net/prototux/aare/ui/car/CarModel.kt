@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import net.prototux.aare.car.NextEvent
-import net.prototux.aare.car.Weather
 import net.prototux.aare.notify.PhoneGuidance
 
 /**
@@ -91,8 +90,6 @@ class CarUiState {
     var trip by mutableStateOf<androidx.car.app.navigation.model.Trip?>(null)
     /** The package that sent [trip]: its maneuver icons are opened on that app's behalf. */
     var tripPackage by mutableStateOf<String?>(null)
-    /** The weather next to the clock, if known and wanted. */
-    var weather by mutableStateOf<Weather?>(null)
     /** The next calendar event, for the dashboard. */
     var nextEvent by mutableStateOf<NextEvent?>(null)
     /** The phone call ringing or on, if any. */

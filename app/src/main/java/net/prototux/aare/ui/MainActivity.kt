@@ -71,6 +71,7 @@ import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -169,49 +170,61 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** The settings pages, Android Auto style: one per topic, opened from the home page. */
-private enum class Page(val titleRes: Int, val subtitleRes: Int, val icon: ImageVector, val mate: Boolean = false) {
-    // Mate: the areas of the car screen and what is chosen for them. First on the home page, under their own heading.
-    // the user's own places for the navigation (O169): categories with their addresses
-    PLACES(R.string.mate_panel_places, R.string.mate_panel_places_sub, androidx.compose.material.icons.Icons.Rounded.Navigation, mate = true),
-    // route settings and charging on the way (O205): what is avoided, the charge levels, the charging networks
-    ROUTING(R.string.mate_panel_routing, R.string.mate_panel_routing_sub, Icons.Rounded.EvStation, mate = true),
-    DASHBOARD(R.string.mate_page_dashboard, R.string.mate_page_dashboard_sub, Icons.Rounded.Dashboard, mate = true),
-    // trips and charges seen on the tablet (System L-076/L-077, 20.11.2026: "ein Fahrtenbuch und ein Ladebuch wie IDMate")
-    LOGBOOK(R.string.logbook_title, R.string.logbook_sub, Icons.Rounded.Route, mate = true),
-    NAVI(R.string.mate_page_navi, R.string.mate_page_navi_sub, androidx.compose.material.icons.Icons.Rounded.Navigation, mate = true),
-    MUSIC(R.string.mate_page_music, R.string.mate_page_music_sub, androidx.compose.material.icons.Icons.Rounded.MusicNote, mate = true),
-    SOUND(R.string.mate_page_sound, R.string.mate_page_sound_sub, Icons.Rounded.GraphicEq, mate = true),
-    MESSAGES(R.string.msg_settings_title, R.string.msg_page_subtitle, Icons.Rounded.Forum, mate = true),
-    // every voice in one place (17.11.2026: "Ich finde das Menü ständig nicht, weil wir drei Sprachmenüs haben und dieses
-    // heißt leider nicht so" - the voices were on the Messenger page): Mate's voice, the phone's, and for all apps
-    VOICES(R.string.mate_page_voices, R.string.mate_page_voices_sub, Icons.Rounded.RecordVoiceOver, mate = true),
-    SPEECH(R.string.mate_page_speech, R.string.mate_page_speech_sub, Icons.Rounded.KeyboardVoice, mate = true),
-    VIEWS(R.string.mate_page_views, R.string.mate_page_views_sub, Icons.Rounded.Bookmarks, mate = true),
-    BAR(R.string.mate_page_bar, R.string.mate_page_bar_sub, Icons.Rounded.Tune, mate = true),
-    // The system underneath (AARE): connection, sound, which apps show.
-    CAR_SCREEN(R.string.setup_page_car_screen_title, R.string.setup_page_car_screen_subtitle, Icons.Rounded.Dashboard),
-    APPS(R.string.setup_page_apps_title, R.string.setup_page_apps_subtitle, Icons.Rounded.Apps),
-    ASSISTANT(R.string.assistant_settings_title, R.string.assistant_page_subtitle, Icons.Rounded.Mic),
-    AUDIO(R.string.audio_settings_title, R.string.audio_page_subtitle, Icons.AutoMirrored.Rounded.VolumeUp),
-    // the map server for Mate Navi: its Tailscale address and the gate's token (wish of 16.11.2026)
-    MAP_SERVER(R.string.mapserver_title, R.string.mapserver_sub, androidx.compose.material.icons.Icons.Rounded.Map),
-    // the map server's region packages for driving without the net (server handover 16.11.2026)
-    REGIONS(R.string.regions_title, R.string.regions_sub, Icons.Rounded.OfflinePin),
-    CONNECTION(R.string.setup_page_connection_title, R.string.setup_page_connection_subtitle, Icons.Rounded.Bluetooth),
-    CAR_DATA(R.string.setup_page_car_data_title, R.string.setup_page_car_data_subtitle, Icons.Rounded.DirectionsCar),
-    ADVANCED(R.string.setup_page_advanced_title, R.string.setup_page_advanced_subtitle, Icons.Rounded.Tune),
-    // all settings into one file and back (17.11.2026: the first release comes with a new key - Mate installed afresh)
-    TRANSFER(R.string.transfer_title, R.string.transfer_sub, Icons.Rounded.Bookmarks),
-    // 18.11.2026 ("Untermenüs wie Musik sollen Audio heißen, darunter Musik und Klang; Spracherkennung ins Menü mit TTS"):
-    // two pages of tiles on the home page, each opening its own pages
-    HUB_AUDIO(R.string.mate_hub_audio, R.string.mate_hub_audio_sub, Icons.Rounded.GraphicEq, mate = true),
-    HUB_SPEECH(R.string.mate_hub_speech, R.string.mate_hub_speech_sub, Icons.Rounded.RecordVoiceOver, mate = true),
+/**
+ * The settings under their themes (System N-039, 23.11.2026: "Startseite = Alltag, alles Einstellbare unter Einstellungen
+ * in Themengruppen, gleiche Begriffe überall, jede Einstellung genau einmal"), in this order, each with its heading.
+ */
+private enum class Group(val titleRes: Int) {
+    CAR_SCREEN(R.string.settings_group_car_screen),
+    NAVIGATION(R.string.settings_group_navigation),
+    AUDIO(R.string.settings_group_audio),
+    SPEECH(R.string.settings_group_speech),
+    MESSENGER(R.string.settings_group_messenger),
+    SYSTEM(R.string.settings_group_system),
 }
 
-/** The pages under a page of tiles: back from one goes to its tiles. */
-private val HUB_OF = mapOf(Page.MUSIC to Page.HUB_AUDIO, Page.SOUND to Page.HUB_AUDIO,
-    Page.VOICES to Page.HUB_SPEECH, Page.SPEECH to Page.HUB_SPEECH)
+/**
+ * The pages, Android Auto style: one per topic. Those without a [group] are panels on the home page (the everyday ones),
+ * the others are tiles under Einstellungen, in their group in this order.
+ */
+private enum class Page(val titleRes: Int, val subtitleRes: Int, val icon: ImageVector, val group: Group?) {
+    // Home page: the user's own places for the navigation (O169): categories with their addresses
+    PLACES(R.string.mate_panel_places, R.string.mate_panel_places_sub, androidx.compose.material.icons.Icons.Rounded.Navigation, null),
+    // trips and charges seen on the tablet (System L-076/L-077, 20.11.2026: "ein Fahrtenbuch und ein Ladebuch wie IDMate"),
+    // with the chargers to rate on top (N-039: everyday, not a setting)
+    LOGBOOK(R.string.logbook_title, R.string.logbook_sub, Icons.Rounded.Route, null),
+    // Mate Musik straight away: the account, the offline lists, its folder, the music apps (N-039)
+    MUSIC(R.string.mate_page_music, R.string.mate_page_music_sub, androidx.compose.material.icons.Icons.Rounded.MusicNote, null),
+    // Car screen: the look (the old pages Autobildschirm and Bedienleiste together), views, apps, dashboard
+    CAR_SCREEN(R.string.setup_page_car_screen_title, R.string.setup_page_car_screen_subtitle, Icons.Rounded.Palette, Group.CAR_SCREEN),
+    VIEWS(R.string.mate_page_views, R.string.mate_page_views_sub, Icons.Rounded.Bookmarks, Group.CAR_SCREEN),
+    APPS(R.string.setup_page_apps_title, R.string.setup_page_apps_subtitle, Icons.Rounded.Apps, Group.CAR_SCREEN),
+    DASHBOARD(R.string.mate_page_dashboard, R.string.mate_page_dashboard_sub, Icons.Rounded.Dashboard, Group.CAR_SCREEN),
+    // Navigation
+    NAVI(R.string.mate_page_navi, R.string.mate_page_navi_sub, androidx.compose.material.icons.Icons.Rounded.Navigation, Group.NAVIGATION),
+    // the route options (O181, O205): what is avoided, the traffic, the charge levels, the charging networks - the
+    // same name as at the car (Navi I-059)
+    ROUTING(R.string.mate_panel_routing, R.string.mate_panel_routing_sub, Icons.Rounded.EvStation, Group.NAVIGATION),
+    // the map server for Mate Navi: its Tailscale address and the gate's token (wish of 16.11.2026)
+    MAP_SERVER(R.string.mapserver_title, R.string.mapserver_sub, androidx.compose.material.icons.Icons.Rounded.Map, Group.NAVIGATION),
+    // the map server's region packages for driving without the net (server handover 16.11.2026)
+    REGIONS(R.string.regions_title, R.string.regions_sub, Icons.Rounded.OfflinePin, Group.NAVIGATION),
+    // Audio: the phone's sound in the car (with the ring and the music under a voice), and Mate's sound
+    AUDIO(R.string.audio_settings_title, R.string.audio_page_subtitle, Icons.AutoMirrored.Rounded.VolumeUp, Group.AUDIO),
+    SOUND(R.string.mate_page_sound, R.string.mate_page_sound_sub, Icons.Rounded.GraphicEq, Group.AUDIO),
+    // Speech: every voice in one place (17.11.2026: "Ich finde das Menü ständig nicht, weil wir drei Sprachmenüs haben und
+    // dieses heißt leider nicht so"), the speech recognition, the assistant
+    VOICES(R.string.mate_page_voices, R.string.mate_page_voices_sub, Icons.Rounded.RecordVoiceOver, Group.SPEECH),
+    SPEECH(R.string.mate_page_speech, R.string.mate_page_speech_sub, Icons.Rounded.KeyboardVoice, Group.SPEECH),
+    ASSISTANT(R.string.assistant_settings_title, R.string.assistant_page_subtitle, Icons.Rounded.Mic, Group.SPEECH),
+    MESSAGES(R.string.msg_settings_title, R.string.msg_page_subtitle, Icons.Rounded.Forum, Group.MESSENGER),
+    // System: the connection, the car's data, the developer things, and all settings into one file and back
+    // (17.11.2026: the first release comes with a new key - Mate installed afresh)
+    CONNECTION(R.string.setup_page_connection_title, R.string.setup_page_connection_subtitle, Icons.Rounded.Bluetooth, Group.SYSTEM),
+    CAR_DATA(R.string.setup_page_car_data_title, R.string.setup_page_car_data_subtitle, Icons.Rounded.DirectionsCar, Group.SYSTEM),
+    ADVANCED(R.string.setup_page_advanced_title, R.string.setup_page_advanced_subtitle, Icons.Rounded.Tune, Group.SYSTEM),
+    TRANSFER(R.string.transfer_title, R.string.transfer_sub, Icons.Rounded.Bookmarks, Group.SYSTEM),
+}
 
 @Composable
 private fun Home() {
@@ -231,8 +244,8 @@ private fun Home() {
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
     }
-    // no back arrows on the pages (18.11.2026): the system's back goes up one level - a page to its tiles or the list
-    BackHandler(enabled = page != null || inSettings) { if (page != null) page = HUB_OF[page] else inSettings = false }
+    // no back arrows on the pages (18.11.2026): the system's back goes up one level - a page to the home page or the list
+    BackHandler(enabled = page != null || inSettings) { if (page != null) page = null else inSettings = false }
 
     AnimatedContent(page, label = "page", transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(100)) }) { p ->
         if (p == null) {
@@ -252,14 +265,14 @@ private fun Home() {
                     item { HomePanels(connected = state.connected, open = { page = it }, openSettings = { inSettings = true }) }
                 } else {
                     item { Text(stringResource(R.string.mate_panel_settings), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp)) }
-                    // Two groups: what Mate shows in the car and what is chosen for it - then the system underneath.
-                    listOf(R.string.mate_group_mate to true, R.string.mate_group_system to false).forEach { (title, mate) ->
+                    // the themes, each under its heading (N-039)
+                    Group.entries.forEach { group ->
                         item {
-                            Text(stringResource(title), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+                            Text(stringResource(group.titleRes), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(start = 8.dp, bottom = 0.dp))
                         }
                         // smaller tiles than the home page's (18.11.2026: "Einstellungen wird auch in Kacheln dargestellt, aber kleinere")
-                        item { SettingsTiles(Page.entries.filter { it.mate == mate && it !in PANEL_PAGES && it !in HUB_OF && !it.name.startsWith("HUB_") }) { page = it } }
+                        item { SettingsTiles(Page.entries.filter { it.group == group }) { page = it } }
                     }
                 }
                 // the sound to the car with the screen off (19.11.2026, crackle in standby): Mate out of the battery optimisation
@@ -268,8 +281,6 @@ private fun Home() {
                 item { About() }
             }
         } else {
-            // Navi L-005: the routing page opens with the visited chargers while charges wait to be looked at (fixed per opening)
-            val visitsFirst = remember(p) { p == Page.ROUTING && runCatching { net.prototux.aare.ui.car.navi.ChargerVisits.freshCount(ctx) > 0 }.getOrDefault(false) }
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
                 Row(Modifier.fillMaxWidth().padding(start = 28.dp, end = 8.dp, top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(p.titleRes), style = MaterialTheme.typography.titleLarge)
@@ -280,10 +291,9 @@ private fun Home() {
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     when (p) {
-                        Page.CAR_SCREEN -> item { CarScreenSettings(settings, refresh) }
+                        Page.CAR_SCREEN -> item { CarScreenSettings(settings) }
                         Page.PLACES -> item { PlacesPage() }
                         Page.ROUTING -> {
-                            if (visitsFirst) item { VisitedChargers() }
                             // O181: what Mate Navi's routes avoid (Valhalla's costing options), read when a route is planned
                             item { Section(stringResource(R.string.navi_avoid_title)) {
                                 var ferries by remember { mutableStateOf(settings.avoidFerries) }
@@ -294,6 +304,15 @@ private fun Home() {
                                 Toggle(stringResource(R.string.navi_avoid_motorways), stringResource(R.string.navi_avoid_motorways_sub), motorways) { motorways = it; settings.avoidMotorways = it }
                                 Toggle(stringResource(R.string.navi_avoid_tolls), stringResource(R.string.navi_avoid_tolls_sub), tolls) { tolls = it; settings.avoidTolls = it }
                                 Toggle(stringResource(R.string.navi_avoid_borders), stringResource(R.string.navi_avoid_borders_sub), borders) { borders = it; settings.avoidBorders = it }
+                            } }
+                            // F2 at the phone too (Navi I-059): the traffic on Mate Navi's map, the same switch as in the car's
+                            // route options, with the day's TomTom calls under it
+                            item { Section(stringResource(R.string.routing_traffic_title)) {
+                                var traffic by remember { mutableStateOf(settings.trafficShown) }
+                                val budget = net.prototux.aare.ui.car.navi.TomTomBudget
+                                Toggle(stringResource(R.string.navi_traffic_shown), stringResource(if (budget.exhausted(ctx)) R.string.navi_traffic_budget_out
+                                    else R.string.navi_traffic_budget, budget.usedToday(ctx), net.prototux.aare.ui.car.navi.TomTomBudget.LIMIT), traffic) {
+                                    traffic = it; settings.trafficShown = it; net.prototux.aare.ui.car.navi.NaviTrafficSwitch.on.value = it }
                             } }
                             // O205: the charge levels of the charging plan
                             item { Section(stringResource(R.string.routing_charge_title)) {
@@ -321,9 +340,6 @@ private fun Home() {
                                 Choices(stringResource(R.string.routing_stop_extra), listOf(0, 2, 3, 5, 8).map { "$it" to "+$it min" }, extra) { extra = it; settings.chargeStopExtraMin = it.toInt() }
                                 Text(stringResource(R.string.routing_stop_extra_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } }
-                            // O226: the chargers charged at, to rate - the planner prefers the well rated among the allowed ones
-                            // (first on the page while charges wait to be looked at: the badge led here, Navi L-005)
-                            if (!visitsFirst) item { VisitedChargers() }
                             // O205/O213: the networks to charge at - only these (others only where they do not reach) or preferred
                             item { Section(stringResource(R.string.routing_networks_title)) {
                                 var chosen by remember { mutableStateOf(settings.chargeNetworks) }
@@ -362,15 +378,18 @@ private fun Home() {
                         Page.MAP_SERVER -> item { MapServerPage(settings) }
                         Page.REGIONS -> item { RegionsPage() }
                         Page.TRANSFER -> item { TransferPage() }
-                        Page.LOGBOOK -> item { LogbookPage() }
+                        Page.LOGBOOK -> {
+                            // O226, N-039: the chargers charged at, to rate - on top, where the count on the panel led
+                            // (the planner prefers the well rated among the allowed ones)
+                            item { VisitedChargers() }
+                            item { LogbookPage() }
+                        }
                         Page.DASHBOARD -> {
-                            item { CombustionCard(settings) }
-                            item { DashboardCard(refresh) }
+                            item { DashboardCard(settings, refresh) }
+                            item { VehicleKindCard(settings) }
                         }
                         Page.NAVI -> {
                             item { NaviChoiceCard() }
-                            item { Section(stringResource(R.string.setup_section_look)) { SizeChoice(settings); Spacer(Modifier.height(12.dp)); AppTrimChoice(settings) } }
-                            item { Section(stringResource(R.string.setup_section_ev_route)) { EvRouteChoice(settings) } }
                             // O194: the optional speed limit warning - off by default, how far over, how often, tone, volume
                             item { Section(stringResource(R.string.speed_warn_title)) {
                                 var on by remember { mutableStateOf(settings.speedWarn) }
@@ -394,24 +413,16 @@ private fun Home() {
                                     Text(stringResource(R.string.speed_warn_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             } }
+                            // O107: charging stops in Google Maps - not for a combustion car (Fahrzeugart on the page Dashboard)
+                            if (!settings.combustion) item { Section(stringResource(R.string.setup_section_ev_route)) { EvRouteChoice(settings) } }
                             // O174: Mate Navi's frame rate, an even 30 by default, the video's rate for tests
-                            item { Section(stringResource(R.string.mate_navi_title)) {
+                            item { Section(stringResource(R.string.navi_fps_title)) {
                                 var fps by remember { mutableStateOf(settings.naviFps) }
-                                Choices(stringResource(R.string.navi_fps_title), listOf("30" to stringResource(R.string.navi_fps_30), "video" to stringResource(R.string.navi_fps_video)), fps) {
+                                Choices("", listOf("30" to stringResource(R.string.navi_fps_30), "video" to stringResource(R.string.navi_fps_video)), fps) {
                                     fps = it; settings.naviFps = it }
                                 Text(stringResource(R.string.navi_fps_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } }
                         }
-                        Page.HUB_AUDIO -> {
-                            item { HubTiles(listOf(
-                                HomePanel(PanelArt.MUSIC, R.string.mate_page_music, R.string.mate_page_music_sub, Page.MUSIC),
-                                HomePanel(PanelArt.SOUND, R.string.mate_page_sound, R.string.mate_page_sound_sub, Page.SOUND))) { page = it } }
-                            // the ring in the car while a call comes in (18.11.2026: "verschiedene Klingeltöne, die wir in der App einstellen können")
-                            item { RingtoneSection(settings) }
-                        }
-                        Page.HUB_SPEECH -> item { HubTiles(listOf(
-                            HomePanel(PanelArt.VOICES, R.string.mate_page_voices, R.string.mate_page_voices_sub, Page.VOICES),
-                            HomePanel(PanelArt.LISTEN, R.string.mate_page_speech, R.string.mate_page_speech_sub, Page.SPEECH))) { page = it } }
                         Page.MUSIC -> {
                             item { MusicCard(refresh) }
                             item { MusicOfflineCard(refresh) }
@@ -421,24 +432,30 @@ private fun Home() {
                             item { MusicFolderCard() }
                             item { MusicChoiceCard() }
                         }
-                        Page.BAR -> {
-                            item { BarSettings(settings) }
-                            item { DashTitleCard(settings) }
+                        Page.SOUND -> {
+                            item { SoundCard(settings) }
+                            item { LevelCard(settings) }
                         }
-                        Page.SOUND -> item { SoundCard(settings) }
                         Page.VIEWS -> item { ViewsCard() }
                         Page.SPEECH -> item { SpeechCard() }
-                        Page.APPS -> item { AppsCard(settings) }
+                        Page.APPS -> item { AppsCard(settings, refresh) }
                         Page.ASSISTANT -> item { AssistantCard(settings) }
                         Page.MESSAGES -> item { MessageSettings(settings, refresh) }
                         Page.VOICES -> item { VoiceCard(settings) }
-                        Page.AUDIO -> item { AudioSettings(settings, state, refresh) { refresh++ } }
+                        Page.AUDIO -> {
+                            item { AudioSettings(settings, state, refresh) { refresh++ } }
+                            // the ring in the car while a call comes in (18.11.2026: "verschiedene Klingeltöne, die wir in der App einstellen können")
+                            item { RingtoneSection(settings) }
+                            item { DuckSection(settings) }
+                        }
                         Page.CONNECTION -> item { ConnectionSettings(settings, refresh) }
                         Page.CAR_DATA -> item { CarDataCard() }
                         Page.ADVANCED -> {
                             item { HeadUnitServerSettings(settings) }
                             item { CertificatesCard(certs, state) }
                             item { VehicleOverridesCard() }
+                            // before the log, which grows long
+                            item { TestingCard(settings) }
                             item { LogCard() }
                         }
                     }
@@ -447,12 +464,6 @@ private fun Home() {
         }
     }
 }
-
-/** The pages that are panels on the home page (not in the settings list). */
-// 18.11.2026 ("die Musik-App in der App eine extra Menü-Kachel; man könnte überlegen, ob eine andere dafür zurück in die
-// Einstellungen verschwindet"): Musik took the place of Ansichten, which is set once and rarely after - now under Einstellungen
-// 18.11.2026: Audio (Musik, Klang) and Sprache (Stimmen, Spracherkennung) as pages of tiles
-private val PANEL_PAGES = setOf(Page.PLACES, Page.ROUTING, Page.HUB_AUDIO, Page.HUB_SPEECH)
 
 private class HomePanel(val art: PanelArt, val title: Int, val subtitle: Int, val page: Page?, val accent: Boolean = false, val action: (() -> Unit)? = null,
     /** A count shown at the corner (Navi L-005: charges to look at); 0 = none. */
@@ -468,18 +479,14 @@ private fun HomePanels(connected: Boolean, open: (Page) -> Unit, openSettings: (
         if (!connected) HomePanel(PanelArt.DASH, R.string.mate_panel_dash_start, R.string.mate_panel_dash_start_sub, null, accent = true,
             action = { ctx.startActivity(Intent(ctx, CarPreviewActivity::class.java)) }) else null,
         HomePanel(PanelArt.PLACES, R.string.mate_panel_places, R.string.mate_panel_places_sub, Page.PLACES),
-        HomePanel(PanelArt.ROUTING, R.string.mate_panel_routing, R.string.mate_panel_routing_sub, Page.ROUTING,
+        // N-039: the logbook with the charges to rate counted (the count was on Routenplanung before, Navi L-005)
+        HomePanel(PanelArt.LOGBOOK, R.string.logbook_title, R.string.logbook_sub, Page.LOGBOOK,
             badge = net.prototux.aare.ui.car.navi.ChargerVisits.changes.intValue.let { runCatching { net.prototux.aare.ui.car.navi.ChargerVisits.freshCount(ctx) }.getOrDefault(0) }),
-        HomePanel(PanelArt.MUSIC, R.string.mate_hub_audio, R.string.mate_hub_audio_sub, Page.HUB_AUDIO),
-        HomePanel(PanelArt.VOICES, R.string.mate_hub_speech, R.string.mate_hub_speech_sub, Page.HUB_SPEECH),
+        HomePanel(PanelArt.MUSIC, R.string.mate_page_music, R.string.mate_page_music_sub, Page.MUSIC),
         HomePanel(PanelArt.SETTINGS, R.string.mate_panel_settings, R.string.mate_panel_settings_sub, null),
     )
     PanelGrid(panels) { p -> when { p.action != null -> p.action.invoke(); p.page != null -> open(p.page); else -> openSettings() } }
 }
-
-/** The tiles of Audio or Sprache: as large as the home page's. */
-@Composable
-private fun HubTiles(panels: List<HomePanel>, open: (Page) -> Unit) = PanelGrid(panels) { p -> p.page?.let(open) }
 
 @Composable
 private fun PanelGrid(panels: List<HomePanel>, onClick: (HomePanel) -> Unit) {
@@ -535,6 +542,8 @@ private fun FirstStartCard() {
     var restoreAsked by remember { mutableStateOf(prefs.getBoolean("restore_asked", !fresh)) }
     var busy by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
+    // restored: the settings are read when the app starts - the way to start again (System I-100d)
+    var restored by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val load = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -542,6 +551,7 @@ private fun FirstStartCard() {
         scope.launch {
             val r = withContext(Dispatchers.IO) { runCatching { net.prototux.aare.MateTransfer.import(ctx, uri, {}) { w -> scope.launch { busy = w } } } }
             busy = null
+            restored = r.isSuccess
             note = r.fold({ ctx.getString(R.string.transfer_loaded, it) }, { ctx.getString(R.string.first_restore_failed, it.message ?: it.javaClass.simpleName) })
             restoreAsked = true; prefs.edit().putBoolean("restore_asked", true).apply()
         }
@@ -559,8 +569,7 @@ private fun FirstStartCard() {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf(false to stringResource(R.string.first_car_ev), true to stringResource(R.string.first_car_ice)).forEach { (ice, label) ->
                     androidx.compose.material3.OutlinedButton(onClick = {
-                        st.combustion = ice
-                        if (ice) st.evModelSource = "off" else if (st.evModelSource == "off") st.evModelSource = "mate"
+                        setVehicleKind(st, ice)
                         carAsked = true; prefs.edit().putBoolean("car_asked", true).apply()
                     }, modifier = Modifier.weight(1f).height(72.dp)) { Text(label, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
                 }
@@ -629,8 +638,13 @@ private fun FirstStartCard() {
     val toAsk = if (!fresh) emptyList() else missing.filter { it.second !in declined && progress[it.second] == null }
     val running = missing.filter { progress[it.second].let { p -> p != null && (p in 0f..1f || p == -1f) } }
     if (toAsk.isEmpty() && running.isEmpty() && note == null) return
-    Section(stringResource(if (running.isNotEmpty()) R.string.first_packages_title else if (toAsk.isNotEmpty()) R.string.first_packages_ask_title else R.string.transfer_title)) {
+    Section(stringResource(if (running.isNotEmpty()) R.string.first_packages_title else if (toAsk.isNotEmpty()) R.string.first_packages_ask_title else R.string.first_restore_done_title)) {
         note?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(8.dp)) }
+        // not while packages load: starting again would break them off
+        if (note != null && restored && running.isEmpty()) {
+            androidx.compose.material3.Button(onClick = { restartMate(ctx) }) { Text(stringResource(R.string.transfer_restart)) }
+            Spacer(Modifier.height(8.dp))
+        }
         if (toAsk.isNotEmpty()) {
             Text(stringResource(R.string.first_packages_ask), style = MaterialTheme.typography.bodyMedium)
             toAsk.forEach { (label, _, _) -> Text("• $label", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 6.dp)) }
@@ -829,13 +843,28 @@ private fun RecorderCard() {
     }
 }
 
-/** Combustion car (O99): the dashboard (data of electric cars) goes away, Mate keeps its basic areas. */
+/**
+ * The kind of car (O99, System I-117a): electric or combustion, set as the first start sets it - a combustion car loses
+ * the dashboard's battery data and the charging stops in Google Maps, Mate keeps its basic areas. It was three switches
+ * (first start, Dashboard, Navi) that ran apart.
+ */
 @Composable
-private fun CombustionCard(settings: Settings) {
-    var on by remember { mutableStateOf(settings.combustion) }
-    Section(stringResource(R.string.combustion_section)) {
-        Toggle(stringResource(R.string.combustion_title), stringResource(R.string.combustion_subtitle), on) { on = it; settings.combustion = it }
+private fun VehicleKindCard(settings: Settings) {
+    var ice by remember { mutableStateOf(settings.combustion) }
+    Section(stringResource(R.string.vehicle_kind_title)) {
+        Choices("", listOf("ev" to stringResource(R.string.vehicle_kind_ev), "ice" to stringResource(R.string.vehicle_kind_ice)), if (ice) "ice" else "ev") {
+            ice = it == "ice"
+            setVehicleKind(settings, ice)
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(stringResource(R.string.vehicle_kind_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** Electric or combustion, both settings together: a combustion car tells Google Maps of no electric car, an electric one Mate's model. */
+private fun setVehicleKind(settings: Settings, combustion: Boolean) {
+    settings.combustion = combustion
+    if (combustion) settings.evModelSource = "off" else if (settings.evModelSource == "off") settings.evModelSource = "mate"
 }
 
 @Composable
@@ -1281,9 +1310,12 @@ private fun EvRouteChoice(settings: Settings) {
     var variant by remember { mutableStateOf(settings.evVariant) }
     var car by remember { mutableStateOf(net.prototux.aare.host.CarDataService.car(ctx)) }
     LaunchedEffect(variant) { while (true) { car = net.prototux.aare.host.CarDataService.car(ctx); kotlinx.coroutines.delay(5000) } }
-    var source by remember { mutableStateOf(settings.evModelSource) }
+    // an electric car with the old choice "Kein Elektroauto" from this page (before N-039): Mate's model, as the Fahrzeugart sets it
+    LaunchedEffect(Unit) { if (!settings.combustion && settings.evModelSource == "off") settings.evModelSource = "mate" }
+    var source by remember { mutableStateOf(settings.evModelSource.let { if (it == "off" && !settings.combustion) "mate" else it }) }
+    // "Kein Elektroauto" is the Fahrzeugart on the page Dashboard (N-039): shown only for an electric car
     Choices(stringResource(R.string.setup_choice_ev_source), listOf("google" to stringResource(R.string.setup_ev_source_google),
-        "mate" to stringResource(R.string.setup_ev_source_mate), "off" to stringResource(R.string.setup_ev_source_off)), source) {
+        "mate" to stringResource(R.string.setup_ev_source_mate)), source) {
         source = it; settings.evModelSource = it
     }
     val on = android.provider.Settings.Global.getInt(ctx.contentResolver, "panel_auto_ev", 0) == 1
@@ -1326,24 +1358,24 @@ private fun EvRouteChoice(settings: Settings) {
 }
 
 /**
- * The one size of the car screen (O134), for the car connected last - each car keeps its own. Shown on the car
- * screen page, with the bar and with the navigation choice.
- */
-/**
- * The bar in one place (overall look and feel review, 18.11.2026): the "Fehler markieren" button in its switcher -
- * before, it was under "Autobildschirm" and the size twice on both pages. Its place and the dark bar went with the
- * other car styles (E-044).
+ * What is there for testing (N-039): "Fehler markieren" in the areas (before alone on the page Bedienleiste) and
+ * "Mate Debug" in the car's apps, both on from the start.
  */
 @Composable
-private fun BarSettings(settings: Settings) {
+private fun TestingCard(settings: Settings) {
     var mark by remember { mutableStateOf(settings.faultMarkButton) }
-    Section(stringResource(R.string.setup_section_look)) {
+    var debug by remember { mutableStateOf(settings.debugApp) }
+    Section(stringResource(R.string.testing_section)) {
         Toggle(stringResource(R.string.setup_toggle_fault_mark_title), stringResource(R.string.setup_toggle_fault_mark_subtitle), mark) {
             mark = it; settings.faultMarkButton = it
+        }
+        Toggle(stringResource(R.string.testing_debug_app_title), stringResource(R.string.testing_debug_app_subtitle), debug) {
+            debug = it; settings.debugApp = it
         }
     }
 }
 
+/** The one size of the car screen (O134), for the car connected last - each car keeps its own. Shown on the page Aussehen. */
 @Composable
 private fun SizeChoice(settings: Settings) {
     val scaleCar = remember { settings.knownCars.maxByOrNull { it.value }?.key.orEmpty() }
@@ -1728,6 +1760,8 @@ private fun SpeechCard() {
             Text(if (sizes.isEmpty()) stringResource(R.string.speech_no_models) else stringResource(R.string.speech_models, sizes.joinToString(", ") { "Whisper $it" }),
                 style = MaterialTheme.typography.bodyMedium)
             Text(stringResource(R.string.speech_models_where), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // the storage place is shared with the offline maps and chosen there (N-039)
+            Text(stringResource(R.string.speech_models_storage), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // load a model here instead of copying it over (O56); the language's alternatives side by side, one chosen
             val offered = net.prototux.aare.speech.ModelDownload.OFFERED
             var chosen by remember(sizes) { mutableStateOf(net.prototux.aare.speech.LocalAsr.chosen(ctx)) }
@@ -1932,9 +1966,9 @@ private fun MusicChoiceCard() {
     }
 }
 
-/** The built-in dashboard: where its server and the stick are connected. */
+/** The built-in dashboard: where its server and the stick are connected, and the next calendar event on it. */
 @Composable
-private fun DashboardCard(refresh: Int = 0) {
+private fun DashboardCard(settings: Settings, refresh: Int = 0) {
     val ctx = LocalContext.current
     // read again whenever the app comes back (after the setup page) - it was always "not connected" (17.11.2026)
     val server = remember(refresh) { net.prototux.aare.dash.DashStatus.server(ctx) }
@@ -1945,6 +1979,11 @@ private fun DashboardCard(refresh: Int = 0) {
             else stringResource(if (stick) R.string.dashboard_card_connected_stick else R.string.dashboard_card_connected, server),
             server != null, changeLabel = stringResource(R.string.music_change)) {
             ctx.startActivity(Intent(ctx, net.prototux.aare.dash.SetupActivity::class.java))
+        }
+        // from the old page Autobildschirm (N-039): the dashboard's settings in one place
+        var calendar by remember { mutableStateOf(settings.showCalendar) }
+        Toggle(stringResource(R.string.setup_toggle_calendar_title), stringResource(R.string.setup_toggle_calendar_subtitle), calendar) {
+            calendar = it; settings.showCalendar = it
         }
     }
 }
@@ -2119,7 +2158,22 @@ private fun MusicCard(refresh: Int) {
             changeLabel = stringResource(R.string.music_change)) {
             ctx.startActivity(Intent(ctx, net.prototux.aare.music.MusicSetupActivity::class.java))
         }
-        val settings = remember { Settings(ctx) }
+        // System I-110b: without the notification access Mate sees no other music app's playback - the way to it
+        @Suppress("UNUSED_EXPRESSION") refresh
+        val access = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
+        if (!access) Check(stringResource(R.string.setup_check_notification_access_title), stringResource(R.string.music_check_notification_access_subtitle), false) {
+            ctx.startSafely(Intent(AndroidSettings.ACTION_NOTIFICATION_LISTENER_SETTINGS), appDetails(ctx))
+        }
+    }
+}
+
+/**
+ * The same loudness for everything (N-039: from the page Musik to Klang): Mate's music levelled to a target, and on
+ * wish the other apps and the prompts too.
+ */
+@Composable
+private fun LevelCard(settings: Settings) {
+    Section(stringResource(R.string.sound_level_section)) {
         var level by remember { mutableStateOf(settings.musicLevel) }
         Toggle(stringResource(R.string.music_level_title), stringResource(R.string.music_level_hint), level) { level = it; settings.musicLevel = it }
         if (level) {
@@ -2144,7 +2198,6 @@ private fun MessageSettings(settings: Settings, refresh: Int) {
     var banners by remember { mutableStateOf(settings.messageBanners) }
     var bannerSeconds by remember { mutableStateOf(settings.messageBannerSeconds) }
     var preview by remember { mutableStateOf(settings.messagePreview) }
-    var duck by remember { mutableStateOf(settings.voiceDuckPercent) }
     var groups by remember { mutableStateOf(settings.groupMessages) }
     var aloud by remember { mutableStateOf(settings.readMessagesAloud) }
     var dnd by remember { mutableStateOf(settings.dndWhileDriving) }
@@ -2168,13 +2221,6 @@ private fun MessageSettings(settings: Settings, refresh: Int) {
         }
         Toggle(stringResource(R.string.msg_toggle_group_title), stringResource(R.string.msg_toggle_group_subtitle), groups) { groups = it; settings.groupMessages = it }
         Toggle(stringResource(R.string.msg_toggle_read_aloud_title), stringResource(R.string.msg_toggle_read_aloud_subtitle), aloud) { aloud = it; settings.readMessagesAloud = it }
-        // How far the music steps back for the voice (also when "read aloud" is tapped in the car).
-        Text(stringResource(R.string.msg_duck_percent, duck), style = MaterialTheme.typography.bodyLarge)
-        androidx.compose.material3.Slider(
-            value = duck.toFloat(), valueRange = 0f..20f, steps = 3,
-            onValueChange = { duck = (Math.round(it / 5f) * 5) }, onValueChangeFinished = { settings.voiceDuckPercent = duck },
-        )
-        Text(stringResource(R.string.msg_duck_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.msg_hint_apps),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -2207,17 +2253,14 @@ private fun Toggle(title: String, subtitle: String, checked: Boolean, onChange: 
     }
 }
 
+/**
+ * Aussehen (N-039): the old pages Autobildschirm and Bedienleiste together - colours, size, foreign apps, animations,
+ * the title beside the bar, the passenger mode. The phone screen is on the page Apps, the dashboard's settings on Dashboard.
+ */
 @Composable
-private fun CarScreenSettings(settings: Settings, refresh: Int) {
-    val ctx = LocalContext.current
+private fun CarScreenSettings(settings: Settings) {
     var theme by remember { mutableStateOf(settings.carTheme) }
-    var phoneScreen by remember { mutableStateOf(settings.phoneScreen) }
     var passenger by remember { mutableStateOf(settings.ignoreDriving) }
-    var weather by remember { mutableStateOf(settings.showWeather) }
-    var calendar by remember { mutableStateOf(settings.showCalendar) }
-    @Suppress("UNUSED_EXPRESSION") refresh
-    val touch = AndroidSettings.Secure.getString(ctx.contentResolver, AndroidSettings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
-        .split(':').any { ComponentName.unflattenFromString(it) == ComponentName(ctx, MirrorTouchService::class.java) }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Section(stringResource(R.string.setup_section_look)) {
             Choices(stringResource(R.string.setup_choice_colors), listOf(Settings.THEME_AUTO to stringResource(R.string.setup_choice_colors_auto), Settings.THEME_DARK to stringResource(R.string.setup_choice_dark), Settings.THEME_LIGHT to stringResource(R.string.setup_choice_light)), theme) {
@@ -2231,29 +2274,10 @@ private fun CarScreenSettings(settings: Settings, refresh: Int) {
             var anim by remember { mutableStateOf(settings.carAnimations) }
             Toggle(stringResource(R.string.views_animations), stringResource(R.string.views_animations_sub), anim) { anim = it; settings.carAnimations = it }
         }
-        Section(stringResource(R.string.setup_section_dashboard)) {
-            Toggle(stringResource(R.string.setup_toggle_weather_title), stringResource(R.string.setup_toggle_weather_subtitle), weather) {
-                weather = it; settings.showWeather = it
-            }
-            Toggle(stringResource(R.string.setup_toggle_calendar_title), stringResource(R.string.setup_toggle_calendar_subtitle), calendar) {
-                calendar = it; settings.showCalendar = it
-            }
-        }
+        DashTitleCard(settings)
         Section(stringResource(R.string.setup_section_driving)) {
             Toggle(stringResource(R.string.setup_toggle_passenger_title), stringResource(R.string.setup_toggle_passenger_subtitle), passenger) {
                 passenger = it; settings.ignoreDriving = it
-            }
-        }
-        Section(stringResource(R.string.phone_section_title)) {
-            Toggle(stringResource(R.string.phone_toggle_enable_title), stringResource(R.string.phone_toggle_enable_subtitle), phoneScreen) {
-                phoneScreen = it; settings.phoneScreen = it
-            }
-            if (phoneScreen) {
-                Check(stringResource(R.string.phone_check_touch_title), stringResource(R.string.phone_check_touch_subtitle), touch) {
-                    ctx.startSafely(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS), appDetails(ctx))
-                }
-                Text(stringResource(R.string.phone_hint_touch_capture),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -2300,21 +2324,7 @@ private fun AudioSettings(settings: Settings, state: ProjectionService.State, re
             Text(best?.let { stringResource(R.string.audio_using_method, methodLabel(it)) } ?: stringResource(R.string.audio_no_method),
                 style = MaterialTheme.typography.bodyMedium, color = if (best == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
         }
-        // Test drive B14: the prompts came in a plain robot voice. Which speech engine apps (ABRP, Mate) speak with,
-        // and a way to the system's speech settings, where a natural German voice is chosen and downloaded.
-        Section(stringResource(R.string.tts_section)) {
-            val engine = remember { android.provider.Settings.Secure.getString(ctx.contentResolver, "tts_default_synth") }
-            val google = remember { runCatching { ctx.packageManager.getApplicationInfo("com.google.android.tts", 0).enabled }.getOrDefault(false) }
-            // Google's voice, or Mate's own voices as the device's engine (MateTtsService)
-            val good = engine == "com.google.android.tts" || engine == ctx.packageName || (engine.isNullOrEmpty() && google)
-            Check(stringResource(R.string.tts_check_title),
-                // Mate's own voices as the device's engine: nothing more to load (18.11.2026: "nicht dauerhaft darauf hinweisen")
-                stringResource(if (engine == ctx.packageName) R.string.tts_check_mate else if (good) R.string.tts_check_google else if (google) R.string.tts_check_other else R.string.tts_check_missing),
-                good, changeLabel = stringResource(R.string.tts_check_open)) {
-                if (!good && !google) ctx.startSafely(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.tts")), appDetails(ctx))
-                else ctx.startSafely(Intent("com.android.settings.TTS_SETTINGS"), appDetails(ctx))
-            }
-        }
+        // the speech engine of the device (test drive B14) is chosen under Stimmen only (N-039: it was here twice)
         Section(stringResource(R.string.audio_section_methods)) {
             Check(methodLabel(CaptureMethod.AUDIO_POLICY),
                 if (policy) stringResource(R.string.audio_policy_ready)
@@ -2394,12 +2404,17 @@ private fun Choices(title: String, options: List<Pair<String, String>>, selected
 private class LauncherLists(val carApps: List<CarAppInfo>, val media: List<PhoneApp>, val messaging: List<PhoneApp>)
 
 @Composable
-private fun AppsCard(settings: Settings) {
+private fun AppsCard(settings: Settings, refresh: Int) {
     val ctx = LocalContext.current
+    // read again when the user comes back from the accessibility settings
+    @Suppress("UNUSED_EXPRESSION") refresh
+    val touch = AndroidSettings.Secure.getString(ctx.contentResolver, AndroidSettings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        .split(':').any { ComponentName.unflattenFromString(it) == ComponentName(ctx, MirrorTouchService::class.java) }
     var hidden by remember { mutableStateOf(settings.hiddenApps) }
     var phoneScreen by remember { mutableStateOf(settings.phoneScreen) }
     var browser by remember { mutableStateOf(settings.browser) }
     var browserUrl by remember { mutableStateOf(settings.browserUrl) }
+    var carData by remember { mutableStateOf(settings.carDataApp) }
     // Same rules as the car's launcher (CarRuntime.applyApps): an app with a car app shows once, as that.
     val lists by produceState<LauncherLists?>(null) {
         value = withContext(Dispatchers.IO) {
@@ -2446,6 +2461,16 @@ private fun AppsCard(settings: Settings) {
             }
             AppGroup(stringResource(R.string.setup_app_group_aare))
             AppRow(null, stringResource(R.string.phone_section_title), stringResource(R.string.phone_app_row_subtitle), phoneScreen) { phoneScreen = it; settings.phoneScreen = it }
+            // what the phone screen needs - only here since N-039 (it was on the page Autobildschirm too, System I-100e)
+            if (phoneScreen) {
+                Check(stringResource(R.string.phone_check_touch_title), stringResource(R.string.phone_check_touch_subtitle), touch) {
+                    ctx.startSafely(Intent(AndroidSettings.ACTION_ACCESSIBILITY_SETTINGS), appDetails(ctx))
+                }
+                Text(stringResource(R.string.phone_hint_touch_capture),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            // the live car data as an app in the car (N-039: with the other apps, not on the page Fahrzeugdaten)
+            AppRow(null, stringResource(R.string.setup_page_car_data_title), stringResource(R.string.car_data_show_in_car_subtitle), carData) { carData = it; settings.carDataApp = it }
             AppRow(null, stringResource(R.string.browser_app_label), stringResource(R.string.browser_app_row_subtitle), browser) { browser = it; settings.browser = it }
             if (browser) {
                 OutlinedTextField(
@@ -2766,17 +2791,10 @@ private fun CarDataCard() {
     val car by CarData.state.collectAsState()
     val proj by ProjectionService.state.collectAsState()
     val ctx = LocalContext.current
-    val settings = remember { Settings(ctx) }
-    var inCar by remember { mutableStateOf(settings.carDataApp) }
     Section(stringResource(R.string.setup_page_car_data_title)) {
-        Toggle(stringResource(R.string.car_data_show_in_car_title), stringResource(R.string.car_data_show_in_car_subtitle), inCar) { inCar = it; settings.carDataApp = it }
-        // the detailed log here too, before a car is connected (17.11.2026: "In den Fahrzeugeinstellungen kann man den
-        // erweiterten Log gar nicht einstellen ... würde ich gerne auch vorher einstellen können"); the same switch as
-        // under Erweitert, Verbindungsprotokoll
-        var verbose by remember { mutableStateOf(settings.verboseProtocolLog) }
-        Toggle(stringResource(R.string.setup_toggle_verbose_log_title), stringResource(R.string.setup_toggle_verbose_log_subtitle), verbose) {
-            verbose = it; settings.verboseProtocolLog = it; SessionAapLog.verbose = it
-        }
+        // shown in the car: Einstellungen > Apps (N-039)
+        // the detailed log only under Erweitert, Verbindungsprotokoll (N-039: it was here twice); it is there before a
+        // car is connected too
         if (!car.connected) {
             Spacer(Modifier.height(8.dp))
             Text(stringResource(R.string.car_data_not_connected), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -3108,11 +3126,15 @@ private fun TransferPage() {
         Text(stringResource(R.string.transfer_secret_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         note?.let { Text(it, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary) }
         if (note != null && note!!.startsWith(ctx.getString(R.string.transfer_loaded_prefix))) androidx.compose.material3.Button(onClick = {
-            // the settings are read when the app starts: started again
-            ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let { i -> ctx.startActivity(android.content.Intent.makeRestartActivityTask(i.component)) }
-            Runtime.getRuntime().exit(0)
+            restartMate(ctx)
         }) { Text(stringResource(R.string.transfer_restart)) }
     }
+}
+
+/** Starts Mate again: the settings are read when the app starts (after a restore). */
+private fun restartMate(ctx: Context) {
+    ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let { i -> ctx.startActivity(android.content.Intent.makeRestartActivityTask(i.component)) }
+    Runtime.getRuntime().exit(0)
 }
 
 /** O211 (17.11.2026): an Android Auto category as a word - the list showed "Category_projection" and "Settings". */
@@ -3238,6 +3260,21 @@ private fun RingtoneSection(settings: net.prototux.aare.Settings) = Section(stri
         Spacer(Modifier.height(12.dp))
         Choices(stringResource(R.string.ringtone_volume), listOf("40", "70", "100").map { it to "$it %" }, vol) { vol = it; settings.carRingtoneVolume = it.toInt(); sample() }
     }
+}
+
+/**
+ * How far the music steps back for a voice (also when "read aloud" is tapped in the car) - N-039: from the page
+ * Messenger to Ton im Auto, where the sound is.
+ */
+@Composable
+private fun DuckSection(settings: Settings) = Section(stringResource(R.string.duck_section)) {
+    var duck by remember { mutableStateOf(settings.voiceDuckPercent) }
+    Text(stringResource(R.string.msg_duck_percent, duck), style = MaterialTheme.typography.bodyLarge)
+    androidx.compose.material3.Slider(
+        value = duck.toFloat(), valueRange = 0f..20f, steps = 3,
+        onValueChange = { duck = (Math.round(it / 5f) * 5) }, onValueChangeFinished = { settings.voiceDuckPercent = duck },
+    )
+    Text(stringResource(R.string.msg_duck_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /**

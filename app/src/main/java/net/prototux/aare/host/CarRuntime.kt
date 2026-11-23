@@ -332,7 +332,7 @@ class CarRuntime(
             "size", "app_trim", "eq_on", "eq_gains" -> main.post { applyScreenSettings() }
             // Apps shown or hidden from the phone: update the car's app list now.
             "hidden_apps", "phone_screen", "assistant_pkg", "app_order",
-            "standalone_apps", "standalone_app_pkgs", "browser", "car_data_app" -> main.post { refreshApps() }
+            "standalone_apps", "standalone_app_pkgs", "browser", "car_data_app", "debug_app" -> main.post { refreshApps() }
         }
     }
 
@@ -492,8 +492,9 @@ class CarRuntime(
         entries += CarAppEntry(PHONE_ID, context.packageName, context.getString(R.string.setup_app_entry_phone), builtinIcon(R.drawable.ic_car_phone), CarAppKind.PHONE)
         entries += CarAppEntry(SETTINGS_ID, context.packageName, context.getString(R.string.setup_app_entry_settings), builtinIcon(R.drawable.ic_car_settings), CarAppKind.SETTINGS)
         entries += CarAppEntry(NOTIFICATIONS_ID, context.packageName, context.getString(R.string.setup_app_entry_notifications), builtinIcon(R.drawable.ic_car_notifications), CarAppKind.NOTIFICATIONS)
-        // tests in the car (19.11.2026: "dass wir eine Debug-App bauen, die ich in den Apps öffnen kann"): audio first
-        entries += CarAppEntry(DEBUG_ID, context.packageName, context.getString(R.string.debug_app_label), builtinIcon(R.drawable.ic_car_debug), CarAppKind.DEBUG)
+        // tests in the car (19.11.2026: "dass wir eine Debug-App bauen, die ich in den Apps öffnen kann"): audio first;
+        // only while switched on in the phone's settings (System N-039, on from the start)
+        if (settings.debugApp) entries += CarAppEntry(DEBUG_ID, context.packageName, context.getString(R.string.debug_app_label), builtinIcon(R.drawable.ic_car_debug), CarAppKind.DEBUG)
         if (settings.phoneScreen && phoneScreenAllowed) {
             entries += CarAppEntry(PHONE_SCREEN_ID, context.packageName, context.getString(R.string.phone_section_title), builtinIcon(R.drawable.ic_phone_screen), CarAppKind.PHONE_SCREEN)
         }
@@ -673,19 +674,12 @@ class CarRuntime(
         }
     }
 
-    /** The weather (every 30 minutes) and the next calendar event (every 5), for the rail and the dashboard. */
+    /**
+     * The next calendar event (every 5 minutes), for the dashboard. The weather beside the clock went with the old
+     * styles (System N-039): nothing showed it any more, so the position is no longer sent for it.
+     */
     private suspend fun watchDashboardInfo() {
-        var lastWeather = 0L
         while (true) {
-            val now = System.currentTimeMillis()
-            if (!settings.showWeather) ui.weather = null
-            else if (now - lastWeather > 30 * 60_000) {
-                // off the main thread, as in watchParked
-                val where = carLocation ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DashboardInfo.phoneLocation(context) }
-                if (where != null) {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DashboardInfo.weather(where) }?.let { ui.weather = it; lastWeather = now }
-                }
-            }
             ui.nextEvent = if (settings.showCalendar)
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DashboardInfo.nextEvent(context) } else null
             kotlinx.coroutines.delay(5 * 60_000)

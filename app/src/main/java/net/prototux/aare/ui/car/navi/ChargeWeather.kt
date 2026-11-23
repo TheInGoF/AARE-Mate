@@ -5,8 +5,8 @@ import org.maplibre.spatialk.geojson.Position
 /**
  * The weather on the way for the charging plan (Navi L-029 step G, L-015: "Gegen-/Rückenwind je Abschnitt, Regen,
  * Temperatur zur Ankunftszeit"). IDmate's model has the rain it learned (kept first, [NaviRain]) and the temperature of
- * now, but no wind and no forecast; those come from Open-Meteo as the weather beside the clock does ([net.prototux.aare.car.DashboardInfo],
- * no account): one request for the hours ahead at a point every [STEP_M] of the route, rounded to 0.1° (about 10 km -
+ * now, but no wind and no forecast; those come from Open-Meteo (no account): one request for the hours ahead at a
+ * point every [STEP_M] of the route, rounded to 0.1° (about 10 km -
  * enough for the weather, and it says less about the way). Each piece of the route takes the point nearest to it at the
  * hour the car gets there. Without an answer the plan is made as before and the log says so.
  */

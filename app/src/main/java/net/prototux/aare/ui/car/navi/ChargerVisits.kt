@@ -30,7 +30,7 @@ internal object ChargerVisits {
     /** Read anew from storage next time (tests, after writing the stored list directly). */
     fun forget() { cache = null; changes.intValue++ }
 
-    /** Counts every change of the stored list, for what shows it (the badge on "Routenplanung", Navi L-005). */
+    /** Counts every change of the stored list, for what shows it (the badge on "Fahrtenbuch", Navi L-005). */
     val changes = androidx.compose.runtime.mutableIntStateOf(0)
 
     fun all(c: Context): List<Visit> = map(c).values.sortedByDescending { it.lastMillis }
@@ -86,7 +86,7 @@ internal object ChargerVisits {
         RatingShare.changed(c, m.getValue(k))
     }
 
-    /** How many charges wait to be looked at (Navi L-005): the badge on the phone app's "Routenplanung". */
+    /** How many charges wait to be looked at (Navi L-005): the badge on the phone app's "Fahrtenbuch". */
     fun freshCount(c: Context): Int = map(c).values.count { it.fresh }
 
     /** The list was looked at: the badge goes, whether or not anything was filled in (Navi L-005). */

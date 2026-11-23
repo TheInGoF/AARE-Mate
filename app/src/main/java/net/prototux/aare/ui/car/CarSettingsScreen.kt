@@ -54,10 +54,11 @@ internal fun CarSettingsScreen(settings: Settings, modifier: Modifier) {
                 theme = it; settings.carTheme = it
             }
         }
-        item { SwitchRow(stringResource(R.string.setup_switch_passenger), passenger) { passenger = it; settings.ignoreDriving = it } }
-        item { SwitchRow(stringResource(R.string.setup_switch_message_notifications), banners) { banners = it; settings.messageBanners = it } }
-        item { SwitchRow(stringResource(R.string.msg_toggle_read_aloud_title), aloud) { aloud = it; settings.readMessagesAloud = it } }
-        item { SwitchRow(stringResource(R.string.setup_switch_audio_next_connection), audio) { audio = it; settings.carAudio = it } }
+        // the same words as the phone app's settings (System N-039), not wordings of the car's own
+        item { SwitchRow(stringResource(R.string.setup_toggle_passenger_title), stringResource(R.string.setup_toggle_passenger_subtitle), passenger) { passenger = it; settings.ignoreDriving = it } }
+        item { SwitchRow(stringResource(R.string.msg_toggle_banners_title), stringResource(R.string.msg_toggle_banners_subtitle), banners) { banners = it; settings.messageBanners = it } }
+        item { SwitchRow(stringResource(R.string.msg_toggle_read_aloud_title), stringResource(R.string.msg_toggle_read_aloud_subtitle), aloud) { aloud = it; settings.readMessagesAloud = it } }
+        item { SwitchRow(stringResource(R.string.audio_toggle_enable_title), stringResource(R.string.audio_toggle_enable_subtitle), audio) { audio = it; settings.carAudio = it } }
     }
 }
 
@@ -74,11 +75,14 @@ private fun Choice(title: String, options: List<Pair<String, String>>, selected:
 }
 
 @Composable
-private fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     // not across the whole screen: the switch stays beside its words, within the driver's reach (O151)
     Row(Modifier.widthIn(max = 760.dp).fillMaxWidth().heightIn(min = LocalCarDimens.current.touchTarget).clickable { onChange(!checked) },
         verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f).padding(end = 16.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         // Mate's colours: the theme's own left the switch a grey bar without a visible knob on the dark screen (16.11.2026)
         Switch(checked = checked, onCheckedChange = onChange, colors = androidx.compose.material3.SwitchDefaults.colors(
             checkedThumbColor = Mate.bg, checkedTrackColor = Mate.accent, checkedBorderColor = Mate.accent,

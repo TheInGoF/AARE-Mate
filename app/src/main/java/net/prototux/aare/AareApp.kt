@@ -20,6 +20,10 @@ class AareApp : Application() {
         net.prototux.aare.car.PhoneLocationFeed.clearLeftovers(this)
         // a Wi-Fi network coming later starts Shizuku too (E-045)
         net.prototux.aare.adb.SelfAdb.watchWifi(this)
+        // the wallpaper of the Android Auto style, left behind since the style went (E-044)
+        Thread {
+            runCatching { java.io.File(filesDir, "wallpaper.jpg").takeIf { it.exists() }?.let { if (it.delete()) DiagLog.add("old wallpaper removed") } }
+        }.start()
     }
 
     /**

@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
-/** The phone app's pages (18.11.2026 rework: tiles, Audio, Sprache, small settings tiles). Only with -Ppreview. */
+/** The phone app's pages (N-039: home page for every day, the settings in six themes, small settings tiles). Only with -Ppreview. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = "de-w600dp-h1000dp-xhdpi")
@@ -36,35 +36,38 @@ class PhonePreview {
         rule.onNodeWithText("Neu einrichten").performClick(); shot("1b-fahrzeug")
         rule.onNodeWithText("Spaceship", substring = true).performClick(); shot("1c-obd")
         rule.onNodeWithText("Verstanden").performClick(); rule.waitForIdle()
-        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Audio"))
-        rule.onNodeWithText("Audio").performClick(); shot("2-audio")
-        rule.activity.onBackPressedDispatcher.onBackPressed(); rule.waitForIdle()
-        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Sprache"))
-        rule.onNodeWithText("Sprache").performClick(); shot("3-sprache")
+        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Musik"))
+        rule.onNodeWithText("Musik").performClick(); shot("2-musik")
         rule.activity.onBackPressedDispatcher.onBackPressed(); rule.waitForIdle()
         rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Einstellungen"))
         rule.onNodeWithText("Einstellungen").performClick(); shot("4-einstellungen")
+        // a page opened from the settings goes back to them
+        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Ton im Auto"))
+        rule.onNodeWithText("Ton im Auto").performClick(); shot("3-ton-im-auto")
+        rule.activity.onBackPressedDispatcher.onBackPressed(); rule.waitForIdle()
         rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Ansichten"))
         rule.onNodeWithText("Ansichten").performClick(); rule.waitForIdle()
         rule.onNodeWithText("Geteilt").performClick(); shot("5-ansichten-geteilt")
     }
 
-    /** Review 18.11.2026: the bar's settings in one page, the car screen's look with size and animations. */
-    @Test fun barAndScreen() {
+    /** N-039: the look of the car screen in one page (with the old page Bedienleiste), the test switches under Erweitert. */
+    @Test fun lookAndTesting() {
         if (System.getProperty("preview") == null) return
         rule.onNodeWithText("Neu einrichten").performClick()
         rule.onNodeWithText("Spaceship", substring = true).performClick()
         rule.onNodeWithText("Verstanden").performClick(); rule.waitForIdle()
         rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Einstellungen"))
         rule.onNodeWithText("Einstellungen").performClick(); rule.waitForIdle()
-        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Bedienleiste"))
-        rule.onNodeWithText("Bedienleiste").performClick(); shot("8-bedienleiste")
+        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Aussehen"))
+        rule.onNodeWithText("Aussehen").performClick(); shot("8-aussehen")
         rule.activity.onBackPressedDispatcher.onBackPressed(); rule.waitForIdle()
-        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Autobildschirm"))
-        rule.onNodeWithText("Autobildschirm").performClick(); shot("9-autobildschirm")
+        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Erweitert"))
+        rule.onNodeWithText("Erweitert").performClick(); rule.waitForIdle()
+        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Testen"))
+        shot("9-testen")
     }
 
-    /** Navi L-004, L-005: the badge on "Routenplanung", the visited chargers first with "neu", one opened for its details. */
+    /** Navi L-004, L-005, N-039: the badge on "Fahrtenbuch", the visited chargers on top with "neu", one opened for its details. */
     @Test fun visitedChargers() {
         if (System.getProperty("preview") == null) return
         val ctx = rule.activity
@@ -79,9 +82,9 @@ class PhonePreview {
         rule.onNodeWithText("Neu einrichten").performClick()
         rule.onNodeWithText("Spaceship", substring = true).performClick()
         rule.onNodeWithText("Verstanden").performClick(); rule.waitForIdle()
-        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Routenplanung"))
+        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Fahrtenbuch"))
         shot("6-start-badge")
-        rule.onNodeWithText("Routenplanung").performClick(); shot("7-ladepunkte")
+        rule.onNodeWithText("Fahrtenbuch").performClick(); shot("7-ladepunkte")
         rule.onNodeWithText("Schnelllader Musterstadt").performClick(); shot("7b-ladepunkt-details")
     }
 }
