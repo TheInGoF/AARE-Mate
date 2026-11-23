@@ -60,6 +60,9 @@ internal class ChargeRouting<R>(
         // the route over the chain's chargers; refused, the chain again without them
         var planned = others(res)
         var over: R? = null
+        val baseS = baseTrack.seconds.lastOrNull() ?: 0.0
+        // the best route over chargers seen so far, should every try make a long way round
+        var best: Pair<R, List<Charger>>? = null; var bestExtra = Double.MAX_VALUE; var bestRes = res
         while (calls < maxCalls) {
             calls++
             over = try { route(planned) } catch (e: Exception) {
@@ -71,8 +74,26 @@ internal class ChargeRouting<R>(
                 if (planned.isEmpty()) break
                 null
             }
-            if (over != null) break
+            val o = over ?: continue
+            // System I-093 (23.11.2026: "soll ich jetzt fast 7 Stunden fahren, weil er die komplette Strecke über Leipzig über
+            // Land fährt, statt auf der Autobahn … dass er irgendwie nahe der Route bleibt, die er vorberechnet hat"): a way over
+            // the chargers far longer than the plain route and the chain's detours together is no way to take - those
+            // chargers out, the chain again with others near the route
+            val extra = (trackOf(o).seconds.lastOrNull() ?: 0.0) - baseS
+            val expected = res.links.filter { !it.cand.mandatory }.sumOf { it.cand.detourS }
+            val allowed = maxOf(expected * 2 + DETOUR_SLACK_S, baseS * DETOUR_SHARE + DETOUR_SLACK_S)
+            if (extra < bestExtra) { bestExtra = extra; best = o to planned; bestRes = res }
+            if (extra <= allowed) break
+            notes += "route over ${planned.joinToString { NaviTripPlan.chargerName(it) }} %.0f min longer than without stops (allowed %.0f) - planned again with others".format(
+                java.util.Locale.ROOT, extra / 60, allowed / 60)
+            refused += planned
+            over = null
+            res = chain(baseTrack)
+            planned = others(res)
+            if (planned.isEmpty()) break
         }
+        // every try went a long way round: the least of them
+        if (over == null && best != null) { over = best.first; planned = best.second; res = bestRes; notes += "kept the least way round (%.0f min longer)".format(java.util.Locale.ROOT, bestExtra / 60) }
         if (over == null) {
             notes += "no route over the chargers - the plan's stops shown on the route without them"
             return out(base, ChargePlanner.Plan(res.stops(), res.arrivePercent), false)
@@ -124,6 +145,9 @@ internal class ChargeRouting<R>(
 
     companion object {
         const val MAX_CALLS = 3
+        /** A way over the chargers may take this much more than the plain route beyond their detours (System I-093). */
+        const val DETOUR_SLACK_S = 15 * 60.0
+        const val DETOUR_SHARE = 0.08
 
         /**
          * The log line of a plan (L-029 Diagnose): route, km and start, candidates, the chain with arrival and departure at

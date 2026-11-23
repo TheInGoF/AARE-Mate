@@ -776,6 +776,15 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             val before = roll.chain
             val d = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { roll.check(driven, soc) } ?: continue
             if (d.kind != ChargeRolling.Kind.KEEP || d.why.contains("waiting")) chargeLog("charging on the way: ${d.kind}, ${d.why}")
+            // System I-094 (23.11.2026: "er braucht aber nicht beim Navi starten … sagen, dass der Ladestopp sich ändert"): right
+            // after a route set on purpose (the start, the plan put in, a stop changed) the plan has only just been made -
+            // no moving of stops in its first two minutes (the log of 22.11. had a move every 30 s right after the start)
+            val sinceGo = android.os.SystemClock.elapsedRealtime() - session.goneAt
+            if (d.kind == ChargeRolling.Kind.MOVE && sinceGo < ROLL_CALM_MS) {
+                roll.undo(before)
+                chargeLog("charging on the way: not moved %d s after the route was set - the plan has only just been made".format(sinceGo / 1000))
+                continue
+            }
             // the driver took stops out for this trip: none added or moved, no card asking for one
             if (NaviKeep.noNewStops && d.kind != ChargeRolling.Kind.KEEP) {
                 if (d.kind == ChargeRolling.Kind.MOVE) roll.undo(before)
@@ -820,7 +829,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     val next = timed.stops().firstOrNull()
                     val text = next?.let { context.getString(net.prototux.aare.R.string.mate_navi_charge_moved, NaviTripPlan.chargerName(it.charger), Math.round(it.atM / 1000).toInt()) }
                         ?: context.getString(net.prototux.aare.R.string.mate_navi_charge_none)
-                    speaker.warn(next?.let { context.getString(net.prototux.aare.R.string.mate_navi_charge_moved_say, ChargeNetworks.name(it.charger.network) ?: it.charger.operator, Math.round(it.atM / 1000).toInt()) }
+                    // said only once the trip is under way (I-094); the card shows it in any case
+                    if (sinceGo > ROLL_SAY_AFTER_MS) speaker.warn(next?.let { context.getString(net.prototux.aare.R.string.mate_navi_charge_moved_say, ChargeNetworks.name(it.charger.network) ?: it.charger.operator, Math.round(it.atM / 1000).toInt()) }
                         ?: context.getString(net.prototux.aare.R.string.mate_navi_charge_none_say))
                     chargeCheckLeft = null
                     chargeCheck = NaviChargeWatch.Result(NaviChargeWatch.Verdict.MOVED, next?.arrivePercent ?: timed.arrivePercent, text)
@@ -1859,6 +1869,9 @@ private val TEST_TO = Position(longitude = 13.3501, latitude = 52.5145)
 private const val SIM_WARP = 3
 /** After the driver moved or zoomed the map, how long until it follows the car again (wish: "nach 5-10s zum auto zurück"). */
 /** How close the map comes to a stop picked in the trip plan (System L-089). */
+/** No stop moved this long after a route set on purpose, and a move said only after [ROLL_SAY_AFTER_MS] (System I-094). */
+private const val ROLL_CALM_MS = 120_000L
+private const val ROLL_SAY_AFTER_MS = 300_000L
 private const val PLAN_LOOK_ZOOM = 17.0
 private const val RESUME_FOLLOW_MS = 6000L
 

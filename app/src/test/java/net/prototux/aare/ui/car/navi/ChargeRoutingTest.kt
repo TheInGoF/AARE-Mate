@@ -16,7 +16,9 @@ import java.util.Random
  */
 internal class MockValhalla(private val base: ChargePlanner.Track, private val factor: Double = 1.0,
                             private val refuse: (List<Charger>) -> Boolean = { false }, private val down: Boolean = false,
-                            private val detourWhPerKm: Double = 200.0) {
+                            private val detourWhPerKm: Double = 200.0,
+                            /** extra seconds a route over these chargers takes (a way over country roads, System I-093) */
+                            private val extraS: (List<Charger>) -> Double = { 0.0 }) {
     var calls = 0; var matrixCalls = 0
     val asked = ArrayList<List<Charger>>()
 
@@ -42,7 +44,9 @@ internal class MockValhalla(private val base: ChargePlanner.Track, private val f
         }
         val m = DoubleArray(pts.size)
         for (i in 1 until pts.size) m[i] = m[i - 1] + ChargerIndex.distanceM(pts[i - 1], pts[i])
-        return ChargePlanner.Track(pts, m, sec.toDoubleArray(), wh.toDoubleArray())
+        val more = extraS(chargers)
+        val secs = sec.toDoubleArray().let { a -> DoubleArray(a.size) { i -> a[i] + more * i / maxOf(1, a.size - 1) } }
+        return ChargePlanner.Track(pts, m, secs, wh.toDoubleArray())
     }
 
     suspend fun matrix(cands: List<ChargeCorridor.Candidate>, track: ChargePlanner.Track): List<ChargeCorridor.Candidate> {
@@ -186,5 +190,17 @@ class ChargeRoutingTest {
             // on the point: not much more than the least level plus its buffer at the end
             assertTrue("end ${o.plan.arrivePercent}", o.plan.arrivePercent <= rules.atDestination + ChargeBuffer.MAX + 4)
         }
+    }
+
+    /** System I-093: the first chain's way over the chargers runs over country roads (2 h more) - others near the route are taken. */
+    @Test fun aLongWayRoundIsNotTaken() = runBlocking {
+        val base = w.track(409)
+        var first: List<Charger>? = null
+        val v = MockValhalla(base, extraS = { cs -> if (first == null) { first = cs; 2 * 3600.0 } else if (cs == first) 2 * 3600.0 else 0.0 })
+        val o = v.routing().plan(base, car, 70.0, w.near(every(409)), rules)
+        assertTrue(o.overStops)
+        assertTrue("other chargers: ${o.plan.stops.map { it.charger }} vs $first", o.plan.stops.none { it.charger in first!! })
+        assertTrue(o.notes.any { it.contains("longer than without stops") })
+        check(o)
     }
 }
