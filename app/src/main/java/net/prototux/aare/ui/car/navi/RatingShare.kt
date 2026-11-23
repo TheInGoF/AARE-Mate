@@ -66,10 +66,11 @@ internal object RatingShare {
             if (waiting.isEmpty()) return@execute
             val url = settings.mapServer.trimEnd('/') + PATH
             var sent = 0
-            for ((k, v) in waiting) {
-                val (sig, body) = v!!.split('|', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+            for (k in waiting.keys) {
                 val key = k.removePrefix("wait:")
-                synchronized(this) { sending += key }
+                // read anew when its turn comes: a rating set back meanwhile has taken its entry out (Navi I-060b)
+                val v = synchronized(this) { prefs(app).getString(k, null)?.also { sending += key } } ?: continue
+                val (sig, body) = v.split('|', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
                 val ok = runCatching {
                     NaviServer.client(app).newCall(Request.Builder().url(url).post(body.toRequestBody("application/json".toMediaType())).build())
                         .execute().use { it.code == 201 }

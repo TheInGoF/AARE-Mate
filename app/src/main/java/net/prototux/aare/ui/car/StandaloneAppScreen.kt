@@ -55,6 +55,9 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
     var started by remember(packageName) { mutableStateOf(false) }
     // left (onDispose): a connect still waiting in its thread must not start a display nobody stops
     val cancelled = remember(packageName) { java.util.concurrent.atomic.AtomicBoolean(false) }
+    // the starts one after the other: a late start of an earlier texture never overtakes a newer one (its stop would end
+    // the newer display - the host has one display only)
+    val starter = remember(packageName) { java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "cinema-start").apply { isDaemon = true } } }
 
     DisposableEffect(packageName) {
         // Hardware / head-unit Back goes to the launched app.
@@ -77,6 +80,8 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
             if (runtime.screenBack === back) runtime.screenBack = null
             runCatching { if (awake.isHeld) awake.release() }
             cancelled.set(true)
+            // what is queued still runs, sees [cancelled] and starts nothing
+            starter.shutdown()
             launcher.release()
         }
     }
@@ -99,15 +104,15 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
                                 val sf = Surface(st).also { surface = it }
                                 val live = java.util.concurrent.atomic.AtomicBoolean(true).also { alive = it }
                                 // connect() blocks (binds Shizuku), so do it off the main thread.
-                                Thread {
+                                starter.execute {
                                     if (launcher.connect() && live.get() && !cancelled.get()) {
                                         val id = launcher.start(sf, w, h, cinemaDpi(runtime.appDensityDpi), packageName)
                                         // gone while it started: stopped at once
-                                        if (id >= 0 && (!live.get() || cancelled.get())) { launcher.stop(); return@Thread }
+                                        if (id >= 0 && (!live.get() || cancelled.get())) { launcher.stop(); return@execute }
                                         main.post { started = id >= 0 }
                                         net.prototux.aare.DiagLog.add("cinema: $packageName - " + (if (id >= 0) launcher.report() else "not started: " + launcher.report().ifEmpty { "no display" }), area = "CAR")
                                     }
-                                }.apply { isDaemon = true }.start()
+                                }
                             }
                             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
                                 val sf = surface ?: Surface(st).also { surface = it }

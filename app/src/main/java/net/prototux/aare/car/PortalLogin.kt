@@ -154,6 +154,9 @@ internal object PortalLogin {
     private const val TOTAL_MS = 20_000L
     private const val MAX_CHARS = 200_000
     private const val MAX_BYTES = 600_000
+    /** For the page view's parts (pictures, scripts): larger, and too large is an error, never a cut-off part. */
+    internal const val PAGE_MAX_BYTES = 8_000_000
+    internal const val PAGE_TOTAL_MS = 60_000L
     private const val AGENT = "Mozilla/5.0 (Linux; Android) Mate"
 
     private fun cookieHeader(cookies: Map<String, String>) = cookies.entries.joinToString("; ") { it.key + "=" + it.value }
@@ -188,12 +191,13 @@ internal object PortalLogin {
      * (Host, Connection, Accept-Encoding and Content-Length are set here); [payload] null sends a GET, else a form POST.
      * Off the main thread.
      */
-    internal fun plainRaw(n: Network, url: String, payload: ByteArray?, extra: Map<String, String>): Raw {
+    internal fun plainRaw(n: Network, url: String, payload: ByteArray?, extra: Map<String, String>,
+                          max: Int = MAX_BYTES, totalMs: Long = TOTAL_MS, strict: Boolean = false): Raw {
         val u = URL(url)
         val port = if (u.port > 0) u.port else 80
         val path = u.file.ifEmpty { "/" }
         val address = n.getAllByName(u.host).first()
-        val deadline = SystemClock.elapsedRealtime() + TOTAL_MS
+        val deadline = SystemClock.elapsedRealtime() + totalMs
         n.socketFactory.createSocket().use { s ->
             s.connect(InetSocketAddress(address, port), TIMEOUT_MS)
             s.soTimeout = TIMEOUT_MS
@@ -232,8 +236,11 @@ internal object PortalLogin {
             fun header(name: String) = headers.firstOrNull { it.first.equals(name, true) }?.second
             val bytes = when {
                 code == 204 || code == 304 -> ByteArray(0)
-                header("Transfer-Encoding")?.contains("chunked", true) == true -> chunked(input, deadline)
-                else -> header("Content-Length")?.toLongOrNull()?.let { exactly(input, it, deadline) } ?: rest(input, deadline)
+                header("Transfer-Encoding")?.contains("chunked", true) == true -> chunked(input, deadline, max, strict)
+                else -> header("Content-Length")?.toLongOrNull()?.let {
+                    if (strict && it > max) throw IOException("answer larger than $max bytes")
+                    exactly(input, it, deadline, max)
+                } ?: rest(input, deadline, max, strict)
             }
             return Raw(code, reason, headers, bytes)
         }
@@ -254,9 +261,9 @@ internal object PortalLogin {
         }
     }
 
-    /** Up to [count] bytes (at most [MAX_BYTES]). */
-    private fun exactly(input: InputStream, count: Long, deadline: Long): ByteArray {
-        val want = count.coerceIn(0, MAX_BYTES.toLong()).toInt()
+    /** Up to [count] bytes (at most [max]). */
+    private fun exactly(input: InputStream, count: Long, deadline: Long, max: Int): ByteArray {
+        val want = count.coerceIn(0, max.toLong()).toInt()
         val b = ByteArray(want)
         var got = 0
         while (got < want) {
@@ -268,26 +275,29 @@ internal object PortalLogin {
         return b.copyOf(got)
     }
 
-    /** All bytes until the server closes (at most [MAX_BYTES]). */
-    private fun rest(input: InputStream, deadline: Long): ByteArray {
+    /** All bytes until the server closes (at most [max]; [strict]: more is an error, not cut off). */
+    private fun rest(input: InputStream, deadline: Long, max: Int, strict: Boolean): ByteArray {
         val b = ByteArrayOutputStream()
         val buf = ByteArray(8_192)
-        while (b.size() < MAX_BYTES) {
+        while (b.size() < max) {
             due(deadline)
-            val r = input.read(buf, 0, minOf(buf.size, MAX_BYTES - b.size()))
-            if (r < 0) break
+            val r = input.read(buf, 0, minOf(buf.size, max - b.size()))
+            if (r < 0) return b.toByteArray()
             b.write(buf, 0, r)
         }
+        if (strict && input.read() >= 0) throw IOException("answer larger than $max bytes")
         return b.toByteArray()
     }
 
-    /** A body sent in chunks (at most [MAX_BYTES]). */
-    private fun chunked(input: InputStream, deadline: Long): ByteArray {
+    /** A body sent in chunks (at most [max]; [strict]: more is an error, not cut off). */
+    private fun chunked(input: InputStream, deadline: Long, max: Int, strict: Boolean): ByteArray {
         val b = ByteArrayOutputStream()
-        while (b.size() < MAX_BYTES) {
+        while (true) {
             val size = line(input, deadline)?.substringBefore(';')?.trim()?.toLongOrNull(16) ?: break
             if (size <= 0) break
-            val part = exactly(input, minOf(size, (MAX_BYTES - b.size()).toLong()), deadline)
+            if (b.size() + size > max) { if (strict) throw IOException("answer larger than $max bytes") }
+            if (b.size() >= max) break
+            val part = exactly(input, minOf(size, (max - b.size()).toLong()), deadline, max)
             b.write(part)
             if (part.size.toLong() < size) break
             line(input, deadline) // the line end after the chunk

@@ -69,7 +69,7 @@ class PortalPage : Activity() {
                 val headers = LinkedHashMap(request.requestHeaders.orEmpty())
                 val cookies = CookieManager.getInstance()
                 cookies.getCookie(u)?.takeIf { it.isNotEmpty() }?.let { headers["Cookie"] = it }
-                val raw = PortalLogin.plainRaw(network, u, null, headers)
+                val raw = PortalLogin.plainRaw(network, u, null, headers, PortalLogin.PAGE_MAX_BYTES, PortalLogin.PAGE_TOTAL_MS, strict = true)
                 raw.headers.filter { it.first.equals("Set-Cookie", true) }.forEach { cookies.setCookie(u, it.second) }
                 if (raw.code in 300..399) {
                     val to = raw.header("Location")?.let { runCatching { java.net.URL(java.net.URL(u), it).toString() }.getOrNull() }

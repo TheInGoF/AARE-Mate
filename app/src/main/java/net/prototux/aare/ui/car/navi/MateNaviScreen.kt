@@ -1070,8 +1070,10 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     LaunchedEffect(arrived) {
         if (!arrived) return@LaunchedEffect
         // the last stretch for the buffer (L-029 step D): what the model missed since the start or the last charging
+        // off the main thread: arrived() waits for a check that may still be planning
         if (!testDrive) NaviKeep.rolling?.let { roll -> net.prototux.aare.host.CarDataService.car(context)?.let { c ->
-            roll.arrived(NaviKeep.rollingRoute?.distance ?: 0.0, c.socPercent) } }
+            val at = NaviKeep.rollingRoute?.distance ?: 0.0
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { roll.arrived(at, c.socPercent) } } }
         NaviKeep.rolling = null
         guiding = false
         val minutes = (android.os.SystemClock.elapsedRealtime() - startedAt) / 60_000.0

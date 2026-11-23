@@ -10,8 +10,7 @@ import net.prototux.aare.DiagLog
 import net.prototux.aare.adb.SelfAdb
 
 /**
- * Starts Shizuku after a reboot (System L-063): Shizuku is gone after a restart, Mate starts it itself 45 s after the boot
- * once a network is there. A job, so the process is kept alive for the start instead of being free to end after the boot
+ * Starts Shizuku after a reboot (System L-063): Shizuku is gone after a restart, Mate starts it itself 45 s after the boot. A job, so the process is kept alive for the start instead of being free to end after the boot
  * broadcast.
  */
 class ShizukuStartJob : JobService() {
@@ -30,8 +29,9 @@ class ShizukuStartJob : JobService() {
         fun schedule(context: Context): Boolean = runCatching {
             val js = context.getSystemService(JobScheduler::class.java) ?: return false
             js.schedule(JobInfo.Builder(ID, ComponentName(context, ShizukuStartJob::class.java))
+                // no network asked for: the car's Wi-Fi has no internet, which the job's network types would wait for; without
+                // any Wi-Fi the try says so in the log, and a Wi-Fi coming later gets its own try (SelfAdb.watchWifi)
                 .setMinimumLatency(DELAY_MS)
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                 .build()) == JobScheduler.RESULT_SUCCESS
         }.onFailure { DiagLog.add("shizuku by Mate: start after boot not planned - ${it.javaClass.simpleName}: ${it.message}") }
             .getOrDefault(false)
