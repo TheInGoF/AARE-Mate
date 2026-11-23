@@ -53,8 +53,30 @@ internal object Storage {
     /** The chosen place of [kind]'s group; the music follows the maps' place until it has one of its own. */
     fun chosen(c: Context, kind: String): String {
         val p = prefs(c)
+        if (kind == MUSIC) settleMusic(c)
         return (if (kind == MUSIC && p.contains("volume_music")) p.getString("volume_music", "") else p.getString("volume", "")) ?: ""
     }
+
+    /**
+     * The music gets a place of its own once, where its titles actually lie (23.11.2026: "Musik ist gelöscht"): it followed
+     * the maps' place, so maps moved to the card before the music could move (L-080 before L-086) left the titles in the
+     * device's storage while Mate looked for them on the card - and loaded them anew there. The place with more titles wins;
+     * the other copy is left alone.
+     */
+    private fun settleMusic(c: Context) {
+        val p = prefs(c)
+        if (p.contains("volume_music")) return
+        val maps = p.getString("volume", "") ?: ""
+        if (maps.isEmpty()) return                       // both in the device's storage: nothing to settle yet
+        val root = volumes(c).firstOrNull { it.id == maps }?.root ?: p.getString("root", null)?.let(::File)
+        val inner = titles(internalDir(c, MUSIC))
+        val card = root?.let { titles(File(it, MUSIC)) } ?: 0L
+        val place = if (inner > card) "" else maps
+        Log.i(TAG, "music's own place: ${if (place.isEmpty()) "device storage" else "card"} (titles: device $inner, card $card bytes)")
+        p.edit().putString("volume_music", place).putString("root_music", if (place.isEmpty()) null else root?.path).commit()
+    }
+
+    private fun titles(d: File) = File(d, "t").listFiles()?.sumOf { it.length() } ?: 0L
 
     /** The device's own folder of [kind] - where the files always lay before L-080. */
     fun internalDir(c: Context, kind: String): File = when (kind) {

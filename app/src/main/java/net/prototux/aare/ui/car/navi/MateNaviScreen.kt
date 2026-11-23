@@ -671,7 +671,10 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             else NaviChargers.along(raw(r), chargeAt, ChargerIndex.get(context)::near)
         }
         chargerJson = NaviChargers.geoJson(found.stops) to NaviChargers.geoJson(found.others.map { it.at })
-        chargerOthers = found.others
+        // networks chosen (e.g. only Tesla and IONITY): all of theirs, not only those along the route
+        chargerOthers = if (planningMap && rules.preferred.isNotEmpty()) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            NaviChargers.ofNetworks(ChargerIndex.get(context).all(rules.minKw) { !rules.outside(it) }, chargeAt)
+        } else found.others
         Log.i(TAG, "chargers on the map: ${found.stops.size} stops, ${found.others.size} others")
         val rest = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { NaviRest.along(context, raw(r)) }
         restJson = NaviChargers.geoJson(rest.filter { it.services }.map { it.at }) to NaviChargers.geoJson(rest.filter { !it.services }.map { it.at })

@@ -32,4 +32,15 @@ class StorageSplitTest {
         assertEquals("", Storage.chosen(ctx, Storage.MUSIC))
         assertEquals("x", File(Storage.dir(ctx, Storage.MUSIC), "titel.mp3").readText())
     }
+
+    /** "Musik ist gelöscht": maps went to the card before the music could, its titles stayed in the device - Mate finds them there. */
+    @Test fun musicStaysWhereItsTitlesLie() {
+        val card = File(ctx.cacheDir, "karte2").apply { mkdirs() }
+        prefs().edit().clear().putString("volume", "CARD-2").putString("root", card.path).commit()
+        val inner = Storage.internalDir(ctx, Storage.MUSIC)
+        File(inner, "t").mkdirs(); File(inner, "t/titel").writeText("musik")
+        assertEquals("", Storage.chosen(ctx, Storage.MUSIC))
+        assertEquals(inner, Storage.dir(ctx, Storage.MUSIC))
+        assertEquals("CARD-2", Storage.chosen(ctx, Storage.MAPS))
+    }
 }

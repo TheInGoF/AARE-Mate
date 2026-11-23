@@ -23,4 +23,13 @@ class NaviChargersPlanTest {
         val found = NaviChargers.along(route, emptyList(), index, NaviChargers.PLAN_M, 100, { !rules.outside(it) }, NaviChargers.PLAN_MAX)
         assertEquals(listOf(far), found.others)
     }
+
+    /** Networks chosen: all of theirs, also far from the route, none of the others, the stop not twice. */
+    @Test fun chosenNetworksEverywhere() {
+        val faraway = Charger(Position(13.4, 54.0), 250, 6, "Ionity")
+        val stop = Charger(Position(11.0, 52.0), 300, 6, "Ionity")
+        val rules = ChargePlanner.Rules(preferred = setOf(far.network!!))
+        val pool = listOf(far, near, faraway, stop).filter { !rules.outside(it) }
+        assertEquals(listOf(far, faraway), NaviChargers.ofNetworks(pool, listOf(stop.at)))
+    }
 }

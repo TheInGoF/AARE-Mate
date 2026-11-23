@@ -25,6 +25,12 @@ internal object NaviChargers {
     /** While planning (System L-099): every charger of the chosen networks this far from the route, at most this many. */
     const val PLAN_M = 15_000.0
     const val PLAN_MAX = 400
+    /** With networks chosen: all of theirs, in the whole country, at most this many. */
+    const val NETWORK_MAX = 4000
+
+    /** All chargers of the chosen networks except the stops (L-099, 23.11.2026: "nur die den Filter entsprechen … dann aber auch alle, nicht nur die auf der Route"). */
+    fun ofNetworks(all: List<Charger>, stops: List<Position>, max: Int = NETWORK_MAX) =
+        all.filter { c -> stops.none { ChargerIndex.distanceM(it, c.at) < SAME_M } }.sortedByDescending { it.kw }.take(max)
     private const val STEP_M = 1_500.0
     private const val SAME_M = 150.0
 

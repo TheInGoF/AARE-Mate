@@ -215,10 +215,12 @@ public final class Offline {
         Set<String> keep = new HashSet<>(), keepArt = new HashSet<>();
         int loaded = 0;
         boolean complete = true;
+        int found = 0;
         try {
             List<Plex.Item> all = plex.playlists();
             for (Plex.Item pl : all) {
                 if (!subs.contains(pl.key)) continue;
+                found++;
                 List<Plex.Item> tracks = new ArrayList<>();
                 for (int at = 0; at < LIST_MAX; at += 500) {
                     List<Plex.Item> part = plex.tracks(pl.key, at, 500);
@@ -254,7 +256,13 @@ public final class Offline {
             Log.w(TAG, "Abgleich: " + e.getClass().getSimpleName());
             return -1;
         }
-        /* aufraeumen: was in keiner abonnierten Liste mehr steht */
+        /* aufraeumen: was in keiner abonnierten Liste mehr steht - nur wenn der Server die Abos auch kennt; sonst (anderes
+           Konto, anderer Server, Listen umbenannt) wuerde alles Geladene geloescht (23.11.2026: "Musik ist gelöscht") */
+        if (found == 0 || found < subs.size()) {
+            Log.w(TAG, "Abgleich: " + found + " von " + subs.size() + " Abos am Server gefunden, nichts geloescht");
+            if (complete) Plex.prefs(c).edit().putLong(KEY_LAST, System.currentTimeMillis()).apply();
+            return loaded;
+        }
         for (String sub : new String[] { "t", "a" }) {
             File[] fs = new File(dir(c), sub).listFiles();
             if (fs == null) continue;

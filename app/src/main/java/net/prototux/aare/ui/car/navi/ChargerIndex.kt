@@ -29,6 +29,9 @@ internal class ChargerIndex private constructor(private val cells: Map<Long, Lis
         return out
     }
 
+    /** Every charger of at least [minKw] that [keep] takes, wherever it lies (System L-099: the driver's networks on the map). */
+    fun all(minKw: Int, keep: (Charger) -> Boolean): List<Charger> = cells.values.flatMap { l -> l.filter { it.kw >= minKw && keep(it) } }
+
     companion object {
         private const val CELL = 0.1
         const val M_PER_DEG = 111_320.0
