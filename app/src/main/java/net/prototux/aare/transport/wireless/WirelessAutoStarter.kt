@@ -7,16 +7,14 @@ import android.os.ParcelUuid
 import androidx.core.content.IntentCompat
 
 /**
- * Notices a wireless head unit coming into Bluetooth range, for the manifest-declared receiver of [ACTIONS]: when a bonded
- * device connects (the car's hands-free link usually comes up on its own) or its services arrive, [headUnitIn] tells
- * whether it publishes the Android Auto wireless service. Starting the session is the caller's decision.
+ * Notices a wireless head unit coming into Bluetooth range, for the manifest-declared receiver of ACL_CONNECTED and
+ * ACTION_UUID: when a bonded device connects (the car's hands-free link usually comes up on its own) or its services
+ * arrive, [headUnitIn] tells whether it publishes the Android Auto wireless service. Starting the session is the caller's decision.
  * ACL_CONNECTED and ACTION_UUID are among the implicit broadcasts still delivered to manifest receivers.
  */
 object WirelessAutoStarter {
-    val ACTIONS = listOf(BluetoothDevice.ACTION_ACL_CONNECTED, BluetoothDevice.ACTION_UUID)
-
     /**
-     * For a manifest-declared receiver: the head unit [intent] (one of [ACTIONS]) is about, or
+     * For a manifest-declared receiver: the head unit [intent] (ACL_CONNECTED or ACTION_UUID) is about, or
      * null. Uses the services Android has cached, or those carried by ACTION_UUID.
      */
     @SuppressLint("MissingPermission")

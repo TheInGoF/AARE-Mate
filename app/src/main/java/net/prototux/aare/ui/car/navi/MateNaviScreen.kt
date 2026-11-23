@@ -500,7 +500,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             val wh = NaviCharge.energyWh(r.steps, null, car)
             val prev = o.preview
             val updated = RouteOption(o.kind, r, Preview(prev.name, r.distance / 1000, r.steps.sumOf { it.duration } / 60.0 + plan.stayMinutes,
-                wh / 1000, plan.arrivePercent, plan.arrivePercent < NaviCharge.reservePercent(context), plan.stops,
+                wh / 1000, plan.arrivePercent, plan.arrivePercent < rules.atDestination, plan.stops,
                 planRows(r, pendingOwn, plan.stops, pending?.name.orEmpty(), plan.arrivePercent), removed))
             if (panel !is NaviStep.Preview) return@launch
             planError = null
@@ -728,7 +728,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     /**
      * System L-092: other chargers for one stop of the running trip - the chosen networks near it (25 km before to 10 km
      * after), still reachable: the level on arrival there, counted from the car's level now and what the way to the stop
-     * takes per km, at least the driver's least level at a charger ([NaviCharge.chargerWarnPercent]); none behind the car.
+     * takes per km, at least the driver's least level at a charger ([ChargePlanner.Rules.atCharger]); none behind the car.
      */
     fun guidedOptions(ch: Charger): List<NaviTripPlan.Option> {
         val r = guided ?: return emptyList()
@@ -739,11 +739,11 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val atM = NaviKeep.rolling?.takeIf { NaviKeep.rollingRoute === r }?.alongM(ch) ?: stop.atM
         val here = ChargePlanner.Stop(ch, atM, stop.arrivePercent, stop.leavePercent, stop.chargeMinutes)
         val perKm = ((car.socPercent - stop.arrivePercent) / ((atM - driven) / 1000).coerceAtLeast(1.0)).coerceIn(0.05, 0.6)
-        return ChargePlanner.alternatives(guidedTrack(r, car), here, chargeStops.map { it.charger }, ChargerIndex.get(context)::near,
-            ChargePlanner.Rules.of(net.prototux.aare.Settings(context)), max = 60)
+        val rules = ChargePlanner.Rules.of(net.prototux.aare.Settings(context))
+        return ChargePlanner.alternatives(guidedTrack(r, car), here, chargeStops.map { it.charger }, ChargerIndex.get(context)::near, rules, max = 60)
             .filter { atM + it.shiftM > driven + 1_000 }
             .map { a -> NaviTripPlan.Option(a.charger, a.shiftM, stop.arrivePercent - a.shiftM / 1000 * perKm) }
-            .filter { (it.arrivePercent ?: 100.0) >= NaviCharge.chargerWarnPercent(context) }
+            .filter { (it.arrivePercent ?: 100.0) >= rules.atCharger }
     }
 
     /** System L-092: one stop of the running trip at another charger - the other stops stay, the route goes over the new one. */
@@ -1070,10 +1070,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     LaunchedEffect(arrived) {
         if (!arrived) return@LaunchedEffect
         // the last stretch for the buffer (L-029 step D): what the model missed since the start or the last charging
-        // off the main thread: arrived() waits for a check that may still be planning
         if (!testDrive) NaviKeep.rolling?.let { roll -> net.prototux.aare.host.CarDataService.car(context)?.let { c ->
-            val at = NaviKeep.rollingRoute?.distance ?: 0.0
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { roll.arrived(at, c.socPercent) } } }
+            roll.arrived(NaviKeep.rollingRoute?.distance ?: 0.0, c.socPercent) } }
         NaviKeep.rolling = null
         guiding = false
         val minutes = (android.os.SystemClock.elapsedRealtime() - startedAt) / 60_000.0
@@ -1715,7 +1713,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     val driven = g.distance - trip.progress.distanceRemaining
                     val p = rollNow.levelAt(driven, car.socPercent, rollNow.endM) + charged
                     NaviCharge.Arrival(p, p < NaviCharge.reservePercent(context), spread = rollNow.spreadAt(driven, car.socPercent, rollNow.endM))
-                } else NaviCharge.arrival(context, trip.remainingSteps, trip.progress.distanceToNextManeuver, charged)
+                } else NaviCharge.arrival(context, trip.remainingSteps, trip.progress.distanceToNextManeuver, NaviCharge.reservePercent(context), charged)
             }
             SideEffect { arrivalNow = arrival }
             // the tile: the level at the next charging stop while one is ahead (not the one the car charges at now), the
@@ -1731,7 +1729,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     val p = rollNow.levelAt(driven, car.socPercent, at)
                     NaviCharge.Arrival(p, p < NaviCharge.chargerWarnPercent(context), atCharger = true, spread = rollNow.spreadAt(driven, car.socPercent, at))
                 } else if (mark != null && driven != null && mark.metres > driven)
-                    NaviCharge.arrivalAtCharger(context, trip.remainingSteps, trip.progress.distanceToNextManeuver, mark.metres - driven) ?: arrival
+                    NaviCharge.arrivalAtCharger(context, trip.remainingSteps, trip.progress.distanceToNextManeuver, mark.metres - driven,
+                        NaviCharge.chargerWarnPercent(context)) ?: arrival
                 else arrival
             }
             // each whole percent the tile changes, into the log with what it was counted from (19.11.2026: "Nur bei der

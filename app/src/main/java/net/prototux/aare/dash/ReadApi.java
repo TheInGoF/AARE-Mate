@@ -32,12 +32,6 @@ final class ReadApi {
      */
     static final int RAIN_MAX_BYTES = 8 * 1024 * 1024;
 
-    /** A refusal the driver is shown in his language ([shown]); the message itself, English, goes to the log. */
-    static final class Refused extends IOException {
-        final int shown;
-        Refused(String message, int shown) { super(message); this.shown = shown; }
-    }
-
     private final Context mCtx;
     private final Link mLink;
     private final Telemetry mTelemetry;
@@ -128,8 +122,7 @@ final class ReadApi {
                     if (rainState != 0) mRainAnsweredAt = System.currentTimeMillis();
                 }
             } catch (IOException | org.json.JSONException e) {
-                mTelemetry.error(SRC, e instanceof Refused ? mCtx.getString(((Refused) e).shown)
-                        : e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                mTelemetry.error(SRC, net.prototux.aare.ShownFailure.text(mCtx, e));
                 Log.w(TAG, "Abruf: " + e);
             } catch (RuntimeException e) {
                 /* 19.11.2026 (the level on arrival stopped following the car until Mate started anew: "unter bestimmten
@@ -172,15 +165,15 @@ final class ReadApi {
             c.setRequestProperty("Authorization", "Bearer " + mLink.token);
             c.setRequestProperty("Accept", "application/json");
             int code = c.getResponseCode();
-            if (code == 401) throw new Refused("access refused (401)", R.string.api_401);
-            if (code == 404) throw new Refused("read API off on the server (404)", R.string.api_404);
-            if (code == 429) throw new Refused("too many failed attempts (429)", R.string.api_429);
+            if (code == 401) throw new net.prototux.aare.ShownFailure("access refused (401)", R.string.api_401);
+            if (code == 404) throw new net.prototux.aare.ShownFailure("read API off on the server (404)", R.string.api_404);
+            if (code == 429) throw new net.prototux.aare.ShownFailure("too many failed attempts (429)", R.string.api_429);
             if (code != 200) throw new IOException("HTTP " + code);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try (InputStream in = c.getInputStream()) {
                 byte[] buf = new byte[4096];
                 for (int n; (n = in.read(buf)) > 0; ) {
-                    if (out.size() + n > maxBytes) throw new Refused("answer too large", R.string.api_too_large);
+                    if (out.size() + n > maxBytes) throw new net.prototux.aare.ShownFailure("answer too large", R.string.api_too_large);
                     out.write(buf, 0, n);
                 }
             }

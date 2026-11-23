@@ -196,7 +196,7 @@ public final class MusicSetupActivity extends Activity {
             } catch (java.io.IOException e) {
                 ui(run, () -> {
                     mCode.setVisibility(View.GONE);
-                    mPlex.setText(getString(R.string.music_login_failed, Plex.Failure.text(this, e)));
+                    mPlex.setText(getString(R.string.music_login_failed, net.prototux.aare.ShownFailure.text(this, e)));
                 });
             }
         }, "mate-plex-login").start();
@@ -245,7 +245,7 @@ public final class MusicSetupActivity extends Activity {
             try {
                 msg = getString(R.string.music_ok, p.name(), p.playlists().size(), p.url);
             } catch (java.io.IOException e) {
-                msg = getString(R.string.music_check_failed, p.url, Plex.Failure.text(this, e));
+                msg = getString(R.string.music_check_failed, p.url, net.prototux.aare.ShownFailure.text(this, e));
             }
             final String m = msg;
             mMain.post(() -> mPlex.setText(m));

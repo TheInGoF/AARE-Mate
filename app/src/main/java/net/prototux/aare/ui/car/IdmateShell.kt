@@ -66,6 +66,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -96,8 +97,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import kotlinx.coroutines.delay
 import net.prototux.aare.R
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 
 /** The separate IDmate app (github.com/IDmate-app), a dashboard for any Android Auto host: no part of this app, never taken for navigation. */
 internal const val IDMATE_PACKAGE = "de.fredersdorf.idmate.auto"
@@ -848,12 +847,13 @@ private fun areas(
     // the tile only while the car stands parked for sure (18.11.2026: "Der Bereich Kino, der sollte nur im Stand angezeigt
     // werden, wenn alle Bedingungen erfüllt sind")
     // parked, but no app can come (Shizuku not started, 19.11.2026): the area all the same, saying why
-    if (cinema.isEmpty() && state.parkedForFilms && state.cinemaMissing != null && !net.prototux.aare.launch.AppLauncher.available())
+    val available = net.prototux.aare.launch.AppLauncher.available()
+    val missing = cinema.isEmpty() && state.parkedForFilms && state.cinemaMissing != null && !available
+    if (missing)
         out += Area(Icons.Rounded.Movie, stringResource(R.string.cinema_title), inner == Inner.CINEMA_MISSING) { show(Inner.CINEMA_MISSING) }
     // parked and a way to show phone apps there: the cinema's app menu (any app of the tablet, the chosen ones first)
-    val canShow = cinema.isNotEmpty() || (state.parkedForFilms && state.cinemaMissing == null) ||
-        net.prototux.aare.launch.AppLauncher.available()
-    if (state.parkedForFilms && canShow && !(cinema.isEmpty() && state.cinemaMissing != null && !net.prototux.aare.launch.AppLauncher.available()))
+    val canShow = cinema.isNotEmpty() || (state.parkedForFilms && state.cinemaMissing == null) || available
+    if (state.parkedForFilms && canShow && !missing)
         out += Area(Icons.Rounded.Movie, stringResource(R.string.cinema_title), inner == Inner.CINEMA || cinema.any { it.id == shown }) { show(Inner.CINEMA) }
     return out
 }
@@ -872,8 +872,8 @@ private fun Controls(
         val ctx = LocalContext.current
         val va = net.prototux.aare.speech.VoiceAssistant.phase
         val thinking = va == net.prototux.aare.speech.VoiceAssistant.Phase.THINK
-        val on = state.listening || thinking ||
-            va == net.prototux.aare.speech.VoiceAssistant.Phase.LISTEN || va == net.prototux.aare.speech.VoiceAssistant.Phase.ASK
+        val on = state.listening || va in setOf(net.prototux.aare.speech.VoiceAssistant.Phase.THINK,
+            net.prototux.aare.speech.VoiceAssistant.Phase.LISTEN, net.prototux.aare.speech.VoiceAssistant.Phase.ASK)
         val musicFront = mediaFront && net.prototux.aare.media.MediaControls.voice
         // the face stays 40 dp; it is hit over the bar's whole height and 56 dp wide (18.11.2026: 8 mm were too small)
         Box(Modifier.fillMaxHeight().widthIn(min = 56.dp)
@@ -1330,16 +1330,15 @@ private fun ChoiceChip(c: Choice, drag: AppDrag? = null) {
 
 @Composable
 private fun Time() {
-    var now by remember { mutableStateOf(LocalTime.now()) }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            now = LocalTime.now()
-            delay(1000L * (60 - now.second))
+            now = System.currentTimeMillis()
+            delay(60_000 - now % 60_000)
         }
     }
     // the one rule for clock times (ui/Clock): 24 hours unless the device is set to 12
-    val pattern = if (net.prototux.aare.ui.Clock.h24()) "HH:mm" else "h:mm"
-    Text(now.format(DateTimeFormatter.ofPattern(pattern, java.util.Locale.getDefault())), color = Color.White, fontSize = Mate.body, fontWeight = FontWeight.Medium)
+    Text(net.prototux.aare.ui.Clock.short(now), color = Color.White, fontSize = Mate.body, fontWeight = FontWeight.Medium)
 }
 
 /** The colour of a tile: the app icon's own colour, darkened so that white text stays readable. */

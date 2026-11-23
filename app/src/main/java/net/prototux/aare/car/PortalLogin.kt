@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.os.SystemClock
 import net.prototux.aare.DiagLog
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
@@ -175,15 +176,19 @@ internal object PortalLogin {
         if (body != null && referer != null) extra["Referer"] = referer
         val raw = plainRaw(n, url, body?.toByteArray(Charsets.UTF_8), extra)
         val text = String(raw.bytes, raw.charset() ?: Charsets.UTF_8).take(MAX_CHARS)
-        return answer(raw.code, raw.header("Location"), raw.headers.filter { it.first.equals("Set-Cookie", true) }.map { it.second }, text, cookies)
+        return answer(raw.code, raw.header("Location"), raw.all("Set-Cookie"), text, cookies)
     }
 
     /** A plain-http answer as it came: status, headers, body bytes (decoded from chunks, at most [MAX_BYTES]). */
     internal class Raw(val code: Int, val reason: String, val headers: List<Pair<String, String>>, val bytes: ByteArray) {
-        fun header(name: String) = headers.firstOrNull { it.first.equals(name, true) }?.second
-        fun charset(): java.nio.charset.Charset? = header("Content-Type")?.let { Regex("(?i)charset=\"?([\\w.:-]+)").find(it)?.groupValues?.get(1) }
-            ?.let { runCatching { java.nio.charset.Charset.forName(it) }.getOrNull() }
+        fun header(name: String) = headers.valuesOf(name).firstOrNull()
+        /** Every value of [name] (a header that may come more than once, like Set-Cookie). */
+        fun all(name: String) = headers.valuesOf(name)
+        fun charset(): java.nio.charset.Charset? = header("Content-Type")?.toMediaTypeOrNull()?.charset()
     }
+
+    /** The values of the header [name], in their order (names compared without case). */
+    private fun List<Pair<String, String>>.valuesOf(name: String) = filter { it.first.equals(name, true) }.map { it.second }
 
     /**
      * The raw request behind [plainRequest], also for [PortalPage]'s WebView (I-118c: its plain-http login pages are
@@ -233,7 +238,7 @@ internal object PortalLogin {
                 headers = generateSequence { line(input, deadline)?.takeIf { it.isNotEmpty() } }
                     .take(200).mapNotNull { h -> h.indexOf(':').takeIf { it > 0 }?.let { h.substring(0, it).trim() to h.substring(it + 1).trim() } }.toList()
             } while (code in 100..199)
-            fun header(name: String) = headers.firstOrNull { it.first.equals(name, true) }?.second
+            fun header(name: String) = headers.valuesOf(name).firstOrNull()
             val bytes = when {
                 code == 204 || code == 304 -> ByteArray(0)
                 header("Transfer-Encoding")?.contains("chunked", true) == true -> chunked(input, deadline, max, strict)
@@ -295,7 +300,7 @@ internal object PortalLogin {
         while (true) {
             val size = line(input, deadline)?.substringBefore(';')?.trim()?.toLongOrNull(16) ?: break
             if (size <= 0) break
-            if (b.size() + size > max) { if (strict) throw IOException("answer larger than $max bytes") }
+            if (strict && b.size() + size > max) throw IOException("answer larger than $max bytes")
             if (b.size() >= max) break
             val part = exactly(input, minOf(size, (max - b.size()).toLong()), deadline, max)
             b.write(part)

@@ -1,8 +1,6 @@
 package net.prototux.aare.ui.car.navi
 
 import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioTrack
 import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.sin
@@ -58,17 +56,9 @@ internal class NaviSpeedAlert(private val overKmh: Int, val times: Int) {
             }
             val gap = ShortArray(RATE / 4)
             val pcm = ShortArray(0).let { var a = it; repeat(times.coerceIn(1, 3)) { i -> a += one; if (i < times.coerceIn(1, 3) - 1) a += gap }; a }
-            val track = runCatching { AudioTrack.Builder()
-                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-                .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-                .setTransferMode(AudioTrack.MODE_STATIC).setBufferSizeInBytes(pcm.size * 2).build()
-                .also { t ->
-                    // a track that could not take the tone is let go here (I-118i), else it stays held
-                    val written = runCatching { t.write(pcm, 0, pcm.size) }.getOrElse { e -> t.release(); throw e }
-                    if (written < 0) { t.release(); throw IllegalStateException("write failed ($written)") }
-                } }
+            val track = runCatching {
+                net.prototux.aare.audio.StaticTrack.of(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build(), RATE, pcm) }
                 .onFailure { android.util.Log.w("MateNavi", "speed warning: tone could not be played", it) }.getOrNull() ?: run {
                     // the music up again, it was turned down for the tone
                     net.prototux.aare.audio.MediaFade.release()

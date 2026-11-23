@@ -106,9 +106,7 @@ class MateTtsSample : android.app.Activity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         // in the voice's own language, whatever the device's is
-        val conf = android.content.res.Configuration(resources.configuration)
-        conf.setLocale(java.util.Locale.forLanguageTag(MateTtsService.voiceLang(this)))
-        val text = createConfigurationContext(conf).getString(net.prototux.aare.R.string.tts_sample, LocalTts.chosen(this)?.name ?: "Mate")
+        val text = net.prototux.aare.Language.resources(this, java.util.Locale.forLanguageTag(MateTtsService.voiceLang(this))).getString(net.prototux.aare.R.string.tts_sample, LocalTts.chosen(this)?.name ?: "Mate")
         setResult(TextToSpeech.LANG_AVAILABLE, android.content.Intent().putExtra("sampleText", text))
         finish()
     }

@@ -308,12 +308,7 @@ public final class SetupActivity extends ComponentActivity {
         // before Android 12 the search needs the location permission, not a Bluetooth one (I-118h)
         android.widget.Toast.makeText(this, android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
                 ? R.string.stick_permission_denied : R.string.stick_permission_denied_location, android.widget.Toast.LENGTH_LONG).show();
-        if (!again) {
-            try {
-                startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        android.net.Uri.fromParts("package", getPackageName(), null)));
-            } catch (android.content.ActivityNotFoundException ignored) { }
-        }
+        if (!again) net.prototux.aare.ui.Open.startSafely(this, net.prototux.aare.ui.Open.appDetails(this), null);
     }
 
     private boolean take(String text) {

@@ -153,10 +153,11 @@ class Settings(context: Context) {
     /**
      * Where Google Maps gets the car's energy model from (O117/O118): "google" - none is sent, Maps plans with the
      * vehicle saved in its own settings (Google's data for that car); "mate" - Mate's computed model with IDmate's
-     * state of charge (Google's server plans stops badly with models it does not know); "off" - no electric car.
+     * state of charge (Google's server plans stops badly with models it does not know); "off" - no electric car,
+     * which follows from [combustion] alone (a stored "off", the old choice "Kein Elektroauto", counts as "mate").
      */
     var evModelSource: String
-        get() = prefs.getString("ev_model_source", "mate") ?: "mate"
+        get() = if (combustion) "off" else prefs.getString("ev_model_source", "mate").takeIf { it != null && it != "off" } ?: "mate"
         set(v) = prefs.edit { putString("ev_model_source", v) }
 
     /** Write the protocol frame trace to the in-app connection log too, to capture it without adb. */

@@ -106,8 +106,6 @@
     <string name="mate_navi_pinned">Pinned</string>
     <string name="places_pin">Pin to the top</string>
     <string name="places_unpin">Unpin</string>
-    <string name="places_move_up">Move up</string>
-    <string name="places_move_down">Move down</string>
     <string name="places_set_home">This is my home</string>
     <string name="places_unset_home">Not my home any more</string>
     <string name="places_wallbox">Wallbox at home</string>
@@ -129,7 +127,6 @@
     <string name="setup_trust_new_cert">Trust this head unit\'s new certificate</string>
     <string name="setup_trust_head_unit">Trust this head unit</string>
     <string name="setup_trust_fingerprint_suffix">%1$s (SHA-256 %2$s...)</string>
-    <string name="setup_preview_car_screen">Preview car screen</string>
     <string name="setup_disconnect">Disconnect</string>
     <string name="setup_finish_title">Finish setting up</string>
     <string name="setup_check_permissions_title">Permissions</string>
@@ -228,7 +225,6 @@
     <string name="setup_app_entry_notifications">Notifications</string>
     <string name="setup_section_app_order">Order in the car</string>
     <string name="setup_section_connection_log">Connection log</string>
-    <string name="setup_log_save">Save</string>
     <string name="setup_toggle_verbose_log_title">Verbose protocol log</string>
     <string name="setup_toggle_verbose_log_subtitle">Record the full head-unit protocol trace in this log, to attach to a bug report. Logs a lot; leave it off otherwise.</string>
     <string name="setup_about_versions">Mate %1$s · based on AARE %2$s · AARE changes looked through up to %3$s</string>
@@ -393,8 +389,6 @@
     <string name="notif_new_message_placeholder">New message</string>
 
     <!-- dash: car shell / dashboard chrome -->
-    <string name="dash_menu_apps">Apps</string>
-    <string name="dash_menu_home">Home</string>
     <string name="dash_menu_exit_to_car">Exit to car</string>
 
     <!-- nav: navigation feature (dashboard card and templates) -->
@@ -470,7 +464,6 @@
     <string name="msg_message_count_one">1 message</string>
     <string name="msg_message_count_many">%1$d messages</string>
 
-    <string name="assistant_mic_label">Assistant</string>
     <string name="assistant_listening">Listening…</string>
 
     <!-- phone: car phone screen (recents, contacts, keypad) -->
@@ -540,9 +533,6 @@
     <string name="idmate_split">Music beside the navigation</string>
     <string name="idmate_call_on">Call in progress</string>
     <string name="idmate_call_end">Hang up</string>
-    <string name="idmate_tab_start">Start</string>
-    <string name="idmate_choice_hint">Tap: default app</string>
-    <string name="idmate_choice_hint_pin">Tap: default app · Pin: always shown</string>
     <string name="msg_banner_no_preview">New message</string>
     <string name="msg_banner_seconds">Banner stays for %1$d s</string>
     <string name="msg_toggle_preview_title">Show the message text</string>
@@ -631,13 +621,9 @@
     <string name="dashboard_card_hint">Map and car values come from your IDmate server: scan its code here, and connect the stick.</string>
     <!-- Dashboard: car data and map from the IDmate server (built in) -->
     <string name="dash_name">Dashboard</string>
-    <string name="soc">State of charge</string>
-    <string name="range">Range</string>
     <string name="no_data">No data yet – connection to IDmate is not set up.</string>
     <string name="refresh">Refresh</string>
     <string name="waiting">Waiting for data from IDmate …</string>
-    <string name="power">Power</string>
-    <string name="speed">Speed</string>
     <string name="charging">Charging</string>
     <string name="charging_dc">Fast charging</string>
     <string name="dbg_gaps">gaps</string>
@@ -718,9 +704,6 @@
     <string name="voice_hint">Messages are read with the speech engine of this device. Voices that need the internet are computed by the engine\u2019s server and tend to sound better. Mate decides for each message: with Wi-Fi or good mobile reception the first voice below, else the second - one from the device, so nothing waits for a server.</string>
     <string name="voice_default">The engine\u2019s default</string>
     <string name="voice_number">Voice %1$d</string>
-    <string name="voice_quality_very_high">very high quality</string>
-    <string name="voice_quality_high">high quality</string>
-    <string name="voice_quality_normal">normal quality</string>
     <string name="voice_needs_internet">needs the internet</string>
     <string name="voice_on_device">on the device</string>
     <string name="voice_try">Try</string>
@@ -737,8 +720,6 @@
     <string name="sound_section_filter">Sound filter</string>
     <string name="sound_toggle_title">Use the sound filter</string>
     <string name="sound_toggle_subtitle">Works on everything Mate sends to the car: its own music, audiobooks, other apps. Navigation prompts stay as they are.</string>
-    <string name="sound_section_curve">Sound curve</string>
-    <string name="sound_presets">Preset</string>
     <string name="sound_preset_flat">Flat</string>
     <string name="sound_preset_bass">Bass</string>
     <string name="sound_preset_treble">Treble</string>
@@ -797,7 +778,6 @@
     <string name="views_name">Name, e.g. Commute or Holiday</string>
     <string name="views_start">Area at the start</string>
     <string name="views_start_split">Split</string>
-    <string name="views_takes_apps">Takes the current navigation app (%1$s) and music app (%2$s) – choose them on the Navigation and Music pages first.</string>
     <string name="views_save">Save view</string>
     <string name="views_delete">Delete</string>
     <string name="sound_target">Target</string>
@@ -822,15 +802,9 @@
     <string name="speech_try_listening">Listening … speak now</string>
     <string name="speech_try_thinking">Recognizing …</string>
     <string name="idmate_dictate_answer">Answer</string>
-    <string name="idmate_dictate_listening">Listening … done</string>
-    <string name="idmate_dictate_thinking">Recognizing …</string>
-    <string name="idmate_dictate_send">Send</string>
     <string name="idmate_dictate_cancel">Cancel</string>
-    <string name="idmate_dictate_readback">Answer to %1$s: %2$s. Send?</string>
-    <string name="idmate_dictate_failed">Speech recognition not ready – microphone or speech model missing.</string>
     <string name="idmate_dictate_sent">Sent.</string>
     <string name="idmate_dictate_not_sent">Sending failed.</string>
-    <string name="music_voice_button">Music by voice</string>
     <string name="music_voice_playing">Playing %1$s.</string>
     <string name="rec_title">Test recording</string>
     <string name="rec_title_on">Recording</string>
@@ -838,8 +812,6 @@
     <string name="rec_photo">Photo %1$d</string>
     <string name="rec_stop">Stop</string>
     <string name="rec_hint">Press Record, then do the steps in the car window, \u201cPhoto\u201d after each step, \u201cStop\u201d at the end. Recorded are touches on the car screen, keys and what the apps answer.</string>
-    <string name="navi_voice_button">Destination</string>
-    <string name="navi_voice_listening">Speak …</string>
     <string name="speech_model_row">Whisper %1$s · %2$d MB</string>
     <string name="speech_model_there">on the device</string>
     <string name="speech_model_absent">not loaded</string>
@@ -851,9 +823,7 @@
     <string name="voice_engine_section">Mate\'s voice</string>
     <string name="voice_female">female</string>
     <string name="voice_male">male</string>
-    <string name="voice_engine_title">Mate reads with</string>
     <string name="voice_engine_system">The phone\'s text-to-speech</string>
-    <string name="voice_engine_piper">Thorsten (natural, on the device)</string>
     <string name="voice_engine_hint">Reads messages and speaks the navigation. The voices on the device sound more natural than the phone\'s and need no network; Kokoro voices sound best. Mate computes the announcements ahead as soon as the route is set. Load once, then “Listen”.</string>
     <string name="voice_engine_try">Hear a sample</string>
     <string name="voice_engine_sample" formatted="true">Hello, this is %1$s. In three hundred metres turn right onto the B 86 towards Hamburg, then take the second exit at the roundabout. Traffic jam on the A 4, about ten minutes of delay. Charging stop reached, charge to eighty percent.</string>
@@ -877,7 +847,6 @@
     <string name="mate_navi_charge_at_charger">at the charger</string>
     <string name="mate_navi_preheat_title">Warm up the battery now</string>
     <string name="mate_navi_preheat_detail">Battery %1$d °C · about %2$d min · about %3$s kWh · start it in the car</string>
-    <string name="mate_navi_preheat_say">Warm up the battery now, so it is ready at the fast charger.</string>
     <string name="mate_navi_charge_spread">± %1$d</string>
     <string name="mate_navi_charge_at_destination">at destination</string>
     <string name="mate_navi_eta_arrival">Arrival</string>
@@ -887,7 +856,6 @@
     <string name="mate_panel_places_sub">Address lists for the navigation: work, home and your own</string>
     <string name="mate_panel_settings">Settings</string>
     <string name="mate_panel_settings_sub">Car screen, navigation, audio, speech, messenger, system</string>
-    <string name="mate_panel_places_soon">The address lists follow in the next step.</string>
     <string name="places_category_work">Work</string>
     <string name="places_category_home">Home</string>
     <string name="places_intro">Your places for the navigation, in lists of your own. In the car: Navi → destination - large tiles for home, pinned places, chargers, rest stops, restaurants and each list (the most visited of late on top in it).</string>
@@ -919,7 +887,6 @@
     <string name="places_order_use">Frequent</string>
     <string name="places_order_name">A–Z</string>
     <string name="places_order_distance">Distance</string>
-    <string name="places_order_title">Order</string>
     <string name="mate_navi_other_places">Others</string>
     <string name="mate_navi_order_no_position">Position not known yet – by frequency</string>
     <string name="mate_navi_planning">Planning the route…</string>
@@ -1031,7 +998,6 @@
     <string name="regions_contains">Holds: %1$s</string>
     <string name="regions_loaded_at">On this device since %1$s</string>
     <string name="regions_choose_at_server">Which regions there are is chosen on the map server’s page (port 8095); a newer map there comes here as an update.</string>
-    <string name="regions_singles">Single packages from before still on this device (%1$d): %2$s. They go once the whole package is loaded.</string>
     <string name="regions_delete_singles">Delete them now</string>
     <string name="regions_on_device">%1$d of %2$d regions on this device · %3$s</string>
     <string name="regions_update_all">Update all (%1$s)</string>
@@ -1053,8 +1019,6 @@
     <string name="music_folder_access">A folder of your own needs access to all files. “Allow access” opens the setting.</string>
     <string name="music_folder_back">Back into Mate’s storage</string>
     <string name="music_folder_unknown">This folder cannot be used. Please choose one on the device or the memory card.</string>
-    <string name="storage_intro_music">Where downloaded music is kept - apart from the offline maps place. Choose another place and the music moves there; it is checked before the old copies go.</string>
-    <string name="storage_move_ask_music">Move the music to \"%1$s\" (%2$s)?</string>
     <string name="storage_card">Memory card (%1$s)</string>
     <string name="storage_card_plain">Memory card</string>
     <string name="storage_internal">Device storage</string>
@@ -1262,10 +1226,8 @@
     <string name="first_restore_new">Set up anew</string>
     <string name="first_restore_failed">Not restored: %1$s</string>
     <string name="first_packages_title">Loading base packages</string>
-    <string name="first_packages_hint">Mate loads what it needs for its basic functions. Wi-Fi is best.</string>
     <string name="first_packages_asr">Speech recognition (Whisper, 160 MB)</string>
     <string name="first_packages_voice">Voice Thorsten (77 MB)</string>
-    <string name="first_packages_done">ready</string>
     <string name="first_packages_waiting">waiting</string>
     <string name="first_packages_retry">Try again</string>
     <string name="first_packages_ok">OK</string>

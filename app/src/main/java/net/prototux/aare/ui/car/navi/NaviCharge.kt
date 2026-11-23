@@ -81,12 +81,13 @@ internal object NaviCharge {
     /**
      * The level on arrival at the next charging stop, [aheadM] metres on (19.11.2026: "Ich brauche nicht das Endziel
      * angezeigt bekommen in dem kleinen Buttonfeld, sondern mit wie viel Prozent ich an der Ladestation ankomme" - the tile
-     * said 31 % at home where the plan said 20 % at the IONITY); null when the car's level is not known.
+     * said 31 % at home where the plan said 20 % at the IONITY); null when the car's level is not known. Below [warnPercent]
+     * (the driver's least level at a charger, [chargerWarnPercent]) the tile warns.
      */
-    fun arrivalAtCharger(context: Context, steps: List<RouteStep>, firstLeftM: Double?, aheadM: Double): Arrival? {
+    fun arrivalAtCharger(context: Context, steps: List<RouteStep>, firstLeftM: Double?, aheadM: Double, warnPercent: Double): Arrival? {
         val car = CarDataService.car(context) ?: return null
         val p = car.socPercent - energyWhUntil(steps, firstLeftM, aheadM, car) / car.capacityWh * 100.0
-        return Arrival(p, p < chargerWarnPercent(context), atCharger = true)
+        return Arrival(p, p < warnPercent, atCharger = true)
     }
 
     /** Energy in Wh for [steps] (the first one only from [firstLeftM] on). */
@@ -98,13 +99,13 @@ internal object NaviCharge {
         }
     }
 
-    /** The level on arrival, or null when the car's level is not known. */
-    fun arrival(context: Context, steps: List<RouteStep>, firstLeftM: Double?, chargedPercent: Double = 0.0): Arrival? {
+    /** The level on arrival, or null when the car's level is not known; below [reservePercent] it needs a charge. */
+    fun arrival(context: Context, steps: List<RouteStep>, firstLeftM: Double?, reservePercent: Double, chargedPercent: Double = 0.0): Arrival? {
         val car = CarDataService.car(context) ?: return null
         val wh = energyWh(steps, firstLeftM, car)
         // what the planned stops ahead put in (their leaving less their arriving level)
         val p = car.socPercent - wh / car.capacityWh * 100.0 + chargedPercent
-        return Arrival(p, p < reservePercent(context))
+        return Arrival(p, p < reservePercent)
     }
 }
 

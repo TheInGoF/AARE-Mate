@@ -70,18 +70,17 @@ class PortalPage : Activity() {
                 val cookies = CookieManager.getInstance()
                 cookies.getCookie(u)?.takeIf { it.isNotEmpty() }?.let { headers["Cookie"] = it }
                 val raw = PortalLogin.plainRaw(network, u, null, headers, PortalLogin.PAGE_MAX_BYTES, PortalLogin.PAGE_TOTAL_MS, strict = true)
-                raw.headers.filter { it.first.equals("Set-Cookie", true) }.forEach { cookies.setCookie(u, it.second) }
+                raw.all("Set-Cookie").forEach { cookies.setCookie(u, it) }
                 if (raw.code in 300..399) {
                     val to = raw.header("Location")?.let { runCatching { java.net.URL(java.net.URL(u), it).toString() }.getOrNull() }
                     if (request.isForMainFrame) DiagLog.add("login page: ${url.host} sends on (${raw.code}) to ${to?.let { android.net.Uri.parse(it).host } ?: "nowhere"}", area = "NET")
-                    val safe = (to ?: "").replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;")
+                    val safe = android.text.TextUtils.htmlEncode(to ?: "")
                     val page = "<!DOCTYPE html><html><head><meta http-equiv=\"refresh\" content=\"0; url=$safe\"></head><body></body></html>"
                     return@runCatching WebResourceResponse("text/html", "UTF-8", page.byteInputStream(Charsets.UTF_8))
                 }
                 val type = raw.header("Content-Type")
                 val mime = type?.substringBefore(';')?.trim()?.ifEmpty { null } ?: "application/octet-stream"
-                val keep = raw.headers.filter { (k, _) -> !k.equals("Set-Cookie", true) && !k.equals("Content-Length", true) &&
-                    !k.equals("Transfer-Encoding", true) && !k.equals("Content-Type", true) && !k.equals("Connection", true) }
+                val keep = raw.headers.filter { (k, _) -> k.lowercase() !in DROP }
                     .groupBy({ it.first }, { it.second }).mapValues { it.value.joinToString(", ") }
                 val code = if (raw.code in 100..299 || raw.code in 400..599) raw.code else 200
                 if (request.isForMainFrame) DiagLog.add("login page: ${url.host} fetched over plain http for the page view, answer ${raw.code}, ${raw.bytes.size} bytes", area = "NET")
@@ -96,6 +95,8 @@ class PortalPage : Activity() {
     companion object {
         private const val CHANNEL = "car_wifi_login"
         private const val ID = 7341
+        /** Headers of a fetched answer not handed to the page view (cookies go through its store, the body is whole). */
+        private val DROP = setOf("set-cookie", "content-length", "transfer-encoding", "content-type", "connection")
 
         /** A notification on the tablet that opens the page. */
         fun offer(context: Context) {

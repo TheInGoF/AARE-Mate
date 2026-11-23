@@ -25,6 +25,12 @@ final class DashPainter {
     static final int RED = Color.rgb(248, 81, 73), WARN = Color.rgb(210, 153, 34);
 
 
+    /**
+     * Warum es keine Karte gibt (Text fuer das Kartenfeld, 0 = keiner): einmal bestimmt in CarStage.start, nicht je Bild
+     * aus den Einstellungen gelesen.
+     */
+    static volatile int sNoMap;
+
     private final Context mCtx;
     private final Hub mHub;
     private final Telemetry mTelemetry;
@@ -246,10 +252,7 @@ final class DashPainter {
         p.setTextSize(16 * dp);
         cv.drawText(lat != null && lon != null
                 ? String.format(Locale.ROOT, "%.5f, %.5f", lat, lon) : s(R.string.dash_no_pos), cx, m.bottom - 44 * dp, p);
-        Link link = Link.load(mCtx);
-        /* wie CarStage.start: ohne HTTPS keine Karte (Ausnahme: Testserver auf dem eigenen Geraet) */
-        int why = link == null ? R.string.dash_map_no_link
-                : !link.secure() && !link.url.startsWith("http://127.0.0.1") ? R.string.dash_map : 0;
+        int why = sNoMap;
         if (why != 0) cv.drawText(s(why), cx, m.bottom - 20 * dp, p);
     }
 

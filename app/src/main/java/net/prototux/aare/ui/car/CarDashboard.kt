@@ -72,9 +72,7 @@ internal fun Clock() {
         }
     }
     // Hours and minutes only: "AM/PM" doesn't fit the rail, and the car shows the period anyway.
-    val text = android.text.format.DateFormat.format(
-        if (net.prototux.aare.ui.Clock.h24()) "HH:mm" else "h:mm", now,
-    ).toString()
+    val text = net.prototux.aare.ui.Clock.short(now)
     Text(text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
 }
 

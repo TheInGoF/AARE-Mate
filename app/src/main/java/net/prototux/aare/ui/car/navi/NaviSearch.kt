@@ -7,6 +7,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import org.json.JSONObject
 import org.maplibre.spatialk.geojson.Position
+import kotlin.math.roundToInt
 
 /**
  * The map server's search (Photon behind the gate, /suche - server handover 16.11.2026): for now the way back from a
@@ -20,9 +21,13 @@ internal object NaviSearch {
         net.prototux.aare.Settings(context).mapServer.ifBlank { null }?.let { it + NaviServer.SEARCH_PATH }
             ?: DEV_PHOTON.takeIf { net.prototux.aare.BuildConfig.DEBUG }
 
-    /** How far, as the hits' lines show it: metres in [step]s below a kilometre, else kilometres with one decimal. */
-    internal fun distanceText(m: Double, step: Int): String =
-        if (m < 1000) "${(m / step).toInt() * step} m" else String.format(java.util.Locale.getDefault(), "%.1f km", m / 1000)
+    /**
+     * How far, as the hits' lines show it: metres in [step]s below a kilometre (cut down, or to the nearest step when
+     * [rounded]), else kilometres with one decimal.
+     */
+    internal fun distanceText(m: Double, step: Int, rounded: Boolean = false): String =
+        if (m < 1000) "${(if (rounded) (m / step).roundToInt() else (m / step).toInt()) * step} m"
+        else String.format(java.util.Locale.getDefault(), "%.1f km", m / 1000)
 
     /**
      * The address of [at] as the car's lists show it (O172, 16.11.2026: "Ort - Straße Hausnummer"), e.g.

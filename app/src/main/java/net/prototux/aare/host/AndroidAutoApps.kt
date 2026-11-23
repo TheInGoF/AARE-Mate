@@ -135,8 +135,7 @@ object AndroidAutoApps {
         val pm = context.packageManager
         // the log is English whatever the device's language (a change of language wrote the whole report anew);
         // the phone app's page stays in the device's language
-        val r = if (!log) context.resources else context.createConfigurationContext(android.content.res.Configuration(context.resources.configuration)
-            .apply { setLocale(java.util.Locale.ENGLISH) }).resources
+        val r = if (!log) context.resources else net.prototux.aare.Language.resources(context, java.util.Locale.ENGLISH)
         if ("template" in uses) {
             @Suppress("DEPRECATION")
             val any = pm.queryIntentServices(Intent(CarAppInfo.SERVICE_ACTION).setPackage(pkg),

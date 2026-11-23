@@ -48,7 +48,7 @@ object SelfAdb {
     private val work = Executors.newSingleThreadExecutor { r -> Thread(r, "self-adb").apply { isDaemon = true } }
     @Volatile private var pairingPort = 0
     @Volatile private var mdns: AdbMdns? = null
-    @Volatile private var lastTry = 0L
+    @Volatile private var lastWifiTry = 0L
     private val main = Handler(Looper.getMainLooper())
     /** The search for the pairing service ends after this long without a pairing; starting the pairing again restarts it. */
     private const val SEARCH_MS = 5 * 60_000L
@@ -114,35 +114,26 @@ object SelfAdb {
     }
 
     /**
-     * Shizuku started by Mate when it is not running and Mate has paired: in the background, at most once a minute.
+     * Shizuku started by Mate when it is not running and Mate has paired: in the background.
      * [why] for the log (car connected, phone app opened). [done] runs once the try is over (or nothing was to do).
      */
-    fun ensureShizuku(context: Context, why: String, force: Boolean = false, done: () -> Unit = {}) {
+    fun ensureShizuku(context: Context, why: String, done: () -> Unit = {}) {
         val app = context.applicationContext
         if (CaptureMethods.shizukuAvailable() || !paired(app) || !CaptureMethods.shizukuInstalled(app)) { done(); return }
-        val now = System.currentTimeMillis()
-        // [force]: the start after the boot always gets its try, even when the Wi-Fi coming took the minute just before
-        if (!force && now - lastTry < 60_000) { done(); return }
-        lastTry = now
         // tries queue on the one worker: one that comes after a successful start has nothing left to do
         work.execute { try { if (!CaptureMethods.shizukuAvailable()) startNow(app, why) } finally { done() } }
     }
 
-    @Volatile private var wifiWatched = false
-
     /**
      * E-045: a Wi-Fi network that comes only later (the car's Wi-Fi Mate joins itself, a hotspot) gets another try at starting
      * Shizuku - before, Mate tried at boot, at the car's connection and when the app opened, and nothing after. Registered once
-     * per process from [net.prototux.aare.AareApp] with the application context; it only listens (no request of its own), so
+     * from [net.prototux.aare.AareApp] in Mate's main process with the application context; it only listens (no request of its own), so
      * Mate's own joining of the car's Wi-Fi is not touched. A Wi-Fi network that goes away ends nothing: Shizuku runs on.
      * Wireless debugging needs Android 11.
      */
     fun watchWifi(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         val app = context.applicationContext
-        // only Mate's main process (the others have no use for it)
-        if (android.app.Application.getProcessName() != app.packageName) return
-        synchronized(this) { if (wifiWatched) return; wifiWatched = true }
         val cm = app.getSystemService(android.net.ConnectivityManager::class.java) ?: return
         val request = android.net.NetworkRequest.Builder()
             .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
@@ -152,20 +143,21 @@ object SelfAdb {
         runCatching {
             cm.registerNetworkCallback(request, object : android.net.ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: android.net.Network) {
-                    // the try logs itself ("shizuku by Mate (Wi-Fi came): ..."); within the minute after another try nothing happens
+                    // the try logs itself ("shizuku by Mate (Wi-Fi came): ..."); within the minute after the last one nothing happens
+                    val now = System.currentTimeMillis()
+                    if (now - lastWifiTry < 60_000) return
+                    lastWifiTry = now
                     ensureShizuku(app, "Wi-Fi came")
                 }
             })
         }.onFailure {
-            wifiWatched = false
             DiagLog.add("shizuku by Mate (Wi-Fi came): watching Wi-Fi failed - ${it.javaClass.simpleName}: ${it.message}")
         }
     }
 
-    /** Started from the phone app's button: without the once-a-minute limit. */
+    /** Started from the phone app's button. */
     fun startByHand(context: Context) {
         val app = context.applicationContext
-        lastTry = System.currentTimeMillis()
         work.execute {
             val ok = startNow(app, "by hand")
             note(app, app.getString(if (ok) R.string.self_adb_ready else R.string.self_adb_paired_not_started), ask = false)

@@ -26,6 +26,20 @@ object Language {
     /** [tag] as a locale, for a speech engine. */
     fun locale(lang: String = code): java.util.Locale = java.util.Locale.forLanguageTag(tag(lang))
 
+    /**
+     * Mate's texts in [locale] whatever the device's language: English for the log (kept once, the log asks often),
+     * another for a voice's own language.
+     */
+    @JvmStatic
+    fun resources(ctx: android.content.Context, locale: java.util.Locale): android.content.res.Resources {
+        if (locale == java.util.Locale.ENGLISH) english?.let { return it }
+        val app = ctx.applicationContext ?: ctx
+        val conf = android.content.res.Configuration(app.resources.configuration).apply { setLocale(locale) }
+        return app.createConfigurationContext(conf).resources.also { if (locale == java.util.Locale.ENGLISH) english = it }
+    }
+
+    @Volatile private var english: android.content.res.Resources? = null
+
     /** The language tags of Valhalla's narrative that belong to [SUPPORTED]. */
     private val VALHALLA = setOf("en-US", "en-GB", "de-DE")
     private val DEFAULT_TAG = mapOf("en" to "en-US", "de" to "de-DE")

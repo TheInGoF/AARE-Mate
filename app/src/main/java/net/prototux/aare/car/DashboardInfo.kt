@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.provider.CalendarContract
-import android.util.Log
 import net.prototux.aare.R
 
 /** The next calendar event, for the dashboard. */
@@ -16,8 +15,6 @@ data class NextEvent(val title: String, val startMs: Long, val allDay: Boolean, 
 
 /** What Android Auto shows around the map: the next calendar event, and the phone's position when the car sends none. */
 object DashboardInfo {
-    private const val TAG = "AareDashboard"
-
     /** The phone's last known position, when the car doesn't send one. */
     @SuppressLint("MissingPermission")
     fun phoneLocation(context: Context): Location? {

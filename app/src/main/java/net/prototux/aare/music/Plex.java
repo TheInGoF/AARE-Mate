@@ -39,24 +39,10 @@ final class Plex {
         String thumb;           /* Pfad des Bildes */
     }
 
-    /**
-     * Ein Fehler von plex.tv oder vom Server mit einem Text fuer die Oberflaeche ([text]); die Meldung selbst ist
-     * englisch und nur fuers Protokoll.
-     */
-    static final class Failure extends IOException {
-        final int text;
-        final Object[] args;
-
+    /** Ein Fehler von plex.tv oder vom Server (net.prototux.aare.ShownFailure, so heisst er auch in PlexAccount). */
+    static final class Failure extends net.prototux.aare.ShownFailure {
         Failure(String log, int text, Object... args) {
-            super(log);
-            this.text = text;
-            this.args = args;
-        }
-
-        /** Warum es nicht ging, in der Sprache der Oberflaeche; bei anderen Fehlern deren Meldung bzw. Art. */
-        static String text(Context c, IOException e) {
-            if (e instanceof Failure) return c.getString(((Failure) e).text, ((Failure) e).args);
-            return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            super(log, text, args);
         }
     }
 

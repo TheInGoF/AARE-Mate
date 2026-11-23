@@ -131,7 +131,7 @@ internal fun NaviEta(metersLeft: Double, secondsLeft: Double, modifier: Modifier
                 androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
                 Text(androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_jam_left, duration(jamLeft.first)),
                     style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = Mate.warn)
-                Text(" · " + distance(jamLeft.second), style = MaterialTheme.typography.titleSmall, color = Mate.text)
+                Text(" · " + NaviSearch.distanceText(jamLeft.second, 10, rounded = true), style = MaterialTheme.typography.titleSmall, color = Mate.text)
             }
             androidx.compose.foundation.layout.Spacer(Modifier.size(6.dp))
             androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(1.dp).background(Mate.textFaint.copy(alpha = 0.4f)))
@@ -143,7 +143,7 @@ internal fun NaviEta(metersLeft: Double, secondsLeft: Double, modifier: Modifier
                     null, tint = Mate.accent, modifier = Modifier.size(20.dp))
                 androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
                 Text(clock(next.secondsLeft), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = Mate.accent)
-                Text(" · " + duration(next.secondsLeft) + " · " + distance(next.metresLeft), style = MaterialTheme.typography.titleSmall, color = Mate.text)
+                Text(" · " + duration(next.secondsLeft) + " · " + NaviSearch.distanceText(next.metresLeft, 10, rounded = true), style = MaterialTheme.typography.titleSmall, color = Mate.text)
             }
             androidx.compose.foundation.layout.Spacer(Modifier.size(6.dp))
             androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(1.dp).background(Mate.textFaint.copy(alpha = 0.4f)))
@@ -152,14 +152,11 @@ internal fun NaviEta(metersLeft: Double, secondsLeft: Double, modifier: Modifier
         Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
             EtaValue(clock(secondsLeft), androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_eta_arrival), Mate.accent)
             EtaValue(duration(secondsLeft), androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_eta_time), Mate.text)
-            EtaValue(distance(metersLeft), androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_eta_distance), Mate.text)
+            EtaValue(NaviSearch.distanceText(metersLeft, 10, rounded = true), androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_eta_distance), Mate.text)
             androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.KeyboardArrowUp, null, tint = Mate.textDim)
         }
     }
 }
-
-private fun distance(m: Double): String =
-    if (m < 1000) "${(m / 10).roundToInt() * 10} m" else String.format(java.util.Locale.getDefault(), "%.1f km", m / 1000)
 
 private fun duration(s: Double): String {
     val min = (s / 60).roundToInt().coerceAtLeast(1)

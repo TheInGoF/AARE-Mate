@@ -78,11 +78,13 @@ internal class NaviSpeaker(context: Context) {
         val params = if (quiet != 1f) android.os.Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, quiet) } else null
         if (tts.speak(words, queue, params, id) == TextToSpeech.ERROR) {
             Log.w(TAG, "voice: speech engine refused, binding again"); ready = false; boundAt = 0; heal()
-            audio.abandonAudioFocusRequest(focus)
             // no onDone/onError comes for a refused one: the music and a paused book back now
-            net.prototux.aare.audio.MediaFade.release()
+            promptOver()
         }
     }
+
+    /** A prompt is over: the focus given back, the music and a paused book back. */
+    private fun promptOver() { audio.abandonAudioFocusRequest(focus); net.prototux.aare.audio.MediaFade.release() }
 
     private fun init() {
         // the language Valhalla speaks (Language.tag), the device's
@@ -90,8 +92,8 @@ internal class NaviSpeaker(context: Context) {
         tts.setAudioAttributes(attrs)
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(id: String?) {}
-            override fun onDone(id: String?) { audio.abandonAudioFocusRequest(focus); net.prototux.aare.audio.MediaFade.release() }
-            @Deprecated("Deprecated in Java") override fun onError(id: String?) { audio.abandonAudioFocusRequest(focus); net.prototux.aare.audio.MediaFade.release() }
+            override fun onDone(id: String?) = promptOver()
+            @Deprecated("Deprecated in Java") override fun onError(id: String?) = promptOver()
         })
     }
 
@@ -192,11 +194,7 @@ internal class NaviSpeaker(context: Context) {
         main.postDelayed({
             if (gen != playGen) return@postDelayed      // stopped meanwhile (I-008: a waiting one played after "Zurück")
             stopTrack()
-            val t = runCatching { android.media.AudioTrack.Builder().setAudioAttributes(attrs)
-                .setAudioFormat(android.media.AudioFormat.Builder().setEncoding(android.media.AudioFormat.ENCODING_PCM_FLOAT)
-                    .setSampleRate(rate).setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO).build())
-                .setTransferMode(android.media.AudioTrack.MODE_STATIC).setBufferSizeInBytes(samples.size * 4).build()
-                .also { it.write(samples, 0, samples.size, android.media.AudioTrack.WRITE_BLOCKING) } }
+            val t = runCatching { net.prototux.aare.audio.StaticTrack.of(attrs, rate, samples) }
                 .onFailure { Log.w(TAG, "voice: sound could not be played", it) }.getOrNull() ?: run {
                     // nothing plays now and nothing waits behind it: the music and a paused book back
                     if (playingUntil <= end) net.prototux.aare.audio.MediaFade.release()
@@ -205,7 +203,7 @@ internal class NaviSpeaker(context: Context) {
             audio.requestAudioFocus(focus)
             runCatching { t.play() }.onFailure { Log.w(TAG, "voice: sound could not be played", it) }; track = t
             val ms = samples.size * 1000L / rate + 300
-            main.postDelayed({ if (track === t) { stopTrack(); audio.abandonAudioFocusRequest(focus); net.prototux.aare.audio.MediaFade.release() } }, ms)
+            main.postDelayed({ if (track === t) { stopTrack(); promptOver() } }, ms)
         }, wait)
         playingUntil = end
     }
@@ -217,7 +215,7 @@ internal class NaviSpeaker(context: Context) {
     /** O230: warnings with fixed words computed once (new route, ...). */
     fun prepareWarnings(texts: List<String>) = NaviKokoro.prepare(app, texts, first = true)
 
-    fun stop() { runCatching { tts.stop() }; playGen++; playingUntil = 0; stopTrack(); audio.abandonAudioFocusRequest(focus); net.prototux.aare.audio.MediaFade.release() }
+    fun stop() { runCatching { tts.stop() }; playGen++; playingUntil = 0; stopTrack(); promptOver() }
 
     companion object {
         private const val TAG = "MateNavi"

@@ -122,16 +122,9 @@ final class StickLink {
         net.prototux.aare.DiagLog.INSTANCE.add("stick: " + text, null, "DASH");
     }
 
-    private android.content.res.Resources mEnglish;
-
     /* the log in English whatever the device's language; the screen in the device's */
     private String english(int id, Object... args) {
-        if (mEnglish == null) {
-            android.content.res.Configuration c = new android.content.res.Configuration(mCtx.getResources().getConfiguration());
-            c.setLocale(java.util.Locale.ENGLISH);
-            mEnglish = mCtx.createConfigurationContext(c).getResources();
-        }
-        return mEnglish.getString(id, args);
+        return net.prototux.aare.Language.resources(mCtx, java.util.Locale.ENGLISH).getString(id, args);
     }
 
     private void state(int id, Object... args) {

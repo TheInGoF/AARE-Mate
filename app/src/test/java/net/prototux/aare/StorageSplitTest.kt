@@ -23,7 +23,7 @@ class StorageSplitTest {
         // the maps move to the device: the music keeps its card
         // the device as a place with room (Robolectric reports no free bytes)
         val inner = Storage.Volume("", "intern", ctx.filesDir, false, 1L shl 40, 1L shl 40, false)
-        Storage.move(ctx, inner, Storage.MAP_KINDS) { _, _, _ -> }
+        Storage.move(ctx, inner) { _, _, _ -> }
         assertEquals("", Storage.chosen(ctx, Storage.MAPS))
         assertEquals("CARD-1", Storage.chosen(ctx, Storage.MUSIC))
         assertEquals(File(card, Storage.MUSIC), Storage.dir(ctx, Storage.MUSIC))

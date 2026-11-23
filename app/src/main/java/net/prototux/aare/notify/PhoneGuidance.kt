@@ -62,10 +62,10 @@ class PhoneGuidance(
     /** [display]: the number as the app wrote it, with a point (machine format, NavStatusBridge parses it). */
     class Distance(val meters: Int, val display: String, val unit: DistanceUnit) {
         /** [display] for the screen, in the device's number format ("1,2" in German). */
-        val shown: String get() {
-            val v = display.toDoubleOrNull() ?: return display
+        val shown: String by lazy {
+            val v = display.toDoubleOrNull() ?: return@lazy display
             val decimals = display.substringAfter('.', "").length
-            return java.text.NumberFormat.getInstance(java.util.Locale.getDefault())
+            java.text.NumberFormat.getInstance(java.util.Locale.getDefault())
                 .apply { minimumFractionDigits = decimals; maximumFractionDigits = decimals; isGroupingUsed = false }.format(v)
         }
     }

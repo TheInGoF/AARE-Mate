@@ -35,10 +35,6 @@
     <color name="mate_scrim">#B3000000</color>
     <!-- Abdunklung hinter dem Umschalter -->
     <color name="mate_scrim_switcher">#99000000</color>
-    <!-- Grund einer Randnotiz -->
-    <color name="mate_scrim_note">#66000000</color>
-    <!-- schwebende Karte ueber der Karte -->
-    <color name="mate_card">#E6161B22</color>
     <!-- Anrufkarte -->
     <color name="mate_card_solid">#F2161B22</color>
     <!-- Griff der Teilung -->
@@ -55,14 +51,6 @@
     <color name="mate_camera">#30D158</color>
     <!-- Kartenattrappe: Land -->
     <color name="mate_map_land">#16212B</color>
-    <!-- Kartenattrappe: Gruen -->
-    <color name="mate_map_green">#1B2A24</color>
-    <!-- Kartenattrappe: Wasser -->
-    <color name="mate_map_water">#1F3B57</color>
-    <!-- Kartenattrappe: Strasse -->
-    <color name="mate_map_street">#2E3B47</color>
-    <!-- Kartenattrappe: Hauptstrasse -->
-    <color name="mate_map_street_main">#3F4E5C</color>
     <!-- Rand der Route -->
     <color name="mate_route_edge">#0A4A40</color>
     <!-- Hof um die eigene Position -->

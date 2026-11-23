@@ -19,4 +19,8 @@ object Clock {
 
     fun format(millis: Long, zone: TimeZone? = null): String =
         SimpleDateFormat(if (h24()) "HH:mm" else "h:mm a", Locale.getDefault()).apply { zone?.let { timeZone = it } }.format(Date(millis))
+
+    /** Hours and minutes only, without "AM/PM": for the narrow clocks of the car screen (the car shows the period anyway). */
+    fun short(millis: Long): String =
+        SimpleDateFormat(if (h24()) "HH:mm" else "h:mm", Locale.getDefault()).format(Date(millis))
 }

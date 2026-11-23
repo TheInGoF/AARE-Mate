@@ -67,7 +67,9 @@ internal fun NaviRouteList(rows: List<NaviTripPlan.Row>, removed: List<Charger>,
                            alternatives: (Charger) -> List<ChargePlanner.Alternative>, strict: Boolean,
                            onOpened: () -> Unit, onReplace: (Charger, Charger) -> Unit, onRemove: (Charger) -> Unit,
                            onRestore: (Charger) -> Unit, onRemoveAll: () -> Unit, onRecalc: () -> Unit,
-                           onReorder: (List<Pair<Position, String>>) -> Unit) {
+                           onReorder: (List<Pair<Position, String>>) -> Unit,
+                           /** The driver's least level at the destination: below it the destination's level shows in the warning colour. */
+                           reservePercent: Double = NaviCharge.reservePercent(androidx.compose.ui.platform.LocalContext.current)) {
     var dragKey by remember { mutableStateOf<Int?>(null) }
     // while a row is held the list stays as it was taken (Navi I-052d: a charging plan arriving meanwhile replaced the
     // rows under the gesture); the gesture starts anew with the rows shown
@@ -148,7 +150,7 @@ internal fun NaviRouteList(rows: List<NaviTripPlan.Row>, removed: List<Charger>,
                             NaviTripPlan.Kind.FERRY -> ferryDetail(r)
                         }
                         if (detail != null) Text(detail, style = MaterialTheme.typography.bodySmall,
-                            color = if (r.kind == NaviTripPlan.Kind.DESTINATION && (r.arrivePercent ?: 100.0) < NaviCharge.reservePercent(androidx.compose.ui.platform.LocalContext.current)) Mate.warn else Mate.textDim, maxLines = 2)
+                            color = if (r.kind == NaviTripPlan.Kind.DESTINATION && (r.arrivePercent ?: 100.0) < reservePercent) Mate.warn else Mate.textDim, maxLines = 2)
                         if (r.overLimit) Text(stringResource(R.string.mate_navi_charge_over, net.prototux.aare.Settings(androidx.compose.ui.platform.LocalContext.current).chargeMaxLevel),
                             style = MaterialTheme.typography.bodySmall, color = Mate.warn)
                     }
@@ -156,7 +158,7 @@ internal fun NaviRouteList(rows: List<NaviTripPlan.Row>, removed: List<Charger>,
                     Column(horizontalAlignment = Alignment.End) {
                         Text(net.prototux.aare.ui.Clock.format(r.arriveAtMillis), style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold, color = Mate.accent)
-                        Text(km(r.metresLeft), style = MaterialTheme.typography.bodySmall, color = Mate.textDim)
+                        Text(NaviSearch.distanceText(r.metresLeft, 10, rounded = true), style = MaterialTheme.typography.bodySmall, color = Mate.textDim)
                     }
                     when {
                         r.kind == NaviTripPlan.Kind.CHARGE && r.charger != null ->
@@ -235,5 +237,3 @@ private fun WideButton(label: String, modifier: Modifier, onClick: () -> Unit) {
 }
 
 private fun pct(p: Double?) = (p ?: 0.0).coerceAtLeast(0.0).roundToInt()
-private fun km(m: Double) = if (m < 1000) "${(m / 10).roundToInt() * 10} m"
-    else String.format(java.util.Locale.getDefault(), "%.1f km", m / 1000)

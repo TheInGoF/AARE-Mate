@@ -64,23 +64,20 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
     /** The model's percent used on the present track from [fromM] to [toM]. */
     private fun used(fromM: Double, toM: Double): Double { val t = track; return (whAt(t, toM) - whAt(t, fromM)) / car.capacityWh * 100.0 }
 
-    private fun whAt(t: ChargePlanner.Track, m: Double): Double {
-        val i = indexAt(t, m)
-        if (i <= 0) return t.wh[0]
-        val a = t.metres[i - 1]; val b = t.metres[i]
-        val k = if (b > a) ((m - a) / (b - a)).coerceIn(0.0, 1.0) else 1.0
-        return t.wh[i - 1] + (t.wh[i] - t.wh[i - 1]) * k
-    }
+    private fun whAt(t: ChargePlanner.Track, m: Double): Double = along(t, t.wh, m)
 
     /** Seconds the plan's model takes from [fromM] to [toM] along the present track (minutes to a charger). */
     fun secondsBetween(fromM: Double, toM: Double): Double { val t = track; return secAt(t, toM) - secAt(t, fromM) }
 
-    private fun secAt(t: ChargePlanner.Track, m: Double): Double {
+    private fun secAt(t: ChargePlanner.Track, m: Double): Double = along(t, t.seconds, m)
+
+    /** [ys] of the track's points at [m] along it, in a straight line between the points either side. */
+    private fun along(t: ChargePlanner.Track, ys: DoubleArray, m: Double): Double {
         val i = indexAt(t, m)
-        if (i <= 0) return t.seconds[0]
+        if (i <= 0) return ys[0]
         val a = t.metres[i - 1]; val b = t.metres[i]
         val k = if (b > a) ((m - a) / (b - a)).coerceIn(0.0, 1.0) else 1.0
-        return t.seconds[i - 1] + (t.seconds[i] - t.seconds[i - 1]) * k
+        return ys[i - 1] + (ys[i] - ys[i - 1]) * k
     }
 
     private fun indexAt(m: Double): Int = indexAt(track, m)
@@ -146,12 +143,13 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
     /** The route over the new stops could not be had: the stops of before stay ([MOVE] undone, no further change for a while). */
     @Synchronized fun undo(old: List<Charger>) { chain = old; moves-- }
 
-    /** Arrived: the last stretch for [ChargeBuffer]. */
-    @Synchronized fun arrived(drivenM: Double, soc: Double) = noteStretch(drivenM, soc)
+    /** Arrived: the last stretch for [ChargeBuffer] (under [scaleLock] alone: no wait for a check still planning). */
+    fun arrived(drivenM: Double, soc: Double) = noteStretch(drivenM, soc)
 
     private fun noteStretch(drivenM: Double, soc: Double) {
-        val (model, km) = synchronized(scaleLock) { (usedBefore + used(refM, drivenM)) to (kmBefore + (drivenM - refM) / 1000) }
-        stretch((refSoc - soc) - model, km)
+        val (taken, model, km) = synchronized(scaleLock) {
+            Triple(refSoc - soc, usedBefore + used(refM, drivenM), kmBefore + (drivenM - refM) / 1000) }
+        stretch(taken - model, km)
     }
 
     /**

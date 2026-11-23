@@ -11,7 +11,8 @@ class AareApp : Application() {
         net.prototux.aare.ui.car.Mate.init(this)
         net.prototux.aare.audio.AudioTrials.load(this)
         // which Mate runs, once per start (System L-075: bugs reported against an older version stay recognisable)
-        if (android.os.Build.VERSION.SDK_INT < 28 || getProcessName() == packageName) DiagLog.add("Mate started: ${versionLine()}")
+        val mainProcess = android.os.Build.VERSION.SDK_INT < 28 || getProcessName() == packageName
+        if (mainProcess) DiagLog.add("Mate started: ${versionLine()}")
         lastExit()
         // what Mate gives back when the tablet's memory is tight (Memory)
         Memory.givers += { if (net.prototux.aare.dash.DashData.dropParkedStage()) "the dashboard's page kept behind another area" else null }
@@ -19,17 +20,12 @@ class AareApp : Application() {
         // the car's position as the phone's, left behind by an earlier run of Mate: the phone's own GPS again
         net.prototux.aare.car.PhoneLocationFeed.clearLeftovers(this)
         // a Wi-Fi network coming later starts Shizuku too (E-045)
-        net.prototux.aare.adb.SelfAdb.watchWifi(this)
-        // the wallpaper of the Android Auto style, left behind since the style went (E-044)
-        Thread {
+        if (mainProcess) net.prototux.aare.adb.SelfAdb.watchWifi(this)
+        // the wallpaper of the Android Auto style, left behind since the style went (E-044): looked for once per installation
+        val once = getSharedPreferences("mate_once", MODE_PRIVATE)
+        if (!once.getBoolean("wallpaper_gone", false)) Thread {
             runCatching { java.io.File(filesDir, "wallpaper.jpg").takeIf { it.exists() }?.let { if (it.delete()) DiagLog.add("old wallpaper removed") } }
-            // an electric car with the old choice "Kein Elektroauto" on the Navi page (before N-039, now the Fahrzeugart):
-            // Mate's model, as choosing "Elektro" sets it - else Google Maps would get no electric car
-            // and the other way round: a combustion car (the old switch "Verbrenner" alone) gives Maps no electric car
-            runCatching { Settings(this).let {
-                if (!it.combustion && it.evModelSource == "off") { it.evModelSource = "mate"; DiagLog.add("electric car: Maps gets Mate's model (old 'no electric car' choice)") }
-                else if (it.combustion && it.evModelSource != "off") { it.evModelSource = "off"; DiagLog.add("combustion car: Maps gets no electric car any more") }
-            } }
+            once.edit().putBoolean("wallpaper_gone", true).apply()
         }.start()
     }
 

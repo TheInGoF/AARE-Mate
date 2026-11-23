@@ -26,18 +26,13 @@ internal object RatingShare {
         if (stars <= 0 && power <= 0 && price <= 0 && worked <= 0) null else "$stars,$power,$price,$worked"
 
     /**
-     * The rating of [v] changed (stars in the car, details in the phone app): queued unless it is what was sent last for
-     * this charger, then sent.
+     * The rating of [v] changed (stars in the car, details in the phone app): queued, then sent - unless it is what was
+     * sent last for this charger, which the sender finds when its turn comes.
      */
     fun changed(c: Context, v: ChargerVisits.Visit) {
         val sig = signature(v.rating, v.power, v.price, v.worked) ?: return
         val p = prefs(c)
         val key = chargerKey(v)
-        // back at what was sent: a change waiting from in between is dropped, else it would go out later (Navi I-060b) -
-        // unless that change is being sent right now: then this one has to go out after it
-        synchronized(this) {
-            if (p.getString("sent:$key", null) == sig && key !in sending) { p.edit().remove("wait:$key").apply(); return }
-        }
         // one id per charge: the visit's time names the charge
         val idKey = "id:$key@${v.lastMillis}"
         val id = p.getString(idKey, null) ?: java.util.UUID.randomUUID().toString().also { p.edit().putString(idKey, it).apply() }
@@ -49,9 +44,6 @@ internal object RatingShare {
         flush(c)
     }
 
-    /** The chargers whose rating is on its way to the server just now (guarded by this object). */
-    private val sending = HashSet<String>()
-
     // one sender for all: sends one after the other, each reading what waits when its turn comes (Navi I-052e)
     private val sender = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "rating-share") }
 
@@ -60,37 +52,39 @@ internal object RatingShare {
         val app = c.applicationContext
         val settings = net.prototux.aare.Settings(app)
         if (!settings.shareRatings || settings.mapServer.isBlank()) return
-        if (prefs(app).all.keys.none { it.startsWith("wait:") }) return
         sender.execute {
-            val waiting = prefs(app).all.filterKeys { it.startsWith("wait:") }.mapValues { it.value as? String }.filterValues { it != null }
+            val p = prefs(app)
+            val waiting = p.all.keys.filter { it.startsWith("wait:") }
             if (waiting.isEmpty()) return@execute
             val url = settings.mapServer.trimEnd('/') + PATH
             var sent = 0
-            for (k in waiting.keys) {
+            for (k in waiting) {
                 val key = k.removePrefix("wait:")
-                // read anew when its turn comes: a rating set back meanwhile has taken its entry out (Navi I-060b)
-                val v = synchronized(this) { prefs(app).getString(k, null)?.also { sending += key } } ?: continue
-                val (sig, body) = v.split('|', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+                // read anew when its turn comes: a rating changed meanwhile goes out as it is now
+                val v = p.getString(k, null) ?: continue
+                val sig = v.substringBefore('|')
+                // back at what was sent: dropped, else it would go out again (Navi I-060b)
+                if (p.getString("sent:$key", null) == sig) {
+                    synchronized(this) { if (p.getString(k, null) == v) p.edit().remove(k).apply() }
+                    continue
+                }
+                val body = v.substringAfter('|', "")
                 val ok = runCatching {
                     NaviServer.client(app).newCall(Request.Builder().url(url).post(body.toRequestBody("application/json".toMediaType())).build())
                         .execute().use { it.code == 201 }
                 }.getOrDefault(false)
                 // what the server has now is what was sent; a rating changed meanwhile stays waiting for the next turn
-                synchronized(this) {
-                    sending -= key
-                    if (ok) {
-                        val p = prefs(app)
-                        val e = p.edit().putString("sent:$key", sig)
-                        if (p.getString(k, null) == v) e.remove(k)
-                        e.apply()
-                    }
+                if (ok) synchronized(this) {
+                    val e = p.edit().putString("sent:$key", sig)
+                    if (p.getString(k, null) == v) e.remove(k)
+                    e.apply()
                 }
                 if (ok) sent++
                 Log.i(TAG, "rating " + (if (ok) "shared" else "kept for later"))
                 if (!ok) break
             }
             net.prototux.aare.DiagLog.add("charge ratings: $sent of ${waiting.size} to the map server, " +
-                "${prefs(app).all.keys.count { it.startsWith("wait:") }} still waiting", area = "CHARGE")
+                "${waiting.count { p.contains(it) }} still waiting", area = "CHARGE")
         }
     }
 }

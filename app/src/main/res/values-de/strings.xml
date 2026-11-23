@@ -38,7 +38,6 @@
     <string name="setup_trust_new_cert">Diesem neuen Zertifikat der Head Unit vertrauen</string>
     <string name="setup_trust_head_unit">Dieser Head Unit vertrauen</string>
     <string name="setup_trust_fingerprint_suffix">%1$s (SHA-256 %2$s...)</string>
-    <string name="setup_preview_car_screen">Autobildschirm-Vorschau</string>
     <string name="setup_disconnect">Trennen</string>
     <string name="setup_finish_title">Einrichtung abschließen</string>
     <string name="setup_check_permissions_title">Berechtigungen</string>
@@ -263,10 +262,6 @@
     <string name="notif_clear_all">Alle löschen</string>
     <string name="notif_new_message_placeholder">Neue Nachricht</string>
 
-    <!-- dash: car shell / dashboard chrome -->
-    <string name="dash_menu_apps">Apps</string>
-    <string name="dash_menu_home">Start</string>
-
     <!-- nav: navigation feature (dashboard card and templates) -->
     <string name="nav_dashboard_no_app_title">Keine Navigations-App</string>
     <string name="nav_dashboard_where_to">Wohin?</string>
@@ -312,7 +307,6 @@
     <string name="msg_message_count_one">1 Nachricht</string>
     <string name="msg_message_count_many">%1$d Nachrichten</string>
 
-    <string name="assistant_mic_label">Assistent</string>
     <string name="assistant_listening">Hört zu…</string>
 
     <!-- phone: car phone screen (recents, contacts, keypad) -->
@@ -412,7 +406,6 @@
     <string name="common_ok">OK</string>
     <string name="common_try_again">Erneut versuchen</string>
     <string name="common_something_went_wrong">Etwas ist schiefgelaufen</string>
-    <string name="setup_log_save">Speichern</string>
     <string name="setup_toggle_verbose_log_title">Ausführliches Head-Unit-Protokoll</string>
     <string name="setup_toggle_verbose_log_subtitle">Zeichnet den vollständigen Head-Unit-Protokollverlauf in diesem Log auf, zum Anhängen an einen Fehlerbericht. Erzeugt viele Daten; sonst ausgeschaltet lassen.</string>
     <string name="setup_nothing_to_open">Dieses Telefon hat keine App, die dies öffnen kann</string>
@@ -479,9 +472,6 @@
     <string name="idmate_split">Musik neben die Navigation</string>
     <string name="idmate_call_on">Anruf läuft</string>
     <string name="idmate_call_end">Auflegen</string>
-    <string name="idmate_tab_start">Start</string>
-    <string name="idmate_choice_hint">Antippen: Standard-App</string>
-    <string name="idmate_choice_hint_pin">Antippen: Standard-App · Nadel: immer anzeigen</string>
     <string name="msg_banner_no_preview">Neue Nachricht</string>
     <string name="msg_banner_seconds">Pop-up bleibt %1$d s</string>
     <string name="msg_toggle_preview_title">Vorschau des Nachrichtentexts</string>
@@ -570,13 +560,9 @@
     <string name="dashboard_card_hint">Karte und Fahrzeugwerte kommen von deinem IDmate-Server: hier dessen Code scannen und den Stick verbinden.</string>
     <!-- Dashboard: car data and map from the IDmate server (built in) -->
     <string name="dash_name">Dashboard</string>
-    <string name="soc">Ladestand</string>
-    <string name="range">Reichweite</string>
     <string name="no_data">Noch keine Daten – die Verbindung zu IDmate ist nicht eingerichtet.</string>
     <string name="refresh">Aktualisieren</string>
     <string name="waiting">Warte auf Daten von IDmate …</string>
-    <string name="power">Leistung</string>
-    <string name="speed">Tempo</string>
     <string name="charging">Lädt</string>
     <string name="charging_dc">Schnellladen</string>
     <string name="dbg_gaps">Lücken</string>
@@ -657,9 +643,6 @@
     <string name="voice_hint">Nachrichten liest die Sprachausgabe dieses Geräts vor. Stimmen, die Internet brauchen, rechnet der Server der Sprachausgabe; sie klingen meist besser. Mate entscheidet bei jeder Nachricht: mit WLAN oder gutem Mobilfunk die erste Stimme unten, sonst die zweite – eine vom Gerät, damit nichts auf einen Server wartet.</string>
     <string name="voice_default">Vorgabe der Sprachausgabe</string>
     <string name="voice_number">Stimme %1$d</string>
-    <string name="voice_quality_very_high">sehr hohe Qualität</string>
-    <string name="voice_quality_high">hohe Qualität</string>
-    <string name="voice_quality_normal">normale Qualität</string>
     <string name="voice_needs_internet">braucht Internet</string>
     <string name="voice_on_device">auf dem Gerät</string>
     <string name="voice_try">Probe</string>
@@ -676,8 +659,6 @@
     <string name="sound_section_filter">Klangfilter</string>
     <string name="sound_toggle_title">Klangfilter verwenden</string>
     <string name="sound_toggle_subtitle">Wirkt auf alles, was Mate ans Auto schickt: eigene Musik, Hörbücher, fremde Apps. Navi-Ansagen bleiben unverändert.</string>
-    <string name="sound_section_curve">Klangkurve</string>
-    <string name="sound_presets">Vorlage</string>
     <string name="sound_preset_flat">Flach</string>
     <string name="sound_preset_bass">Bass</string>
     <string name="sound_preset_treble">Höhen</string>
@@ -736,7 +717,6 @@
     <string name="views_name">Name, z. B. Pendeln oder Urlaub</string>
     <string name="views_start">Bereich beim Start</string>
     <string name="views_start_split">Geteilt</string>
-    <string name="views_takes_apps">Übernimmt die jetzige Navi-App (%1$s) und Musik-App (%2$s) – vorher auf den Seiten Navi und Musik wählen.</string>
     <string name="views_save">Ansicht speichern</string>
     <string name="views_delete">Löschen</string>
     <string name="sound_target">Ziel</string>
@@ -761,15 +741,9 @@
     <string name="speech_try_listening">Hört zu … jetzt sprechen</string>
     <string name="speech_try_thinking">Erkennt …</string>
     <string name="idmate_dictate_answer">Antworten</string>
-    <string name="idmate_dictate_listening">Hört zu … fertig</string>
-    <string name="idmate_dictate_thinking">Erkennt …</string>
-    <string name="idmate_dictate_send">Senden</string>
     <string name="idmate_dictate_cancel">Abbrechen</string>
-    <string name="idmate_dictate_readback">Antwort an %1$s: %2$s. Senden?</string>
-    <string name="idmate_dictate_failed">Spracherkennung nicht bereit – Mikrofon oder Sprachmodell fehlt.</string>
     <string name="idmate_dictate_sent">Gesendet.</string>
     <string name="idmate_dictate_not_sent">Senden ging nicht.</string>
-    <string name="music_voice_button">Musik per Sprache</string>
     <string name="music_voice_playing">Spiele %1$s.</string>
     <string name="rec_title">Prüfaufnahme</string>
     <string name="rec_title_on">Aufnahme läuft</string>
@@ -777,8 +751,6 @@
     <string name="rec_photo">Foto %1$d</string>
     <string name="rec_stop">Stopp</string>
     <string name="rec_hint">Aufnehmen drücken, dann die Schritte im Autofenster ausführen, nach jedem Schritt „Foto“, am Ende „Stopp“. Aufgezeichnet werden Tipps am Autobildschirm, Tasten und die Rückmeldungen der Apps.</string>
-    <string name="navi_voice_button">Ziel</string>
-    <string name="navi_voice_listening">Sprechen …</string>
     <string name="speech_model_row">Whisper %1$s · %2$d MB</string>
     <string name="speech_model_there">auf dem Gerät</string>
     <string name="speech_model_absent">nicht geladen</string>
@@ -790,9 +762,7 @@
     <string name="voice_engine_section">Stimme von Mate</string>
     <string name="voice_female">weiblich</string>
     <string name="voice_male">männlich</string>
-    <string name="voice_engine_title">Mate liest vor mit</string>
     <string name="voice_engine_system">Sprachausgabe des Telefons</string>
-    <string name="voice_engine_piper">Thorsten (natürlich, auf dem Gerät)</string>
     <string name="voice_engine_hint">Liest Nachrichten vor und spricht die Navi-Ansagen. Die Stimmen auf dem Gerät klingen natürlicher als die des Telefons und brauchen kein Netz; Kokoro-Stimmen klingen am besten. Navi-Ansagen rechnet Mate dafür schon vorab, sobald die Route steht. Einmal laden, dann „Probe hören“.</string>
     <string name="voice_engine_try">Probe hören</string>
     <string name="voice_engine_sample" formatted="true">Hallo, hier spricht %1$s. In dreihundert Metern rechts abbiegen auf die B 86 Richtung Hamburg, danach an der zweiten Ausfahrt den Kreisverkehr verlassen. Stau auf der A 4, etwa zehn Minuten Verzögerung. Ladestopp erreicht, lade bis achtzig Prozent.</string>
@@ -840,8 +810,6 @@
     <string name="mate_navi_pinned">Angepinnt</string>
     <string name="places_pin">Oben anpinnen</string>
     <string name="places_unpin">Nicht mehr anpinnen</string>
-    <string name="places_move_up">Nach oben</string>
-    <string name="places_move_down">Nach unten</string>
     <string name="places_set_home">Das ist mein Zuhause</string>
     <string name="places_unset_home">Nicht mehr mein Zuhause</string>
     <string name="places_wallbox">Wallbox zuhause</string>
@@ -866,7 +834,6 @@
     <string name="mate_navi_charge_at_charger">am Lader</string>
     <string name="mate_navi_preheat_title">Batterie jetzt vorheizen</string>
     <string name="mate_navi_preheat_detail">Batterie %1$d °C · etwa %2$d min · etwa %3$s kWh · im Auto starten</string>
-    <string name="mate_navi_preheat_say">Jetzt die Batterie vorheizen, damit sie am Schnelllader warm ist.</string>
     <string name="mate_navi_charge_spread">± %1$d</string>
     <string name="mate_navi_charge_at_destination">am Ziel</string>
     <string name="mate_navi_eta_arrival">Ankunft</string>
@@ -876,7 +843,6 @@
     <string name="mate_panel_places_sub">Adresslisten für die Navi: Arbeit, Privat und eigene</string>
     <string name="mate_panel_settings">Einstellungen</string>
     <string name="mate_panel_settings_sub">Autobildschirm, Navigation, Audio, Sprache, Messenger, System</string>
-    <string name="mate_panel_places_soon">Die Adresslisten folgen im nächsten Schritt.</string>
     <string name="places_category_work">Arbeit</string>
     <string name="places_category_home">Privat</string>
     <string name="places_intro">Deine Ziele für die Navi, in eigenen Listen. Im Auto: Navi → Ziel – große Kacheln für Zuhause, angepinnte Ziele, Lader, Rast, Restaurants und jede Liste (darin oben die zuletzt häufigsten).</string>
@@ -908,7 +874,6 @@
     <string name="places_order_use">Häufig</string>
     <string name="places_order_name">A–Z</string>
     <string name="places_order_distance">Entfernung</string>
-    <string name="places_order_title">Sortierung</string>
     <string name="mate_navi_other_places">Weitere</string>
     <string name="mate_navi_order_no_position">Standort noch unbekannt – nach Häufigkeit</string>
     <string name="mate_navi_planning">Route wird berechnet …</string>
@@ -1020,7 +985,6 @@
     <string name="regions_contains">Enthält: %1$s</string>
     <string name="regions_loaded_at">Auf diesem Gerät seit %1$s</string>
     <string name="regions_choose_at_server">Welche Regionen es gibt, wählst du auf der Seite des Kartenservers (Port 8095); eine neuere Karte dort kommt hier als Aktualisierung an.</string>
-    <string name="regions_singles">Einzelpakete von früher noch auf dem Gerät (%1$d): %2$s. Sie werden gelöscht, sobald das Gesamtpaket geladen ist.</string>
     <string name="regions_delete_singles">Jetzt löschen</string>
     <string name="regions_on_device">%1$d von %2$d Regionen auf dem Gerät · %3$s</string>
     <string name="regions_update_all">Alle aktualisieren (%1$s)</string>
@@ -1042,8 +1006,6 @@
     <string name="music_folder_access">Für einen eigenen Ordner braucht Mate den Zugriff auf alle Dateien. „Zugriff erlauben“ öffnet die Einstellung.</string>
     <string name="music_folder_back">Zurück in den Speicher von Mate</string>
     <string name="music_folder_unknown">Dieser Ordner lässt sich nicht nutzen. Bitte einen Ordner im Gerät oder auf der Speicherkarte wählen.</string>
-    <string name="storage_intro_music">Wohin geladene Musik gespeichert wird – unabhängig vom Speicherort der Offline-Karten. Wählst du einen anderen Ort, zieht die Musik dorthin um; sie wird geprüft, bevor die alten Kopien gelöscht werden.</string>
-    <string name="storage_move_ask_music">Musik nach „%1$s“ umziehen (%2$s)?</string>
     <string name="storage_card">Speicherkarte (%1$s)</string>
     <string name="storage_card_plain">Speicherkarte</string>
     <string name="storage_internal">Interner Speicher</string>
@@ -1251,10 +1213,8 @@
     <string name="first_restore_new">Neu einrichten</string>
     <string name="first_restore_failed">Nicht wiederhergestellt: %1$s</string>
     <string name="first_packages_title">Grundpakete werden geladen</string>
-    <string name="first_packages_hint">Mate lädt, was es für seine Grundfunktionen braucht. Am besten im WLAN.</string>
     <string name="first_packages_asr">Spracherkennung (Whisper, 160 MB)</string>
     <string name="first_packages_voice">Stimme Thorsten (77 MB)</string>
-    <string name="first_packages_done">fertig</string>
     <string name="first_packages_waiting">wartet</string>
     <string name="first_packages_retry">Erneut versuchen</string>
     <string name="first_packages_ok">OK</string>

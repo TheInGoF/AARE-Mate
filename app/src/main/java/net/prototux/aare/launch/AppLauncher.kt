@@ -60,7 +60,7 @@ class AppLauncher(private val context: Context) {
     fun stop() { runCatching { host?.stop() } }
 
     fun release() {
-        runCatching { host?.stop() }
+        stop()
         if (didBind) runCatching { Shizuku.unbindUserService(args, connection, true) }
         host = null
     }

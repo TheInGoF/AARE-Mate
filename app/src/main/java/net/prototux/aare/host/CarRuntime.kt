@@ -155,8 +155,7 @@ class CarRuntime(
                 }
                 number.isBlank() -> if (onScreen) ui.screen = CarScreen.App(PHONE_ID)
                 onScreen -> {
-                    Calls.place(context, number)
-                    notice(context.getString(R.string.notif_calling_title, number), context.getString(R.string.notif_asked_by, from.info.label))
+                    if (Calls.place(context, number)) notice(context.getString(R.string.notif_calling_title, number), context.getString(R.string.notif_asked_by, from.info.label))
                     ui.screen = CarScreen.App(PHONE_ID)
                 }
                 else -> notice(context.getString(R.string.notif_call_confirm_title, number), context.getString(R.string.notif_asked_by, from.info.label), durationMs = 10_000, actions = listOf(context.getString(R.string.common_call) to {
@@ -173,7 +172,7 @@ class CarRuntime(
         val own = intent.component?.takeIf { it.packageName == from.info.packageName }
         // a destination for the driver's navigation app: Mate Navi takes it itself when it is chosen or on the screen
         if (isNavigate && own == null && mateNaviFirst()) {
-            val r = runCatching { net.prototux.aare.ui.car.navi.NaviRequests.fromUri(intent.data?.toString()) }.getOrNull()
+            val r = net.prototux.aare.ui.car.navi.NaviRequests.fromUri(intent.data?.toString())
             if (r != null) { toMateNavi(r); return }
         }
         val target = when {
@@ -330,9 +329,10 @@ class CarRuntime(
         when (key) {
             "car_theme", "ignore_driving" -> main.post { applyScreenSettings() }
             "size", "app_trim", "eq_on", "eq_gains" -> main.post { applyScreenSettings() }
-            // Apps shown or hidden from the phone: update the car's app list now.
+            // Apps shown or hidden from the phone: update the car's app list now - from the last scan where nothing new is to be read.
             "hidden_apps", "phone_screen", "assistant_pkg", "app_order",
-            "standalone_apps", "standalone_app_pkgs", "browser", "car_data_app", "debug_app" -> main.post { refreshApps() }
+            "standalone_apps", "browser", "car_data_app", "debug_app" -> main.post { rebuildApps() }
+            "standalone_app_pkgs" -> main.post { refreshApps() }
         }
     }
 
@@ -426,14 +426,17 @@ class CarRuntime(
         scope.launch {
             val scan = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val pm = context.packageManager
+                val cinema = settings.standaloneApps && AppLauncher.available()
                 AppScan(CarAppCatalog.query(context), AndroidAutoApps.messagingApps(context),
                     net.prototux.aare.host.projected.ProjectedAppCatalog.query(context),
-                    settings.standaloneAppPackages.mapNotNull { pkg ->
+                    // the cinema's apps only when they can be shown at all
+                    if (cinema) settings.standaloneAppPackages.mapNotNull { pkg ->
                         val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull() ?: return@mapNotNull null
                         val icon = runCatching { pm.getApplicationIcon(info).toBitmap(128, 128) }.getOrNull()
                         CarAppEntry(standaloneId(pkg), pkg, pm.getApplicationLabel(info).toString(), icon, CarAppKind.STANDALONE)
-                    })
+                    } else emptyList(), cinema)
             }
+            lastScan = scan
             applyApps(scan)
             // I-013: which apps with Android Auto support are missing in the list and why - into the diagnosis log,
             // once and again when it changes (a new app, an app that refused Mate)
@@ -453,18 +456,31 @@ class CarRuntime(
         }
     }
 
-    /** What [refreshApps] reads from the package manager off the main thread: car apps, messengers, projected and phone apps. */
-    private class AppScan(val found: List<CarAppInfo>, val messaging: List<PhoneApp>,
-        val projected: List<net.prototux.aare.host.projected.ProjectedAppInfo>, val standalone: List<CarAppEntry>)
+    /**
+     * What [refreshApps] reads from the package manager off the main thread: car apps, messengers, projected and phone apps.
+     * [cinema]: whether the phone apps were read (only when the cinema could show them).
+     */
+    private data class AppScan(val found: List<CarAppInfo>, val messaging: List<PhoneApp>,
+        val projected: List<net.prototux.aare.host.projected.ProjectedAppInfo>, val standalone: List<CarAppEntry>, val cinema: Boolean)
+
+    /** The last scan, so a changed setting rebuilds the list without asking the package manager again. Main thread. */
+    private var lastScan: AppScan? = null
+
+    /** The projected apps of the last scan by package, for their screen. */
+    private var projectedApps: Map<String, net.prototux.aare.host.projected.ProjectedAppInfo> = emptyMap()
+
+    /** The car's app list from the last scan; a scan anew when there is none or its cinema apps are missing now. */
+    private fun rebuildApps() {
+        val scan = lastScan
+        if (scan == null || (!scan.cinema && settings.standaloneApps && AppLauncher.available())) refreshApps() else applyApps(scan)
+    }
 
     private fun applyApps(scan: AppScan) {
-        val found = scan.found
-        val messaging = scan.messaging
         val hidden = settings.hiddenApps
         val assistantPkg = assistantPackage()
         carApps.clear()
         val entries = ArrayList<CarAppEntry>()
-        for (app in found) {
+        for (app in scan.found) {
             val id = carId(app)
             carApps[id] = app
             if (app.packageName in hidden) continue
@@ -500,6 +516,7 @@ class CarRuntime(
         }
         // Apps that draw their own car screen through Google's private projection (Google Maps): a navigation
         // app like the others. Works where the system lets this host pass the app's check (see docs/maps-projection.md).
+        projectedApps = scan.projected.associateBy { it.packageName }
         val projected = scan.projected.filter { it.packageName !in hidden }
         for (p in projected) entries += CarAppEntry(projectedId(p.packageName), p.packageName, p.label, p.icon, CarAppKind.PROJECTED)
         // Ordinary phone apps the user allowed onto the car screen (parked only; needs Shizuku).
@@ -521,11 +538,7 @@ class CarRuntime(
                 if (cinemaWhy != null && cinemaText != R.string.cinema_missing_off) net.prototux.aare.DiagLog.Level.WARN else null, "CAR")
         }
         if (settings.standaloneApps && AppLauncher.available()) {
-            for (entry in scan.standalone) {
-                val pkg = entry.packageName
-                if (pkg in hidden || projected.any { it.packageName == pkg }) continue
-                entries += entry
-            }
+            entries += scan.standalone.filter { e -> e.packageName !in hidden && projected.none { it.packageName == e.packageName } }
         }
         if (settings.browser) {
             entries += CarAppEntry(BROWSER_ID, context.packageName, context.getString(R.string.browser_app_label), builtinIcon(R.drawable.ic_car_browser), CarAppKind.BROWSER)
@@ -535,7 +548,7 @@ class CarRuntime(
         if (settings.carDataApp) {
             entries += CarAppEntry(CAR_DATA_ID, context.packageName, context.getString(R.string.car_data_app_label), builtinIcon(R.drawable.ic_car_data), CarAppKind.CAR_DATA)
         }
-        for (m in messaging) {
+        for (m in scan.messaging) {
             if (m.packageName in hidden || entries.any { it.packageName == m.packageName }) continue
             entries += CarAppEntry(messagingId(m.packageName), m.packageName, m.label, m.icon, CarAppKind.MESSAGING)
         }
@@ -961,10 +974,8 @@ class CarRuntime(
             if (!this@CarRuntime.navigateTo(place)) notice(context.getString(R.string.notif_navigation_title), context.getString(R.string.notif_navigation_no_app_text))
         }
         override fun placeCall(number: String) {
-            // Calls.place fails quietly without the right: the driver is told instead
-            if (context.checkSelfPermission(android.Manifest.permission.CALL_PHONE) != android.content.pm.PackageManager.PERMISSION_GRANTED)
-                notice(context.getString(R.string.idmate_tab_phone), context.getString(R.string.phone_permissions_placeholder))
-            else Calls.place(context, number)
+            // a call Android did not take (no right to call): the driver is told instead
+            if (!Calls.place(context, number)) notice(context.getString(R.string.idmate_tab_phone), context.getString(R.string.phone_permissions_placeholder))
         }
     }
 
@@ -1065,8 +1076,8 @@ class CarRuntime(
                                     CarAppKind.MESSAGING -> MessagingScreen(app, ui.drivingRestricted, this@CarRuntime, mod)
                                     CarAppKind.PHONE_SCREEN -> MirrorScreen(this@CarRuntime, ui.drivingRestricted, mod)
                                     CarAppKind.STANDALONE -> StandaloneAppScreen(this@CarRuntime, ui.drivingRestricted || !ui.parkedForFilms, app.packageName, mod)
-                                    // the package manager asked once per app, not at every recomposition
-                                    CarAppKind.PROJECTED -> androidx.compose.runtime.remember(app.packageName) { net.prototux.aare.host.projected.ProjectedAppCatalog.find(context, app.packageName) }?.let { p ->
+                                    // from the last scan, kept per app across recompositions
+                                    CarAppKind.PROJECTED -> androidx.compose.runtime.remember(app.packageName) { projectedApps[app.packageName] }?.let { p ->
                                         // a new size starts the app afresh at that size
                                         androidx.compose.runtime.key(appDensityDpi) {
                                             net.prototux.aare.host.projected.ProjectedAppScreen(p, appDensityDpi, { info ->

@@ -107,11 +107,7 @@ private fun RegionList(singles: List<RegionPacks.Region>, mapDate: String, versi
             Text(stringResource(R.string.regions_update_all, size(updates.sumOf { it.bytes })))
         }
     }
-    // the map's date on the server (the catalogue sends ISO), as for the whole package
-    runCatching { java.time.LocalDate.parse(mapDate).format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
-        .withLocale(java.util.Locale.getDefault())) }.getOrNull()?.let {
-        Text(stringResource(R.string.regions_map_date, it), style = MaterialTheme.typography.labelLarge)
-    }
+    MapDate(mapDate)
     val collator = java.text.Collator.getInstance(java.util.Locale.getDefault())
     singles.groupBy { it.path.joinToString(" › ") }.toSortedMap(collator).forEach { (path, group) ->
         val rs = group.sortedWith(compareBy(collator) { it.name })
@@ -179,6 +175,15 @@ private fun RegionRow(r: RegionPacks.Region, state: RegionPacks.State, running: 
     }
 }
 
+/** The map's date on the server (the catalogue sends ISO), in the device's way; nothing when it cannot be read. */
+@Composable
+private fun MapDate(mapDate: String) {
+    runCatching { java.time.LocalDate.parse(mapDate).format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+        .withLocale(java.util.Locale.getDefault())) }.getOrNull()?.let {
+        Text(stringResource(R.string.regions_map_date, it), style = MaterialTheme.typography.labelLarge)
+    }
+}
+
 @Composable
 private fun WholePackage(r: RegionPacks.Region, mapDate: String, changed: () -> Unit) {
     val ctx = LocalContext.current
@@ -212,10 +217,8 @@ private fun WholePackage(r: RegionPacks.Region, mapDate: String, changed: () -> 
                     }
                 } else TextButton(onClick = { loads.stop(r.id) }) { Text(stringResource(R.string.regions_pause)) }
             }
-            // the map's date on the server (the catalogue sends ISO), and when the one on the device was loaded
-            runCatching { java.time.LocalDate.parse(mapDate).format(dates) }.getOrNull()?.let {
-                Text(stringResource(R.string.regions_map_date, it), style = MaterialTheme.typography.labelLarge)
-            }
+            // the map's date on the server, and when the one on the device was loaded
+            MapDate(mapDate)
             RegionPacks.loadedAt(ctx, r)?.takeIf { state != RegionPacks.State.NONE }?.let { at ->
                 Text(stringResource(R.string.regions_loaded_at, java.time.Instant.ofEpochMilli(at).atZone(java.time.ZoneId.systemDefault()).toLocalDate().format(dates)),
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -281,7 +284,7 @@ internal fun StorageCard(busy: Boolean, changed: () -> Unit) {
             if (busy && moving == null) Text(stringResource(R.string.storage_busy), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             val t = target
             if (t != null && moving == null) {
-                val problem = remember(t, tick) { net.prototux.aare.Storage.problem(ctx, t, kinds) }
+                val problem = remember(t, tick) { net.prototux.aare.Storage.problem(ctx, t) }
                 val need = remember(t, tick) { kinds.sumOf { net.prototux.aare.Storage.bytes(ctx, it) } }
                 when (problem) {
                     is net.prototux.aare.Storage.Problem.TooLarge -> Text(stringResource(R.string.storage_fat32, size(problem.bytes)),
@@ -294,7 +297,7 @@ internal fun StorageCard(busy: Boolean, changed: () -> Unit) {
                         FilledTonalButton(enabled = !busy, onClick = {
                             target = null
                             StorageMove.start(need, { e -> StorageMove.describe(ctx, e) }, changed) { p ->
-                                net.prototux.aare.Storage.move(ctx, t, kinds, p)
+                                net.prototux.aare.Storage.move(ctx, t, p)
                             }
                         }) { Text(stringResource(R.string.storage_move)) }
                     }

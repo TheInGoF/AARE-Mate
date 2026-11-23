@@ -132,9 +132,15 @@ final class CarStage {
     boolean start(Context host, int dpi) {
         stop();
         Link link = Link.load(mCtx);
-        if (link == null) { mHub.telemetry.note("stage", mCtx.getString(R.string.stage_no_link), "no map: no link to IDmate set up"); return false; }
+        DashPainter.sNoMap = 0;
+        if (link == null) {
+            DashPainter.sNoMap = R.string.dash_map_no_link;
+            mHub.telemetry.note("stage", mCtx.getString(R.string.stage_no_link), "no map: no link to IDmate set up");
+            return false;
+        }
         /* IDMate liefert die Kartenansicht nur ueber HTTPS (Ausnahme: Testserver auf dem eigenen Geraet) */
         if (!link.secure() && !link.url.startsWith("http://127.0.0.1")) {
+            DashPainter.sNoMap = R.string.dash_map;
             mHub.telemetry.note("stage", mCtx.getString(R.string.stage_no_https), "no map: link without HTTPS");
             return false;
         }

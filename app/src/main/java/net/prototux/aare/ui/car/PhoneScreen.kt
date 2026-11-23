@@ -96,8 +96,7 @@ internal fun PhoneScreen(runtime: CarRuntime, modifier: Modifier) {
     val call: (Callee) -> Unit = { c ->
         // An empty tel: places no call; it would only show a "Calling" banner with no name.
         if (c.number.isNotBlank()) {
-            Calls.place(context, c.number)
-            runtime.notice(callingTitle, c.name.ifBlank { c.number })
+            if (Calls.place(context, c.number)) runtime.notice(callingTitle, c.name.ifBlank { c.number })
         }
     }
 

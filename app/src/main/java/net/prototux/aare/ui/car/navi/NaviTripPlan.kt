@@ -222,7 +222,7 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                     androidx.compose.foundation.layout.Box(Modifier.size(4.dp, LEG_H).clip(RoundedCornerShape(2.dp)).background(Mate.textFaint))
                 }
                 Spacer(Modifier.width(16.dp))
-                Text(stringResource(R.string.mate_navi_plan_leg, if (legM >= 10_000) "%d km".format((legM / 1000).roundToInt()) else km(legM), duration(legMin)), style = MaterialTheme.typography.titleSmall,
+                Text(stringResource(R.string.mate_navi_plan_leg, if (legM >= 10_000) "%d km".format((legM / 1000).roundToInt()) else NaviSearch.distanceText(legM, 10, rounded = true), duration(legMin)), style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold, color = Mate.textDim)
             }
             Row(Modifier.graphicsLayer { val sc = if (dragging) 1.03f else 1f; scaleX = sc; scaleY = sc }
@@ -278,7 +278,7 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                 Column(horizontalAlignment = Alignment.End) {
                     Text(net.prototux.aare.ui.Clock.format(r.arriveAtMillis), style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold, color = Mate.accent)
-                    Text(km(r.metresLeft), style = MaterialTheme.typography.bodyMedium, color = Mate.textDim)
+                    Text(NaviSearch.distanceText(r.metresLeft, 10, rounded = true), style = MaterialTheme.typography.bodyMedium, color = Mate.textDim)
                 }
                 // 19.11.2026 ("Im Reiseplan der Navi-App möchte ich Ladestationen entfernen, damit ich auch ohne festgelegte
                 // Ladestops reisen kann"): a charging stop taken out right here, the route goes on without it
@@ -374,8 +374,6 @@ private const val ALT_LIST_MAX = 8
 /** The height of a stretch's line between two stops. */
 private val LEG_H = 40.dp
 private fun duration(min: Double): String { val m = min.roundToInt(); return if (m >= 60) "%d h %02d min".format(m / 60, m % 60) else "$m min" }
-private fun km(m: Double) = if (m < 1000) "${(m / 10).roundToInt() * 10} m" else "%.1f km".format(m / 1000)
-
 /** A ferry's line in the plan: the sea and the ride, without energy (as IDmate counts it). */
 @Composable
 internal fun ferryDetail(r: NaviTripPlan.Row): String {

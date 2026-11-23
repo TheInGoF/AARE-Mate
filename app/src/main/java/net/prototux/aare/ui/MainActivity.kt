@@ -465,37 +465,41 @@ private fun Home() {
     }
 }
 
-private class HomePanel(val art: PanelArt, val title: Int, val subtitle: Int, val page: Page?, val accent: Boolean = false, val action: (() -> Unit)? = null,
+private class HomePanel(val art: PanelArt, val title: Int, val subtitle: Int, val accent: Boolean = false,
     /** A count shown at the corner (Navi L-005: charges to look at); 0 = none. */
-    val badge: Int = 0)
+    val badge: Int = 0, val onClick: () -> Unit)
 
 /** The home page's panels: a plain line drawing, a title and a line under it; two or three in a row. */
 @Composable
 private fun HomePanels(connected: Boolean, open: (Page) -> Unit, openSettings: () -> Unit) {
     val ctx = LocalContext.current
+    val visits = net.prototux.aare.ui.car.navi.ChargerVisits
+    val fresh = remember(visits.changes.intValue) { runCatching { visits.freshCount(ctx) }.getOrDefault(0) }
+    // a panel that opens one of the pages, with the page's own title and line
+    fun page(art: PanelArt, pg: Page, badge: Int = 0) = HomePanel(art, pg.titleRes, pg.subtitleRes, badge = badge) { open(pg) }
     val panels = listOfNotNull(
         // the car screen on the phone, while no car is connected: first, in Mate's colour (18.11.2026: "Autobildschirm-
         // Vorschau wird zu Dashboard-starten-Kachel, in Türkis, negativ zu den anderen, oben links die erste Kachel")
-        if (!connected) HomePanel(PanelArt.DASH, R.string.mate_panel_dash_start, R.string.mate_panel_dash_start_sub, null, accent = true,
-            action = { ctx.startActivity(Intent(ctx, CarPreviewActivity::class.java)) }) else null,
-        HomePanel(PanelArt.PLACES, R.string.mate_panel_places, R.string.mate_panel_places_sub, Page.PLACES),
+        if (!connected) HomePanel(PanelArt.DASH, R.string.mate_panel_dash_start, R.string.mate_panel_dash_start_sub, accent = true) {
+            ctx.startActivity(Intent(ctx, CarPreviewActivity::class.java)) } else null,
+        page(PanelArt.PLACES, Page.PLACES),
         // N-039: the logbook with the charges to rate counted (the count was on Routenplanung before, Navi L-005)
-        HomePanel(PanelArt.LOGBOOK, R.string.logbook_title, R.string.logbook_sub, Page.LOGBOOK,
-            badge = net.prototux.aare.ui.car.navi.ChargerVisits.changes.intValue.let { runCatching { net.prototux.aare.ui.car.navi.ChargerVisits.freshCount(ctx) }.getOrDefault(0) }),
-        HomePanel(PanelArt.MUSIC, R.string.mate_page_music, R.string.mate_page_music_sub, Page.MUSIC),
-        HomePanel(PanelArt.SETTINGS, R.string.mate_panel_settings, R.string.mate_panel_settings_sub, null),
+        page(PanelArt.LOGBOOK, Page.LOGBOOK, badge = fresh),
+        page(PanelArt.MUSIC, Page.MUSIC),
+        HomePanel(PanelArt.SETTINGS, R.string.mate_panel_settings, R.string.mate_panel_settings_sub, onClick = openSettings),
     )
-    PanelGrid(panels) { p -> when { p.action != null -> p.action.invoke(); p.page != null -> open(p.page); else -> openSettings() } }
+    TileGrid(panels, narrow = 2, wide = 3, gap = 16.dp) { p, m -> PanelCard(p, m, p.onClick) }
 }
 
+/** Tiles in rows of [narrow] or, on a wide screen, [wide]; each row as high as its highest tile, a short row left open. */
 @Composable
-private fun PanelGrid(panels: List<HomePanel>, onClick: (HomePanel) -> Unit) {
+private fun <T> TileGrid(items: List<T>, narrow: Int, wide: Int, gap: androidx.compose.ui.unit.Dp, cell: @Composable (T, Modifier) -> Unit) {
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val columns = if (maxWidth > 840.dp) 3 else 2
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            panels.chunked(columns).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Max)) {
-                    row.forEach { p -> PanelCard(p, Modifier.weight(1f).then(Modifier.fillMaxSize())) { onClick(p) } }
+        val columns = if (maxWidth > 840.dp) wide else narrow
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            items.chunked(columns).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(gap), modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Max)) {
+                    row.forEach { cell(it, Modifier.weight(1f).then(Modifier.fillMaxSize())) }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
@@ -569,7 +573,7 @@ private fun FirstStartCard() {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf(false to stringResource(R.string.first_car_ev), true to stringResource(R.string.first_car_ice)).forEach { (ice, label) ->
                     androidx.compose.material3.OutlinedButton(onClick = {
-                        setVehicleKind(st, ice)
+                        st.combustion = ice  // Settings.evModelSource follows it
                         carAsked = true; prefs.edit().putBoolean("car_asked", true).apply()
                     }, modifier = Modifier.weight(1f).height(72.dp)) { Text(label, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
                 }
@@ -672,23 +676,13 @@ private fun FirstStartCard() {
 /** The settings as small tiles: the page's sign, its name and one line; three or four in a row. */
 @Composable
 private fun SettingsTiles(pages: List<Page>, open: (Page) -> Unit) {
-    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val columns = if (maxWidth > 840.dp) 4 else 3
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            pages.chunked(columns).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Max)) {
-                    row.forEach { pg ->
-                        Column(Modifier.weight(1f).then(Modifier.fillMaxSize()).clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainer)
-                            .clickable { open(pg) }.padding(14.dp)) {
-                            Icon(pg.icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
-                            Spacer(Modifier.height(10.dp))
-                            Text(stringResource(pg.titleRes), style = MaterialTheme.typography.titleSmall, maxLines = 2)
-                            Text(stringResource(pg.subtitleRes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-                        }
-                    }
-                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-                }
-            }
+    TileGrid(pages, narrow = 3, wide = 4, gap = 12.dp) { pg, m ->
+        Column(m.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable { open(pg) }.padding(14.dp)) {
+            Icon(pg.icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            Spacer(Modifier.height(10.dp))
+            Text(stringResource(pg.titleRes), style = MaterialTheme.typography.titleSmall, maxLines = 2)
+            Text(stringResource(pg.subtitleRes), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
         }
     }
 }
@@ -854,17 +848,11 @@ private fun VehicleKindCard(settings: Settings) {
     Section(stringResource(R.string.vehicle_kind_title)) {
         Choices("", listOf("ev" to stringResource(R.string.vehicle_kind_ev), "ice" to stringResource(R.string.vehicle_kind_ice)), if (ice) "ice" else "ev") {
             ice = it == "ice"
-            setVehicleKind(settings, ice)
+            settings.combustion = ice
         }
         Spacer(Modifier.height(6.dp))
         Text(stringResource(R.string.vehicle_kind_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-}
-
-/** Electric or combustion, both settings together: a combustion car tells Google Maps of no electric car, an electric one Mate's model. */
-private fun setVehicleKind(settings: Settings, combustion: Boolean) {
-    settings.combustion = combustion
-    if (combustion) settings.evModelSource = "off" else if (settings.evModelSource == "off") settings.evModelSource = "mate"
 }
 
 @Composable
@@ -1020,19 +1008,6 @@ private fun AutoRivalCheck() {
                 ctx.startSafely(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", auto, null)), appDetails(ctx))
             }
     }
-}
-
-private fun appDetails(ctx: Context) =
-    Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null))
-
-/**
- * Opens a settings screen or a link. Some phones lack the screen (Go builds and OEM ROMs drop some)
- * or have no browser: then [fallback] opens instead, or a short message, rather than a crash. No
- * resolveActivity() check first: package visibility hides browsers from it without a <queries> entry.
- */
-private fun Context.startSafely(intent: Intent, fallback: Intent? = null) {
-    val opened = listOfNotNull(intent, fallback).any { runCatching { startActivity(it) }.isSuccess }
-    if (!opened) Toast.makeText(this, R.string.setup_nothing_to_open, Toast.LENGTH_SHORT).show()
 }
 
 // ---------------------------------------------------------------- settings

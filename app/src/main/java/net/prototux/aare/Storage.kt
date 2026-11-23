@@ -196,12 +196,15 @@ internal object Storage {
     }
 
     /** Why a move stopped, for the page to word it (StorageMove.describe); nothing has changed then. */
-    class MoveFailed(val why: Why) : IOException(why.name) {
-        enum class Why { NO_ROOM, TOO_LARGE, NOT_WRITABLE, VERIFY }
+    class MoveFailed(val why: Why) : ShownFailure(why.name, why.text) {
+        enum class Why(@androidx.annotation.StringRes val text: Int) {
+            NO_ROOM(R.string.storage_reason_room), TOO_LARGE(R.string.storage_reason_fat32),
+            NOT_WRITABLE(R.string.storage_reason_not_writable), VERIFY(R.string.storage_reason_verify)
+        }
     }
 
-    fun problem(c: Context, to: Volume, kinds: List<String> = MAP_KINDS): Problem? {
-        val from = kinds.map { dir(c, it) }
+    fun problem(c: Context, to: Volume): Problem? {
+        val from = MAP_KINDS.map { dir(c, it) }
         val big = from.maxOf { largest(it) }
         if (to.fat32 && big > FAT32_MAX) return Problem.TooLarge(big)
         val need = from.sumOf { sizeOf(it) }
@@ -225,15 +228,14 @@ internal object Storage {
      * and the SHA-256 kept beside a map file) before the old files go; on any error the copies are dropped and the old
      * place stays chosen. Blocking - off the main thread. The music moves with [moveMusic] (its folder may be the driver's).
      */
-    fun move(c: Context, to: Volume, kinds: List<String> = MAP_KINDS, progress: (Phase, Long, Long) -> Unit) {
-        require(MUSIC !in kinds) { "the music moves with moveMusic" }
+    fun move(c: Context, to: Volume, progress: (Phase, Long, Long) -> Unit) {
         val app = c.applicationContext
         // the same check the page shows, here too: nothing is copied that cannot fit
-        problem(app, to, kinds)?.let { throw MoveFailed(if (it is Problem.TooLarge) MoveFailed.Why.TOO_LARGE else MoveFailed.Why.NO_ROOM) }
+        problem(app, to)?.let { throw MoveFailed(if (it is Problem.TooLarge) MoveFailed.Why.TOO_LARGE else MoveFailed.Why.NO_ROOM) }
         // the music followed the maps' place so far: it gets that place as its own before the maps move without it
         prefs(app).let { p -> if (!p.contains("volume_music"))
             p.edit().putString("volume_music", p.getString("volume", "") ?: "").putString("root_music", p.getString("root", null)).commit() }
-        val pairs = kinds.map { dir(app, it) to target(app, to, it) }.filter { (a, b) -> a.exists() && a.canonicalPath != b.canonicalPath }
+        val pairs = MAP_KINDS.map { dir(app, it) to target(app, to, it) }.filter { (a, b) -> a.exists() && a.canonicalPath != b.canonicalPath }
         transfer(pairs, progress)
         prefs(app).edit().putString("volume", to.id).putString("root", to.root.path).commit()
         pairs.forEach { (a, _) -> a.deleteRecursively() }
