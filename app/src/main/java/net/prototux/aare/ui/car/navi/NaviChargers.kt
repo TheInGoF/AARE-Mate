@@ -22,25 +22,31 @@ internal object NaviChargers {
     const val NEAR_M = 1_000.0
     const val MIN_KW = 150
     const val MAX_OTHERS = 80
+    /** While planning (System L-099): every charger of the chosen networks this far from the route, at most this many. */
+    const val PLAN_M = 15_000.0
+    const val PLAN_MAX = 400
     private const val STEP_M = 1_500.0
     private const val SAME_M = 150.0
 
     class Found(val stops: List<Position>, val others: List<Charger>)
 
     /** The chargers near [route] (points in order), the [stops] apart. Pure lookup, no drawing. */
-    fun along(route: List<Position>, stops: List<Position>, near: (Position, Double, Int) -> List<Charger>): Found {
+    fun along(route: List<Position>, stops: List<Position>, near: (Position, Double, Int) -> List<Charger>,
+              /** System L-099: while planning a wide strip of the driver's networks, else the near ones of 150 kW */
+              radiusM: Double = NEAR_M, minKw: Int = MIN_KW, keep: (Charger) -> Boolean = { true }, max: Int = MAX_OTHERS): Found {
         val seen = LinkedHashSet<Charger>()
         var last: Position? = null
         var walked = 0.0
+        val step = maxOf(STEP_M, radiusM / 2)
         for (p in route) {
-            walked += last?.let { ChargerIndex.distanceM(it, p) } ?: STEP_M
+            walked += last?.let { ChargerIndex.distanceM(it, p) } ?: step
             last = p
-            if (walked < STEP_M) continue
+            if (walked < step) continue
             walked = 0.0
-            seen += near(p, NEAR_M, MIN_KW)
+            seen += near(p, radiusM, minKw).filter(keep)
         }
         val others = seen.filter { c -> stops.none { ChargerIndex.distanceM(it, c.at) < SAME_M } }
-            .sortedByDescending { it.kw }.take(MAX_OTHERS)
+            .sortedByDescending { it.kw }.take(max)
         return Found(stops, others)
     }
 

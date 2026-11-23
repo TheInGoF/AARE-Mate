@@ -173,6 +173,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     var routeOptions by remember { mutableStateOf<List<RouteOption>>(emptyList()) }
     // F5: the fast chargers along the shown route, the planned stops apart (GeoJSON: stops, others)
     var chargerJson by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // System L-099: the other chargers on the map, each with its network's logo (the shown ones are what a tap picks from)
+    var chargerOthers by remember { mutableStateOf<List<Charger>>(emptyList()) }
     // O220: the closed stretches that touched the planned routes - the only closures drawn
     var closedLines by remember { mutableStateOf(session.closureLines) }
     // F5: rest stops along it (GeoJSON: service areas, rest areas)
@@ -656,12 +658,20 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     val previewing = panel is NaviStep.Preview
     val chargeRoute = if (routeJson == null) null else if (guiding && !previewing) guided ?: planned else planned
     val chargeAt = (if (guiding && !previewing) chargeStops else preview?.stops.orEmpty()).map { it.charger.at }
-    LaunchedEffect(chargeRoute, chargeAt) {
-        val r = chargeRoute ?: run { chargerJson = null; restJson = null; return@LaunchedEffect }
+    // System L-099 (23.11.2026: "ich wollte ja einen Reiseplaner alle gefilterten Ladestationen angezeigt bekommen, die in
+    // meinem Netzwerk existieren … eventuell einen größeren Umweg in Kauf nehme … Mit Icon"): while planning (preview or
+    // trip plan open) every charger of the driver's filter in a wide strip, otherwise the near strong ones as before
+    val planningMap = previewing || panel == NaviStep.Plan
+    LaunchedEffect(chargeRoute, chargeAt, planningMap) {
+        val r = chargeRoute ?: run { chargerJson = null; chargerOthers = emptyList(); restJson = null; return@LaunchedEffect }
+        val rules = ChargePlanner.Rules.of(net.prototux.aare.Settings(context))
         val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            NaviChargers.along(raw(r), chargeAt, ChargerIndex.get(context)::near)
+            if (planningMap) NaviChargers.along(raw(r), chargeAt, ChargerIndex.get(context)::near, NaviChargers.PLAN_M, rules.minKw,
+                { c -> !rules.outside(c) }, NaviChargers.PLAN_MAX)
+            else NaviChargers.along(raw(r), chargeAt, ChargerIndex.get(context)::near)
         }
         chargerJson = NaviChargers.geoJson(found.stops) to NaviChargers.geoJson(found.others.map { it.at })
+        chargerOthers = found.others
         Log.i(TAG, "chargers on the map: ${found.stops.size} stops, ${found.others.size} others")
         val rest = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { NaviRest.along(context, raw(r)) }
         restJson = NaviChargers.geoJson(rest.filter { it.services }.map { it.at }) to NaviChargers.geoJson(rest.filter { !it.services }.map { it.at })
@@ -1164,8 +1174,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     // System L-096 (22.11.2026: "auf der Map direkt anklicken kann und sagen kann, ich möchte über diese Station
                     // fahren … als festen Ladepunkt"): a charger tapped where the map shows them (zoom 10 and nearer)
                     val mPerPx = 156_543.0 * Math.cos(Math.toRadians(pos.latitude)) / Math.pow(2.0, camera.position.zoom) / altDensity
-                    val ch = if (camera.position.zoom < 10.0) null else ChargerIndex.get(context).near(pos, 40 * mPerPx, NaviChargers.MIN_KW)
-                        .minByOrNull { ChargerIndex.distanceM(it.at, pos) }
+                    // the chargers shown (L-099: from zoom 7 while planning, 10 otherwise)
+                    val ch = if (camera.position.zoom < (if (planningMap) 7.0 else 10.0)) null
+                        else chargerOthers.filter { ChargerIndex.distanceM(it.at, pos) < 40 * mPerPx }.minByOrNull { ChargerIndex.distanceM(it.at, pos) }
                     if (ch == null) org.maplibre.compose.util.ClickResult.Pass else {
                         Log.i(TAG, "map: charger tapped")
                         val p = NaviStep.Pick(ch.at, ch, (panel as? NaviStep.Preview)?.place)
@@ -1299,13 +1310,21 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     iconRotationAlignment = const(org.maplibre.compose.expressions.value.IconRotationAlignment.Viewport),
                     iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport))
             }
-            chargerJson?.let { (stopsJson, othersJson) ->
-                // the others small and only nearer in; the planned stops always, above them and the route
-                val othersData = remember(othersJson) { GeoJsonData.JsonString(othersJson) }
-                val othersImage = remember { NaviChargers.image(CHARGER_PX, stop = false) }
-                org.maplibre.compose.layers.SymbolLayer(id = "chargers", source = rememberGeoJsonSource(othersData), minZoom = 10f,
-                    iconImage = org.maplibre.compose.expressions.dsl.image(othersImage),
-                    iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport))
+            chargerJson?.let { (stopsJson, _) ->
+                // the others with their network's logo (System L-099, N-037), the bolt without one; only nearer in while driving,
+                // from further out while planning
+                val ctxLogo = LocalContext.current
+                val logoPx = (26 * altDensity).toInt()
+                val plateCol = Mate.logoPlate.toArgb(); val edgeCol = Mate.text.copy(alpha = 0.6f).toArgb()
+                val byNet = remember(chargerOthers) { chargerOthers.groupBy { it.network?.takeIf { n -> NetworkLogos.of(n) != null } ?: "" } }
+                byNet.forEach { (net, list) ->
+                    val img = remember(net, logoPx) { NetworkLogos.bitmap(ctxLogo, net, logoPx, plateCol, edgeCol) ?: NaviChargers.image(CHARGER_PX, stop = false) }
+                    val json = remember(list) { NaviChargers.geoJson(list.map { it.at }) }
+                    org.maplibre.compose.layers.SymbolLayer(id = "chargers-${net.ifEmpty { "other" }}", source = rememberGeoJsonSource(remember(json) { GeoJsonData.JsonString(json) }),
+                        minZoom = if (planningMap) 7f else 10f,
+                        iconImage = org.maplibre.compose.expressions.dsl.image(img),
+                        iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport))
+                }
                 val stopsData = remember(stopsJson) { GeoJsonData.JsonString(stopsJson) }
                 val stopImage = remember { NaviChargers.image(STOP_PX, stop = true) }
                 org.maplibre.compose.layers.SymbolLayer(id = "charge-stops", source = rememberGeoJsonSource(stopsData),
