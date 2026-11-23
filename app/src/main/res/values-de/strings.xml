@@ -24,7 +24,7 @@
 
     <!-- setup: MainActivity home/settings screens -->
     <string name="setup_page_car_screen_title">Aussehen</string>
-    <string name="setup_page_car_screen_subtitle">Farben, Größe, fremde Apps, Animationen, Titelstreifen, Beifahrer</string>
+    <string name="setup_page_car_screen_subtitle">Farben, Größe, Animationen, Titelstreifen</string>
     <string name="setup_page_apps_title">Apps</string>
     <string name="setup_page_apps_subtitle">Welche Apps im Auto angezeigt werden</string>
     <string name="setup_page_connection_title">Verbindung</string>

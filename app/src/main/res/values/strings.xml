@@ -27,7 +27,7 @@
 
     <!-- setup: MainActivity home/settings screens -->
     <string name="setup_page_car_screen_title">Look</string>
-    <string name="setup_page_car_screen_subtitle">Colors, size, other apps, animations, title strip, passenger mode</string>
+    <string name="setup_page_car_screen_subtitle">Colors, size, animations, title strip</string>
     <string name="setup_page_apps_title">Apps</string>
     <string name="setup_page_apps_subtitle">Which apps show in the car</string>
     <string name="setup_page_connection_title">Connection</string>
