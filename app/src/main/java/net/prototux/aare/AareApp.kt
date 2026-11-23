@@ -23,6 +23,9 @@ class AareApp : Application() {
         // the wallpaper of the Android Auto style, left behind since the style went (E-044)
         Thread {
             runCatching { java.io.File(filesDir, "wallpaper.jpg").takeIf { it.exists() }?.let { if (it.delete()) DiagLog.add("old wallpaper removed") } }
+            // an electric car with the old choice "Kein Elektroauto" on the Navi page (before N-039, now the Fahrzeugart):
+            // Mate's model, as choosing "Elektro" sets it - else Google Maps would get no electric car
+            runCatching { Settings(this).let { if (!it.combustion && it.evModelSource == "off") { it.evModelSource = "mate"; DiagLog.add("electric car: Maps gets Mate's model (old 'no electric car' choice)") } } }
         }.start()
     }
 

@@ -117,13 +117,15 @@ object SelfAdb {
      * Shizuku started by Mate when it is not running and Mate has paired: in the background, at most once a minute.
      * [why] for the log (car connected, phone app opened). [done] runs once the try is over (or nothing was to do).
      */
-    fun ensureShizuku(context: Context, why: String, done: () -> Unit = {}) {
+    fun ensureShizuku(context: Context, why: String, force: Boolean = false, done: () -> Unit = {}) {
         val app = context.applicationContext
         if (CaptureMethods.shizukuAvailable() || !paired(app) || !CaptureMethods.shizukuInstalled(app)) { done(); return }
         val now = System.currentTimeMillis()
-        if (now - lastTry < 60_000) { done(); return }
+        // [force]: the start after the boot always gets its try, even when the Wi-Fi coming took the minute just before
+        if (!force && now - lastTry < 60_000) { done(); return }
         lastTry = now
-        work.execute { try { startNow(app, why) } finally { done() } }
+        // tries queue on the one worker: one that comes after a successful start has nothing left to do
+        work.execute { try { if (!CaptureMethods.shizukuAvailable()) startNow(app, why) } finally { done() } }
     }
 
     @Volatile private var wifiWatched = false
@@ -150,8 +152,7 @@ object SelfAdb {
         runCatching {
             cm.registerNetworkCallback(request, object : android.net.ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: android.net.Network) {
-                    if (CaptureMethods.shizukuAvailable() || !paired(app) || !CaptureMethods.shizukuInstalled(app)) return
-                    DiagLog.add("shizuku by Mate (Wi-Fi came): Shizuku not running, trying to start it")
+                    // the try logs itself ("shizuku by Mate (Wi-Fi came): ..."); within the minute after another try nothing happens
                     ensureShizuku(app, "Wi-Fi came")
                 }
             })

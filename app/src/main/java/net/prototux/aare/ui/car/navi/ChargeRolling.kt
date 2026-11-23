@@ -43,6 +43,9 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
     /** How many times the stops changed (each one request to the map server). */
     var moves = 0; private set
 
+    // what [scale], [levelAt] and [spreadAt] read is guarded by this lock alone, not by the object: the screen reads them on
+    // the main thread while a [check] plans for a long time under the object's lock (a stall of the map otherwise)
+    private val scaleLock = Any()
     // the stretch since the start or the last charging: level, and the model's percent used before the present track
     private var refSoc = startSoc
     private var refM = 0.0
@@ -92,20 +95,21 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
      * What the car really took against the model since [refSoc]: above 1 it takes more. Trusted the more the further it
      * has gone - quicker when it takes more (to be safe), slower when it takes less.
      */
-    @Synchronized fun scale(drivenM: Double, soc: Double): Double {
+    fun scale(drivenM: Double, soc: Double): Double = synchronized(scaleLock) {
         val model = modelEarlier + usedBefore + used(refM, drivenM)
         val km = kmEarlier + kmBefore + (drivenM - refM) / 1000
-        if (model < MIN_USED) return 1.0
+        if (model < MIN_USED) return@synchronized 1.0
         val seen = ((takenEarlier + refSoc - soc) / model).coerceIn(LOW_SCALE, HIGH_SCALE)
         val trust = if (seen >= 1) minOf(1.0, km / TRUST_UP_KM) else minOf(1.0, km / TRUST_DOWN_KM)
-        return 1 + (seen - 1) * trust
+        1 + (seen - 1) * trust
     }
 
     /** The route changed (the stops moved, a new route from here): the plan goes on on [newTrack] from its start. */
     @Synchronized fun retrack(newTrack: ChargePlanner.Track, drivenM: Double, newChain: List<Charger> = chain) {
-        usedBefore += used(refM, drivenM); kmBefore += (drivenM - refM) / 1000; refM = 0.0
         planUsedBefore += used(planM, drivenM); planM = 0.0
-        track = newTrack; chain = newChain; lastCheckM = -1e9
+        // the new track and the start of its stretch together, so a reader never sees one without the other
+        synchronized(scaleLock) { usedBefore += used(refM, drivenM); kmBefore += (drivenM - refM) / 1000; refM = 0.0; track = newTrack }
+        chain = newChain; lastCheckM = -1e9
     }
 
     /**
@@ -114,7 +118,7 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
      * the plan: "Wenn die Route sagt, okay, er braucht noch 36% und ich habe 40, dann komme ich mit 4 an"). The plan's
      * model along the way, times what the car really took so far ([scale]).
      */
-    @Synchronized fun levelAt(drivenM: Double, soc: Double, toM: Double): Double = soc - used(drivenM, toM) * scale(drivenM, soc)
+    fun levelAt(drivenM: Double, soc: Double, toM: Double): Double = synchronized(scaleLock) { soc - used(drivenM, toM) * scale(drivenM, soc) }
 
     /**
      * How sure [levelAt] is, as ± percent (N-019 step 1, E-029: "Anzeige ‚Ankunft 11 % ± 2' mit schrumpfendem ±"): the
@@ -122,7 +126,7 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
      * start, down to [REL_LEARNED] once the drive has shown how the car takes it (the same trust as [scale]). Shrinks as
      * the way ahead gets shorter and the drive longer.
      */
-    @Synchronized fun spreadAt(drivenM: Double, soc: Double, toM: Double): Double {
+    fun spreadAt(drivenM: Double, soc: Double, toM: Double): Double = synchronized(scaleLock) {
         val ahead = maxOf(0.0, used(drivenM, toM) * scale(drivenM, soc))
         val km = kmEarlier + kmBefore + (drivenM - refM) / 1000
         val trust = minOf(1.0, km / TRUST_DOWN_KM)
@@ -130,7 +134,7 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
         val kmAhead = maxOf(0.0, toM - drivenM) / 1000
         val atStart = learnedMissPer100?.let { it * kmAhead / 100.0 } ?: (ahead * REL_START)
         val err = atStart + (ahead * REL_LEARNED - atStart) * trust
-        return Math.sqrt(READING * READING + err * err)
+        Math.sqrt(READING * READING + err * err)
     }
 
     /** The present track's length in metres. */
@@ -146,8 +150,7 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
     @Synchronized fun arrived(drivenM: Double, soc: Double) = noteStretch(drivenM, soc)
 
     private fun noteStretch(drivenM: Double, soc: Double) {
-        val model = usedBefore + used(refM, drivenM)
-        val km = kmBefore + (drivenM - refM) / 1000
+        val (model, km) = synchronized(scaleLock) { (usedBefore + used(refM, drivenM)) to (kmBefore + (drivenM - refM) / 1000) }
         stretch((refSoc - soc) - model, km)
     }
 
@@ -158,8 +161,10 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
     @Synchronized fun check(drivenM: Double, soc: Double, force: Boolean = false): Decision? {
         if (soc > lastSoc + CHARGED_PERCENT) {
             noteStretch(drivenM, lastSoc)
-            takenEarlier += refSoc - lastSoc; modelEarlier += usedBefore + used(refM, drivenM); kmEarlier += kmBefore + (drivenM - refM) / 1000
-            refSoc = soc; refM = drivenM; usedBefore = 0.0; kmBefore = 0.0
+            synchronized(scaleLock) {
+                takenEarlier += refSoc - lastSoc; modelEarlier += usedBefore + used(refM, drivenM); kmEarlier += kmBefore + (drivenM - refM) / 1000
+                refSoc = soc; refM = drivenM; usedBefore = 0.0; kmBefore = 0.0
+            }
             planSoc = soc; planM = drivenM; planUsedBefore = 0.0
         }
         lastSoc = soc

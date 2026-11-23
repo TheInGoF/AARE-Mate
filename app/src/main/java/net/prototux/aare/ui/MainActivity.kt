@@ -1310,9 +1310,7 @@ private fun EvRouteChoice(settings: Settings) {
     var variant by remember { mutableStateOf(settings.evVariant) }
     var car by remember { mutableStateOf(net.prototux.aare.host.CarDataService.car(ctx)) }
     LaunchedEffect(variant) { while (true) { car = net.prototux.aare.host.CarDataService.car(ctx); kotlinx.coroutines.delay(5000) } }
-    // an electric car with the old choice "Kein Elektroauto" from this page (before N-039): Mate's model, as the Fahrzeugart sets it
-    LaunchedEffect(Unit) { if (!settings.combustion && settings.evModelSource == "off") settings.evModelSource = "mate" }
-    var source by remember { mutableStateOf(settings.evModelSource.let { if (it == "off" && !settings.combustion) "mate" else it }) }
+    var source by remember { mutableStateOf(settings.evModelSource) }
     // "Kein Elektroauto" is the Fahrzeugart on the page Dashboard (N-039): shown only for an electric car
     Choices(stringResource(R.string.setup_choice_ev_source), listOf("google" to stringResource(R.string.setup_ev_source_google),
         "mate" to stringResource(R.string.setup_ev_source_mate)), source) {

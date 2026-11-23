@@ -16,7 +16,7 @@ import net.prototux.aare.adb.SelfAdb
  */
 class ShizukuStartJob : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
-        SelfAdb.ensureShizuku(this, "tablet started") { jobFinished(params, false) }
+        SelfAdb.ensureShizuku(this, "tablet started", force = true) { jobFinished(params, false) }
         return true
     }
 

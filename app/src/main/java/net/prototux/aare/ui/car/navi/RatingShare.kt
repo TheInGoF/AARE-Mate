@@ -33,8 +33,11 @@ internal object RatingShare {
         val sig = signature(v.rating, v.power, v.price, v.worked) ?: return
         val p = prefs(c)
         val key = chargerKey(v)
-        // back at what was sent: a change waiting from in between is dropped, else it would go out later (Navi I-060b)
-        if (p.getString("sent:$key", null) == sig) { synchronized(this) { p.edit().remove("wait:$key").apply() }; return }
+        // back at what was sent: a change waiting from in between is dropped, else it would go out later (Navi I-060b) -
+        // unless that change is being sent right now: then this one has to go out after it
+        synchronized(this) {
+            if (p.getString("sent:$key", null) == sig && key !in sending) { p.edit().remove("wait:$key").apply(); return }
+        }
         // one id per charge: the visit's time names the charge
         val idKey = "id:$key@${v.lastMillis}"
         val id = p.getString(idKey, null) ?: java.util.UUID.randomUUID().toString().also { p.edit().putString(idKey, it).apply() }
@@ -45,6 +48,9 @@ internal object RatingShare {
         synchronized(this) { p.edit().putString("wait:$key", "$sig|$body").apply() }
         flush(c)
     }
+
+    /** The chargers whose rating is on its way to the server just now (guarded by this object). */
+    private val sending = HashSet<String>()
 
     // one sender for all: sends one after the other, each reading what waits when its turn comes (Navi I-052e)
     private val sender = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "rating-share") }
@@ -62,19 +68,23 @@ internal object RatingShare {
             var sent = 0
             for ((k, v) in waiting) {
                 val (sig, body) = v!!.split('|', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
+                val key = k.removePrefix("wait:")
+                synchronized(this) { sending += key }
                 val ok = runCatching {
                     NaviServer.client(app).newCall(Request.Builder().url(url).post(body.toRequestBody("application/json".toMediaType())).build())
                         .execute().use { it.code == 201 }
                 }.getOrDefault(false)
-                val key = k.removePrefix("wait:")
-                // a rating changed meanwhile stays waiting for the next turn: only what was sent is taken out
-                if (ok) {
-                    synchronized(this) {
+                // what the server has now is what was sent; a rating changed meanwhile stays waiting for the next turn
+                synchronized(this) {
+                    sending -= key
+                    if (ok) {
                         val p = prefs(app)
-                        if (p.getString(k, null) == v) p.edit().remove(k).putString("sent:$key", sig).apply()
+                        val e = p.edit().putString("sent:$key", sig)
+                        if (p.getString(k, null) == v) e.remove(k)
+                        e.apply()
                     }
-                    sent++
                 }
+                if (ok) sent++
                 Log.i(TAG, "rating " + (if (ok) "shared" else "kept for later"))
                 if (!ok) break
             }

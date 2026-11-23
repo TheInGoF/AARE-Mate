@@ -288,7 +288,7 @@
     <string name="audio_settings_title">Sound in the car</string>
     <string name="audio_page_subtitle">Phone audio in the car, ways, ringtone, music while reading aloud</string>
     <string name="audio_toggle_enable_title">Phone audio in the car</string>
-    <string name="audio_toggle_enable_subtitle">Music, podcasts, the assistant and, depending on the method, navigation voice</string>
+    <string name="audio_toggle_enable_subtitle">Music, podcasts, the assistant and, depending on the method, navigation voice - from the next connection</string>
     <string name="audio_using_method">Using: %1$s</string>
     <string name="audio_no_method">No method is set up yet: choose one below.</string>
     <string name="audio_method_policy">System audio routing (like Android Auto)</string>

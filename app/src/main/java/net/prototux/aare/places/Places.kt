@@ -49,8 +49,8 @@ object Places {
     private fun file(context: Context) = File(context.filesDir, FILE)
 
     /**
-     * The file could not be read as a whole: kept as places.json.bad, and nothing is saved until it reads again - else
-     * the next change would write the empty book over all places.
+     * The file could not be read as a whole and not even be kept as places.json.bad: nothing is saved until it reads
+     * again - else the next change would write the empty book over all places.
      */
     private var broken = false
 
@@ -71,11 +71,11 @@ object Places {
             } }.getOrNull() } }
             Book(cats, places).also { broken = false }
         }.getOrElse { e ->
-            if (!broken) {
-                runCatching { f.copyTo(File(f.parentFile, "$FILE.bad"), overwrite = true) }
-                net.prototux.aare.DiagLog.error("places: $FILE not readable, kept as $FILE.bad, saving stopped - $e")
-            }
-            broken = true
+            // kept as places.json.bad: from then on saving may go on (what is added is not lost); only when even the copy
+            // fails, saving stays stopped, so the unreadable file is not written over
+            val kept = runCatching { f.copyTo(File(f.parentFile, "$FILE.bad"), overwrite = true) }.isSuccess
+            net.prototux.aare.DiagLog.error("places: $FILE not readable, " + (if (kept) "kept as $FILE.bad" else "could not be kept, saving stopped") + " - $e")
+            broken = !kept
             Book(defaultCategories(context), emptyList())
         }
     }

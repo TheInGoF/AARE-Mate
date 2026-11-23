@@ -12,7 +12,7 @@ class BootReceiver : BroadcastReceiver() {
         // after a restart Shizuku is gone: Mate starts it itself once a network is there (System L-063)
         if (!ShizukuStartJob.schedule(context)) {
             val app = context.applicationContext
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ net.prototux.aare.adb.SelfAdb.ensureShizuku(app, "tablet started") }, 45_000)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ net.prototux.aare.adb.SelfAdb.ensureShizuku(app, "tablet started", force = true) }, 45_000)
         }
     }
 }

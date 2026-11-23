@@ -187,7 +187,7 @@
     <string name="audio_settings_title">Ton im Auto</string>
     <string name="audio_page_subtitle">Telefonaudio im Auto, Wege, Klingelton, Musik beim Vorlesen</string>
     <string name="audio_toggle_enable_title">Telefonaudio im Auto</string>
-    <string name="audio_toggle_enable_subtitle">Musik, Podcasts, der Assistent und, je nach Methode, die Navigationsstimme</string>
+    <string name="audio_toggle_enable_subtitle">Musik, Podcasts, der Assistent und, je nach Methode, die Navigationsstimme – gilt ab der nächsten Verbindung</string>
     <string name="audio_using_method">Verwendet: %1$s</string>
     <string name="audio_no_method">Noch keine Methode eingerichtet: Wähle unten eine aus.</string>
     <string name="audio_method_policy">Systemweg (wie Android Auto)</string>
