@@ -245,9 +245,11 @@ internal fun IdmateShell(
             val idmate = state.apps.firstOrNull { isDash(it) }
             // One dashboard, not two: wherever AARE would show its own start view, the IDmate app comes up instead.
             val atStart = inner == null && state.screen == CarScreen.Dashboard
-            LaunchedEffect(atStart, idmate?.id, combustion) {
+            // the navigation app is keyed as well: state.apps may still be empty when the car connects
+            val startNaviApp = naviApp(naviList, choice)
+            LaunchedEffect(atStart, idmate?.id, combustion, startNaviApp?.id) {
                 if (!atStart) return@LaunchedEffect
-                if (combustion) naviApp(naviList, choice)?.let { actions.openApp(it) } ?: run { inner = Inner.NAVIGATION }
+                if (combustion) startNaviApp?.let { actions.openApp(it) }
                 else if (idmate != null) actions.openApp(idmate)
             }
             // The navigation app in front refused this host: the next one that works takes its place by itself.
@@ -273,7 +275,7 @@ internal fun IdmateShell(
                 v.navi?.let { choice.pickNavi(it) }
                 val navi = naviList.firstOrNull { it.packageName == v.navi } ?: naviApp(naviList, choice)
                 val music = musicList.firstOrNull { it.packageName == v.music } ?: startMusic
-                android.util.Log.i("IdmateShell", "Ansicht aus der Leiste: ${v.name} -> ${v.start}")
+                android.util.Log.i("IdmateShell", "view from bar: ${v.name} -> ${v.start}")
                 when (v.start) {
                     MateViews.START_NAVI -> navi?.let(open)
                     MateViews.START_MUSIC -> music?.let(open)
@@ -305,16 +307,15 @@ internal fun IdmateShell(
                     MateViews.START_MESSAGES -> { inner = Inner.MESSAGES }
                     MateViews.START_SPLIT -> { startMusic?.let { actions.openApp(it) }; startNavi?.let(open); split = true }
                 }
-                android.util.Log.i("IdmateShell", "Ansicht beim Start: ${startView?.name} -> ${startView?.start}")
+                android.util.Log.i("IdmateShell", "start view: ${startView?.name} -> ${startView?.start}")
             }
             val side = if (state.driverOnRight) Alignment.BottomEnd else Alignment.BottomStart
             // The content has the whole display; nothing is reserved for a bar.
             if (splitOn && player != null) {
                 val clear = ControlsHeight + ControlsMargin * 2
-                val music: @Composable (Modifier, Boolean) -> Unit = { m, underControls ->
+                val music: @Composable (Modifier) -> Unit = { m ->
                     // 18.11.2026 (split views tested at every share): the controls reach into the music pane on the far side
                     // as well when the navigation is narrow - the music always keeps clear of them
-                    @Suppress("UNUSED_EXPRESSION") underControls
                     Box(m.fillMaxHeight()) { appContent(player, Modifier.fillMaxSize().padding(bottom = clear)) }
                 }
                 val naviEntry = naviApp(naviList, choice)
@@ -326,7 +327,7 @@ internal fun IdmateShell(
                             net.prototux.aare.host.templates.LocalCarBottomInset provides clear,
                             net.prototux.aare.ui.car.navi.LocalNaviShare provides naviShare,
                         ) {
-                            if (naviEntry != null) appContent(naviEntry, Modifier.fillMaxSize()) else NavigationMockup()
+                            if (naviEntry != null) appContent(naviEntry, Modifier.fillMaxSize())
                         }
                     }
                 }
@@ -347,10 +348,9 @@ internal fun IdmateShell(
                     val leftShare = if (naviRight) 1f - share else share
                     val leftW = (maxWidth - SplitGap) * leftShare
                     Row(Modifier.fillMaxSize()) {
-                        // the controls sit at the driver's corner: the music pane there keeps clear of them
-                        if (naviRight) music(Modifier.weight(1f - share), !state.driverOnRight) else navi(Modifier.weight(share))
+                        if (naviRight) music(Modifier.weight(1f - share)) else navi(Modifier.weight(share))
                         Box(Modifier.fillMaxHeight().width(SplitGap).background(Ink))
-                        if (naviRight) navi(Modifier.weight(share)) else music(Modifier.weight(1f - share), state.driverOnRight)
+                        if (naviRight) navi(Modifier.weight(share)) else music(Modifier.weight(1f - share))
                     }
                     // 18.11.2026 ("Sollte eigentlich der Verschiebe-Slider funktionieren, dass der das live verschiebt, wenn man's
                     // anfasst und greift, dass man dann jede Stufe direkt festlegen kann. Da müssen sich die Apps ja nicht sofort
@@ -378,7 +378,6 @@ internal fun IdmateShell(
                 }
             } else Box(Modifier.fillMaxSize()) {
                 when (inner) {
-                    Inner.NAVIGATION -> NavigationMockup()
                     Inner.MESSAGES -> Partners(state)
                     // parked, but no phone app can be shown: why, and what to do
                     Inner.CINEMA_MISSING -> Box(Modifier.fillMaxSize().padding(bottom = ControlsHeight + ControlsMargin * 2), contentAlignment = Alignment.Center) {
@@ -448,7 +447,7 @@ internal fun IdmateShell(
                 splitPrefs.edit().putBoolean("navi_right", lay.naviRight).putFloat("navi_share", lay.naviShare).apply()
                 if (isNavi) choice.pickNavi(app.packageName) else { choice.pickMusic(app.packageName); splitMusic = app.id; actions.openApp(app) }
                 val navi = if (isNavi) app else naviApp(naviList, choice)
-                android.util.Log.i("IdmateShell", "App abgelegt: ${app.label} ${if (right) "rechts" else "links"}" + (if (wasSplit) " (ersetzt)" else " (neue geteilte Ansicht)") +
+                android.util.Log.i("IdmateShell", "app dropped: ${app.label} ${if (right) "right" else "left"}" + (if (wasSplit) " (replaced)" else " (new split)") +
                     String.format(java.util.Locale.ROOT, ", navi share %.2f", lay.naviShare))
                 navi?.let(open)
                 split = true
@@ -506,34 +505,13 @@ internal fun IdmateShell(
                 if (wanted) listOf(heard.subtitle, heard.title).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null } else null
             }
             androidx.compose.runtime.SideEffect { ShellDebug.onDashboard = onDashboard; ShellDebug.title = playingTitle; ShellDebug.titleShown = playingTitle != null }
-            val naviFront = !splitOn && inner == null && (state.screen as? CarScreen.App)?.let { s -> naviList.any { it.id == s.appId } } == true
             // The navigation app is in front (O154): no clock, message sign, reception or battery - the map shows the
             // arrival and the car the time; the music as everywhere else (O191). Not only while a route runs: Google Maps tells
             // no host that it guides (no notification, no call), and the time and reception are the car's anyway.
-            val guiding = naviFront
+            val naviFront = !splitOn && inner == null && (state.screen as? CarScreen.App)?.let { s -> naviList.any { it.id == s.appId } } == true
             // A projected app's text field asked for a keyboard (Maps' search, O97): ours, German, in bursts while driving
             if (naviFront && net.prototux.aare.host.projected.ProjectedInput.hint != null) ProjectedKeyboard(state.drivingRestricted, Modifier.align(if (state.driverOnRight) Alignment.TopEnd else Alignment.TopStart).fillMaxWidth(net.prototux.aare.media.KEYBOARD_SHARE))
             else if (net.prototux.aare.host.projected.ProjectedInput.hint != null && !naviFront) net.prototux.aare.host.projected.ProjectedInput.close()
-            // the destination heard, read back: go, again or cancel - above the controls at the driver's side
-            val np = net.prototux.aare.speech.NaviVoice.phase
-            if (np == net.prototux.aare.speech.NaviVoice.Phase.CONFIRM || np == net.prototux.aare.speech.NaviVoice.Phase.FAILED) {
-                val ok = np == net.prototux.aare.speech.NaviVoice.Phase.CONFIRM
-                Column(Modifier.align(side).padding(start = ControlsMargin, end = ControlsMargin, bottom = ControlsHeight + ControlsMargin * 2)
-                    .width(620.dp).clip(RoundedCornerShape(18.dp)).background(Mate.cardSolid).padding(16.dp)) {
-                    Text(if (ok) "„${net.prototux.aare.speech.NaviVoice.place}“" else stringResource(R.string.idmate_dictate_nothing),
-                        color = if (ok) Color.White else TextDim, fontSize = Mate.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        val b: @Composable androidx.compose.foundation.layout.RowScope.(String, Boolean, () -> Unit) -> Unit = { label, main, act ->
-                            Box(Modifier.weight(1f).height(64.dp).clip(RoundedCornerShape(16.dp)).background(if (main) Teal else Color.White.copy(alpha = 0.10f)).clickable(onClick = act),
-                                contentAlignment = Alignment.Center) { Text(label, color = if (main) Ink else Color.White, fontSize = Mate.heading, fontWeight = FontWeight.SemiBold) }
-                        }
-                        if (ok) b(stringResource(R.string.navi_voice_go), true) { net.prototux.aare.speech.NaviVoice.go { actions.navigateTo(it) } }
-                        b(stringResource(R.string.idmate_dictate_again), !ok) { net.prototux.aare.speech.NaviVoice.listen(context.applicationContext) }
-                        b(stringResource(R.string.idmate_dictate_cancel), false) { net.prototux.aare.speech.NaviVoice.cancel() }
-                    }
-                }
-            }
             // what the voice heard and did, above the controls at the driver's side; a tap closes it
             androidx.compose.runtime.DisposableEffect(Unit) {
                 net.prototux.aare.speech.VoiceAssistant.host = object : net.prototux.aare.speech.VoiceAssistant.Host {
@@ -556,7 +534,7 @@ internal fun IdmateShell(
                         net.prototux.aare.speech.VoiceAssistant.Phase.LISTEN -> stringResource(R.string.voice_listening)
                         net.prototux.aare.speech.VoiceAssistant.Phase.THINK -> stringResource(R.string.voice_thinking)
                         net.prototux.aare.speech.VoiceAssistant.Phase.ASK -> va.answer
-                        else -> if (va.heard.isNotBlank()) "„${va.heard.trim()}“" else ""
+                        else -> if (va.heard.isNotBlank()) stringResource(R.string.quoted, va.heard.trim()) else ""
                     }
                     if (vp == net.prototux.aare.speech.VoiceAssistant.Phase.CONFIRM) {
                         // a call waits: the contact's own name, the seconds left, X and "Jetzt anrufen" (18.11.2026)
@@ -589,7 +567,7 @@ internal fun IdmateShell(
             Controls(state, actions, areas, overview, switcher, Modifier.align(side), mediaFront, playingTitle,
                 playing = if (player != null && state.nowPlaying != null) splitOn else null, toggleSplit = { split = !split; switcher = false },
                 showPlaying = { player?.let { net.prototux.aare.media.NowPlayingRequest.count++; if (!splitOn) open(it) } },
-                call = if (state.call?.ringing == false) ({ callOpen = !callOpen; switcher = false }) else null, naviFront = naviFront, guiding = guiding) { switcher = !switcher }
+                call = if (state.call?.ringing == false) ({ callOpen = !callOpen; switcher = false }) else null, naviFront = naviFront) { switcher = !switcher }
             overlay(Modifier.align(Alignment.BottomCenter).padding(bottom = ControlsHeight + ControlsMargin * 2))
             NoticeOverlay(state, actions, Modifier.align(Alignment.TopCenter))
             // Calls never lie over the middle of the map: a small card right above the controls.
@@ -799,7 +777,7 @@ private fun offersMedia(pm: android.content.pm.PackageManager, pkg: String): Boo
 }
 
 /** The areas this shell draws itself, not an app's screen. */
-private enum class Inner { NAVIGATION, MESSAGES, CINEMA_MISSING, CINEMA }
+private enum class Inner { MESSAGES, CINEMA_MISSING, CINEMA }
 
 /**
  * The areas of this style, in their fixed order: dashboard, navigation, music, messages.
@@ -822,14 +800,13 @@ private fun areas(
         show(null)
         if (idmate != null) open(idmate) else actions.goHome()
     }
-    // Navigation: an installed navigation app (ABRP first); the mock-up stands in while there is none.
+    // Navigation: an installed navigation app (ABRP first).
     val navi = naviApp(naviList, choice)
     // One navigation app wins. With several installed, a long press on the tile opens the choice.
     val naviAll = if (naviList.size < 2) emptyList() else naviList.map { app ->
         Choice(app, app.id == navi?.id) { choice.pickNavi(app.packageName); open(app) }
     }
     if (navi != null) out += Area(Icons.Rounded.Navigation, stringResource(R.string.idmate_tab_navigation), naviList.any { it.id == shown }, all = naviAll, dragApp = navi) { open(navi) }
-    else out += Area(Icons.Rounded.Navigation, stringResource(R.string.idmate_tab_navigation), inner == Inner.NAVIGATION) { show(Inner.NAVIGATION) }
     // Music has one default app too, and beside it the apps pinned in the large choice (audio books, podcasts).
     val musicPinned = musicList.filter { it.id != media?.id && it.packageName in choice.extras }.map { app ->
         Choice(app, shown == app.id) { open(app) }
@@ -853,10 +830,16 @@ private fun areas(
     // gehen muss … Wenn ich dann nach oben wische … zeigt er mir meine Favoriten an. Maria, anrufen"): one tile, two halves
     val ctx = LocalContext.current
     val phoneApp = state.apps.firstOrNull { it.kind == CarAppKind.PHONE }
-    val people = remember(phoneApp != null) { if (phoneApp == null) emptyList() else phoneFavourites(ctx) }
+    // read off the main thread, and only with the rights to read them (a missing right left the list empty unseen)
+    val people by androidx.compose.runtime.produceState(emptyList<Pair<String, String>>(), phoneApp != null) {
+        val allowed = listOf(android.Manifest.permission.READ_CONTACTS, android.Manifest.permission.READ_CALL_LOG)
+            .any { ctx.checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
+        value = if (phoneApp == null || !allowed) emptyList()
+            else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { phoneFavourites(ctx) }
+    }
     out += Area(Icons.Rounded.Chat, stringResource(R.string.idmate_tab_messages), inner == Inner.MESSAGES,
         half = phoneApp?.let { p -> Area(Icons.Rounded.Call, stringResource(R.string.idmate_tab_phone), shown == p.id) { show(null); open(p) } },
-        people = people.map { (name, number) -> name to { net.prototux.aare.car.Calls.place(ctx, number) } }) { show(Inner.MESSAGES) }
+        people = people.map { (name, number) -> name to { actions.placeCall(number) } }) { show(Inner.MESSAGES) }
     // Kino (18.11.2026: "dass ich die YouTube-App dann quasi einfasse in das Mate-System"): the phone apps allowed onto the
     // car screen that are no map apps - shown only while the car stands parked for sure (ParkedGate, CarRuntime)
     val pm = LocalContext.current.packageManager
@@ -880,19 +863,16 @@ private fun areas(
 private fun Controls(
     state: CarUiState, actions: CarActions, areas: List<Area>, overview: Boolean, switcher: Boolean, modifier: Modifier,
     mediaFront: Boolean, title: String?, playing: Boolean?, toggleSplit: () -> Unit, showPlaying: () -> Unit, call: (() -> Unit)?,
-    naviFront: Boolean = false, guiding: Boolean = false, toggle: () -> Unit,
+    naviFront: Boolean = false, toggle: () -> Unit,
 ) {
     val current = if (overview) null else areas.firstOrNull { it.selected }
     // The one microphone (O103): what it listens for follows the area in front - a destination for the navigation
     // app on screen, a music wish in Mate Musik; elsewhere, and on a long press, the phone's assistant.
     val voice: @Composable () -> Unit = {
         val ctx = LocalContext.current
-        val nv = net.prototux.aare.speech.NaviVoice.phase
-        val mv = net.prototux.aare.speech.MusicVoice.phase
         val va = net.prototux.aare.speech.VoiceAssistant.phase
-        val thinking = nv == net.prototux.aare.speech.NaviVoice.Phase.THINK || mv == net.prototux.aare.speech.MusicVoice.Phase.THINK ||
-            va == net.prototux.aare.speech.VoiceAssistant.Phase.THINK
-        val on = state.listening || thinking || nv == net.prototux.aare.speech.NaviVoice.Phase.LISTEN || mv == net.prototux.aare.speech.MusicVoice.Phase.LISTEN ||
+        val thinking = va == net.prototux.aare.speech.VoiceAssistant.Phase.THINK
+        val on = state.listening || thinking ||
             va == net.prototux.aare.speech.VoiceAssistant.Phase.LISTEN || va == net.prototux.aare.speech.VoiceAssistant.Phase.ASK
         val musicFront = mediaFront && net.prototux.aare.media.MediaControls.voice
         // the face stays 40 dp; it is hit over the bar's whole height and 56 dp wide (18.11.2026: 8 mm were too small)
@@ -1055,7 +1035,7 @@ private fun Controls(
                 } else phoneTurn?.let { g ->
                     g.arrow?.let { a -> androidx.compose.foundation.Image(remember(a) { a.asImageBitmap() }, null, Modifier.size(24.dp),
                         colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Teal)) }
-                    Text(g.distance?.let { d -> d.display + " " + d.unit.short } ?: g.primary.take(24),
+                    Text(g.distance?.let { d -> d.shown + " " + d.unit.short } ?: g.primary.take(24),
                         color = Color.White, fontSize = Mate.body, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
             }
@@ -1085,12 +1065,12 @@ private fun Controls(
     if (!(mediaFront && mc.playerShown)) parts += media
     // While a route is driven the car shows the time and the map the arrival: no clock, no message sign, no
     // reception and battery here (O154). What listens or watches stays - that is never hidden.
-    if (!guiding) {
+    if (!naviFront) {
         parts += gap
         parts += { Time() }
     }
     // Messages wait unread in the background: a teal sign beside the phone's status; a tap opens them.
-    if (state.unseen > 0 && !guiding) {
+    if (state.unseen > 0 && !naviFront) {
         val messages = areas.firstOrNull { it.icon == Icons.Rounded.Chat }
         parts += gap
         parts += {
@@ -1103,8 +1083,8 @@ private fun Controls(
     }
     parts += gap
     // beside reception and battery: what is listening or watching right now
-    parts += { InUseDots(gapBefore = false) }
-    if (!guiding) parts += { PhoneStatusIcons(offline = Mate.warn) }
+    parts += { InUseDots() }
+    if (!naviFront) parts += { PhoneStatusIcons(offline = Mate.warn) }
     // a film in front (Kino, 18.11.2026: "Ich hätte dann unten links eigentlich nur noch den Mikrofonknopf und das
     // Mate-Bedienfeld ohne die ganzen Zusatzinfos. Alles andere wäre aus"): the microphone and the area button, nothing else
     val cinemaFront = (state.screen as? CarScreen.App)?.let { sc -> state.app(sc.appId)?.kind == CarAppKind.STANDALONE } == true
@@ -1357,7 +1337,9 @@ private fun Time() {
             delay(1000L * (60 - now.second))
         }
     }
-    Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), color = Color.White, fontSize = Mate.body, fontWeight = FontWeight.Medium)
+    // the one rule for clock times (ui/Clock): 24 hours unless the device is set to 12
+    val pattern = if (net.prototux.aare.ui.Clock.h24()) "HH:mm" else "h:mm"
+    Text(now.format(DateTimeFormatter.ofPattern(pattern, java.util.Locale.getDefault())), color = Color.White, fontSize = Mate.body, fontWeight = FontWeight.Medium)
 }
 
 /** The colour of a tile: the app icon's own colour, darkened so that white text stays readable. */
@@ -1595,72 +1577,6 @@ private fun Partners(state: CarUiState) {
 }
 
 /**
- * Navigation, as a mock-up: a drawn map with a route from A to B, the next manoeuvre and the arrival
- * strip. Nothing here is real - it is there to try what the screen shows together and how it handles,
- * until a navigation app takes this area.
- */
-@Composable
-private fun NavigationMockup() {
-    Box(Modifier.fillMaxSize().background(Mate.mapLand)) {
-        androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
-            val w = size.width; val h = size.height
-            fun p(x: Float, y: Float) = androidx.compose.ui.geometry.Offset(x * w, y * h)
-            // land use and water
-            drawRect(Mate.mapGreen, topLeft = p(0.55f, 0f), size = androidx.compose.ui.geometry.Size(w * 0.45f, h * 0.38f))
-            drawRect(Mate.mapGreen, topLeft = p(0f, 0.62f), size = androidx.compose.ui.geometry.Size(w * 0.3f, h * 0.38f))
-            val river = androidx.compose.ui.graphics.Path().apply {
-                moveTo(0f, h * 0.30f); cubicTo(w * 0.25f, h * 0.20f, w * 0.45f, h * 0.55f, w * 0.70f, h * 0.48f)
-                cubicTo(w * 0.85f, h * 0.44f, w * 0.92f, h * 0.60f, w, h * 0.58f)
-            }
-            drawPath(river, Mate.mapWater, style = androidx.compose.ui.graphics.drawscope.Stroke(width = h * 0.045f))
-            // streets
-            val street = Mate.mapStreet
-            for (i in 1..7) drawLine(street, p(i / 8f, 0f), p(i / 8f - 0.06f, 1f), strokeWidth = 3f)
-            for (i in 1..5) drawLine(street, p(0f, i / 6f), p(1f, i / 6f + 0.05f), strokeWidth = 3f)
-            drawLine(Mate.mapStreetMain, p(0f, 0.86f), p(1f, 0.12f), strokeWidth = 9f)
-            // the route from A to B
-            val route = androidx.compose.ui.graphics.Path().apply {
-                moveTo(w * 0.16f, h * 0.80f); lineTo(w * 0.30f, h * 0.66f); lineTo(w * 0.44f, h * 0.67f)
-                lineTo(w * 0.58f, h * 0.46f); lineTo(w * 0.72f, h * 0.36f); lineTo(w * 0.84f, h * 0.22f)
-            }
-            drawPath(route, Mate.routeEdge, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 22f,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-            drawPath(route, Mate.route, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 14f,
-                cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
-            drawCircle(Color.White, 15f, p(0.16f, 0.80f)); drawCircle(Mate.route, 9f, p(0.16f, 0.80f))
-            drawCircle(Color.White, 17f, p(0.84f, 0.22f)); drawCircle(Mate.danger, 11f, p(0.84f, 0.22f))
-            // the car, a third along the route
-            drawCircle(Mate.routeHalo, 34f, p(0.30f, 0.66f)); drawCircle(Color.White, 15f, p(0.30f, 0.66f)); drawCircle(Teal, 10f, p(0.30f, 0.66f))
-        }
-        // next manoeuvre
-        Row(
-            Modifier.align(Alignment.TopStart).padding(16.dp).clip(RoundedCornerShape(18.dp)).background(Mate.card).padding(horizontal = 18.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Icon(Icons.Rounded.Navigation, null, tint = Teal, modifier = Modifier.size(40.dp))
-            Column {
-                Text("400 m", color = Color.White, fontSize = Mate.display, fontWeight = FontWeight.Bold)
-                Text(stringResource(R.string.idmate_mock_turn), color = TextDim, fontSize = Mate.body)
-            }
-        }
-        // arrival strip, clear of the controls' corner
-        Row(
-            Modifier.align(Alignment.BottomEnd).padding(16.dp).clip(RoundedCornerShape(18.dp)).background(Mate.card).padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp),
-        ) {
-            listOf("14:52" to R.string.idmate_mock_arrival, "38 min" to R.string.idmate_mock_time, "41 km" to R.string.idmate_mock_distance, "62 %" to R.string.idmate_mock_soc).forEach { (v, l) ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(v, color = Color.White, fontSize = Mate.title, fontWeight = FontWeight.SemiBold)
-                    Text(stringResource(l), color = TextDim, fontSize = Mate.caption)
-                }
-            }
-        }
-        Text(stringResource(R.string.idmate_mock_note), color = Mate.textFaint, fontSize = Mate.caption,
-            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp).clip(RoundedCornerShape(10.dp)).background(Mate.scrimNote).padding(horizontal = 10.dp, vertical = 4.dp))
-    }
-}
-
-/**
  * An app in the hand: the two halves of the screen to lay it into (the one under the finger lit), and the app's card
  * under the finger - lifted with a small grow when animations are on. An app that cannot go into a split (neither a
  * navigation nor a music app) says so.
@@ -1772,7 +1688,7 @@ private fun DictateCard(modifier: Modifier, title: String, send: (String) -> Uni
     Column(modifier.widthIn(max = 760.dp).clip(RoundedCornerShape(18.dp)).background(Mate.cardSolid)
         .pointerInput(Unit) { detectTapGestures { } }.padding(16.dp)) {
         Text(title, color = TextDim, fontSize = Mate.body)
-        if (text.isNotBlank()) Text("„$text“", color = Color.White, fontSize = Mate.title, maxLines = 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+        if (text.isNotBlank()) Text(stringResource(R.string.quoted, text), color = Color.White, fontSize = Mate.title, maxLines = 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
         val now = when {
             sending -> stringResource(R.string.fault_note_sending)
             listening -> stringResource(if (waiting > 0) R.string.fault_note_listening_working else R.string.fault_note_listening)
@@ -1905,7 +1821,6 @@ private fun SplitBar(modifier: Modifier, swap: () -> Unit, grab: () -> Unit, mov
     }
 }
 
-/** How long the playback buttons stay in the controls after playback has stopped. */
 
 private val CallGreen get() = Mate.call
 private val CallRed get() = Mate.callEnd
@@ -1956,7 +1871,7 @@ private fun CallButton(icon: ImageVector, label: String, color: Color, onClick: 
  * Nothing is drawn while neither is.
  */
 @Composable
-private fun InUseDots(gapBefore: Boolean) {
+private fun InUseDots() {
     val context = LocalContext.current
     var mic by remember { mutableStateOf(false) }
     var cameras by remember { mutableStateOf(setOf<String>()) }
@@ -1984,7 +1899,7 @@ private fun InUseDots(gapBefore: Boolean) {
     // Mate's own listening shows at once, without waiting for the system's recording report
     val micOn = mic || net.prototux.aare.speech.Dictation.listening
     if (!micOn && cameras.isEmpty()) return
-    Row(Modifier.padding(start = if (gapBefore) 12.dp else 0.dp, end = if (gapBefore) 0.dp else 12.dp),
+    Row(Modifier.padding(end = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
         // an orange microphone while anything records (Mate's own listening too), a green camera while one is in use (O108)
         if (micOn) Icon(Icons.Rounded.Mic, stringResource(R.string.idmate_mic_in_use), tint = Mate.mic, modifier = Modifier.size(20.dp))

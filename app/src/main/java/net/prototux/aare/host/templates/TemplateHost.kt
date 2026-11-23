@@ -64,12 +64,4 @@ interface TemplateHost {
     fun mapFling(vx: Float, vy: Float)
     fun mapScale(focusX: Float, focusY: Float, factor: Float)
     fun mapClick(x: Float, y: Float)
-    /**
-     * A long press on the map (no SurfaceCallback has one; used by Mate's own dashboard for "Navigieren"). True when
-     * the host took it: the finger then only lifts. False (every other app): the gesture goes on as a tap or a drag.
-     */
-    fun mapLongPress(x: Float, y: Float): Boolean = false
 }
-
-/** Entry point implemented by the renderer: draws any supported template. */
-typealias TemplateRenderer = @Composable (template: Template, host: TemplateHost, modifier: Modifier) -> Unit

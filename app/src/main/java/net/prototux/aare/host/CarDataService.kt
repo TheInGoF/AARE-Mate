@@ -207,7 +207,8 @@ class CarDataService : Service() {
                 sent = bytes
                 for (l in targets) oneWay(l, 1, "com.google.android.gms.car.ICarSensorEventListener") { it.writeInt(1); writeEvent(it, bytes) }
                 Log.i(TAG, "energy model sent: ${describe(this@CarDataService)}, ${bytes.size} bytes, sum ${java.util.zip.CRC32().apply { update(bytes) }.value.toString(16)}")
-                seen(this@CarDataService, "sent", describe(this@CarDataService))
+                // the step only: describe() is the log's English sentence; the phone app shows the car's values itself
+                seen(this@CarDataService, "sent")
             }
             main.postDelayed(this, 60_000)
         }
@@ -257,7 +258,7 @@ class CarDataService : Service() {
          */
         fun seen(c: Context, step: String, what: String = "") {
             c.getSharedPreferences("mate_ev", Context.MODE_PRIVATE).edit()
-                .putLong("at:$step", System.currentTimeMillis()).apply { if (what.isNotEmpty()) putString("what:$step", what) }.apply()
+                .putLong("at:$step", System.currentTimeMillis()).apply { if (what.isNotEmpty()) putString("what:$step", what) else remove("what:$step") }.apply()
         }
         /** The steps as (step, time, what) for the phone app; time 0 = never. */
         fun steps(c: Context): List<Triple<String, Long, String>> {
@@ -349,15 +350,15 @@ class CarDataService : Service() {
                 runCatching { f.readBytes().takeIf { it[0].toInt() == 0x42 } }.getOrNull()      // 0x42 = field 8, a message
             }
 
-        /** In words, for the log and the phone app: what Maps is told. */
+        /** In words, for the log (English, Locale.ROOT): what Maps is told. */
         fun describe(context: Context): String {
             val car = car(context) ?: return "no state of charge known"
-            val use = if (car.curve != null) "IDmate's model: ${"%.1f".format(EnergyModel.powerW(100.0, car) / 1000)} kWh/100 km at 100, " +
-                "${"%.1f".format(EnergyModel.powerW(130.0, car) / 1300)} at 130, last hours x ${"%.2f".format(car.recentFactor)}"
-            else (car.consumptionKwh100?.let { "trips ${"%.1f".format(it)} kWh/100 km, " } ?: "no trips known, ") +
-                "factor ${"%.2f".format(EnergyModel.factor(car))}"
-            return "battery ${"%.1f".format(car.capacityWh / 1000.0)} kWh at ${"%.0f".format(car.socPercent)} %, " +
-                "${"%.0f".format(car.outsideCelsius)} °C outside, $use, " +
+            val use = if (car.curve != null) "IDmate's model: ${"%.1f".format(java.util.Locale.ROOT, EnergyModel.powerW(100.0, car) / 1000)} kWh/100 km at 100, " +
+                "${"%.1f".format(java.util.Locale.ROOT, EnergyModel.powerW(130.0, car) / 1300)} at 130, last hours x ${"%.2f".format(java.util.Locale.ROOT, car.recentFactor)}"
+            else (car.consumptionKwh100?.let { "trips ${"%.1f".format(java.util.Locale.ROOT, it)} kWh/100 km, " } ?: "no trips known, ") +
+                "factor ${"%.2f".format(java.util.Locale.ROOT, EnergyModel.factor(car))}"
+            return "battery ${"%.1f".format(java.util.Locale.ROOT, car.capacityWh / 1000.0)} kWh at ${"%.0f".format(java.util.Locale.ROOT, car.socPercent)} %, " +
+                "${"%.0f".format(java.util.Locale.ROOT, car.outsideCelsius)} °C outside, $use, " +
                 (if (knownChargeTimes(context) != null) "charging times of a known car (file)"
                 else "10 to 80 % in ${EnergyModel.chargeTimes(150_000, car).let { t -> Math.round(EnergyModel.stopSeconds(t, car, 10.0, 80.0) / 60.0) }} min at 150 kW")
         }

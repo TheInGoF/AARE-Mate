@@ -142,7 +142,7 @@ internal fun MapScaffold(
         fun names(st: ActionStrip?) = st?.actions?.joinToString(" | ") { a ->
             (a.title?.toString() ?: "") + "(" + Action.typeToString(a.type) + (if (a.icon != null) ",Symbol" else "") + ")"
         } ?: "-"
-        android.util.Log.i("MateMap", "Leiste oben: ${names(actionStrip)} · Kartenleiste: ${names(mapActionStrip)}")
+        android.util.Log.i("MateMap", "top strip: ${names(actionStrip)} · map strip: ${names(mapActionStrip)}")
     }
     // the gesture detector outlives recompositions: read the current template through this
     val onMapDrag by rememberUpdatedState { if (panOffered) setPan(true) }
@@ -236,7 +236,7 @@ private fun ReportAreas(registry: ObstructionRegistry, panState: androidx.compos
                 )
                 if (area != lastVisible) {
                     lastVisible = area
-                    android.util.Log.i("MateMap", "frei ${area.joinToString(",")} von ${map.width.roundToInt()}x${map.height.roundToInt()}, verdeckt: " +
+                    android.util.Log.i("MateMap", "free ${area.joinToString(",")} of ${map.width.roundToInt()}x${map.height.roundToInt()}, covered: " +
                         rects.joinToString(" ") { "[${it.left.roundToInt()},${it.top.roundToInt()},${it.right.roundToInt()},${it.bottom.roundToInt()}]" })
                     safeCall("setVisibleArea") { host.setVisibleArea(area[0], area[1], area[2], area[3]) }
                 }
@@ -265,26 +265,11 @@ private fun Modifier.mapGestures(host: TemplateHost, canPan: () -> Boolean, onDr
         tracker.addPosition(down.uptimeMillis, down.position)
         var dragging = false
         var multiTouch = false
-        var held = false
-        var holdAsked = false
         var slop = Offset.Zero
-        val holdAt = down.uptimeMillis + viewConfiguration.longPressTimeoutMillis
         while (true) {
-            // a finger that rests without moving is a long press (18.11.2026: "Langer Klick. Navigieren-Popup")
-            val wait = holdAt - android.os.SystemClock.uptimeMillis()
-            val resting = !dragging && !held && !holdAsked
-            val event = if (resting && wait > 0) withTimeoutOrNull(wait) { awaitPointerEvent() } else if (resting) null else awaitPointerEvent()
-            if (event == null) {
-                // only where the host takes it (Mate's dashboard map) is the long press the gesture. In every other app
-                // the finger goes on as before: lifted it is a tap, moved it is a drag - a tap held a little longer
-                // or a drag begun after a rest was lost there
-                holdAsked = true
-                held = host.mapLongPress(down.position.x, down.position.y)
-                continue
-            }
+            val event = awaitPointerEvent()
             val pressed = event.changes.filter { it.pressed }
             if (pressed.isEmpty()) break
-            if (held) { event.changes.forEach { it.consume() }; continue }   // after a long press the finger only lifts
             if (pressed.size >= 2) {
                 if (!dragging) onDragStart()
                 multiTouch = true
@@ -311,9 +296,7 @@ private fun Modifier.mapGestures(host: TemplateHost, canPan: () -> Boolean, onDr
             }
             event.changes.forEach { it.consume() }
         }
-        if (held) {
-            // the long press was the gesture: no tap after it
-        } else if (!dragging) {
+        if (!dragging) {
             host.mapClick(down.position.x, down.position.y)
         } else if (!multiTouch) {
             val v = tracker.calculateVelocity()
@@ -454,7 +437,7 @@ private fun MapListCard(
                         .clickable { safeCall("onContentRefreshRequested") { d.sendContentRefreshRequested(host.done) } },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Rounded.Refresh, "Refresh", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(32.dp))
+                    Icon(Icons.Rounded.Refresh, stringResource(R.string.refresh), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(32.dp))
                 }
             }
         }

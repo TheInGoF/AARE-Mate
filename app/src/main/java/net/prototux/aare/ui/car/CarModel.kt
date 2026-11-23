@@ -60,15 +60,6 @@ class CarNotice(
     val reply: ((String) -> Boolean)? = null,
 )
 
-/** Head-unit geometry: the drawable area inside the video margins, and the rail side. */
-data class CarGeometry(
-    val widthPx: Int,
-    val heightPx: Int,
-    val dpi: Int,
-    /** Rail on the left (left-hand drive) or right. */
-    val railStart: Boolean = true,
-)
-
 /**
  * All state the car UI reads. The session and hosts write it from the main thread.
  */
@@ -165,4 +156,6 @@ interface CarActions {
     fun declineWaiting() {}
     /** Navigate to a place (an address or a name) in the car's navigation app. */
     fun navigateTo(place: String)
+    /** Call [number] (a favourite of the phone tile); says so on the screen when Mate may not place calls. */
+    fun placeCall(number: String) {}
 }

@@ -75,7 +75,7 @@ object CarTools {
                 JSONObject().put("ok", true).put("app", app.label)
             }
         }
-        "debug_ui" -> JSONObject().put("ok", true).put("on_dashboard", net.prototux.aare.ui.car.ShellDebug.onDashboard)
+        "debug_ui" -> if (!net.prototux.aare.BuildConfig.TEST_HOOKS) JSONObject().put("ok", false) else JSONObject().put("ok", true).put("on_dashboard", net.prototux.aare.ui.car.ShellDebug.onDashboard)
             .put("title_strip", net.prototux.aare.ui.car.ShellDebug.title ?: JSONObject.NULL)
         // debug builds: what a QR code's text gives for the map server page (O173), without the camera
         "debug_map_qr" -> if (!net.prototux.aare.BuildConfig.DEBUG) JSONObject().put("ok", false) else
@@ -210,7 +210,8 @@ object CarTools {
             net.prototux.aare.ui.car.navi.NaviDebug.offline = args.optBoolean("on"); JSONObject().put("ok", true).put("offline", net.prototux.aare.ui.car.navi.NaviDebug.offline) }
         "debug_navi_miss_turn" -> if (!net.prototux.aare.BuildConfig.TEST_HOOKS) JSONObject().put("ok", false) else
             net.prototux.aare.ui.car.navi.NaviDebug.missTurn.let { f -> net.prototux.aare.ui.car.navi.NaviDebug.offlineAfterMiss = args.optBoolean("offline"); f?.invoke(); JSONObject().put("ok", f != null) }
-        "debug_driving" -> { runtime.ui.drivingRestricted = args.optBoolean("on"); net.prototux.aare.audio.CarEq.carDriving = args.optBoolean("on"); JSONObject().put("ok", true).put("driving", runtime.ui.drivingRestricted) }
+        // test builds only: in a release the chosen assistant app could lift the driving restrictions with it
+        "debug_driving" -> if (!net.prototux.aare.BuildConfig.TEST_HOOKS) JSONObject().put("ok", false) else { runtime.ui.drivingRestricted = args.optBoolean("on"); net.prototux.aare.audio.CarEq.carDriving = args.optBoolean("on"); JSONObject().put("ok", true).put("driving", runtime.ui.drivingRestricted) }
         // debug builds: as if the car switched its lights (counts only while the theme follows the car)
         "debug_dictate_file" -> if (!net.prototux.aare.BuildConfig.DEBUG) JSONObject().put("ok", false) else runCatching {
             val f = java.io.File(runtime.context.cacheDir, args.optString("file", "asr-test-2.wav"))

@@ -1,6 +1,5 @@
 package net.prototux.aare.ui.car
 
-import android.text.format.DateFormat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,7 +30,6 @@ import net.prototux.aare.host.templates.CarFormat
  */
 @Composable
 internal fun ClusterTurnCard(ui: CarUiState, runtime: CarRuntime, modifier: Modifier) {
-    val context = LocalContext.current
     Column(modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         val trip = ui.trip
         val phone = ui.phoneGuidance

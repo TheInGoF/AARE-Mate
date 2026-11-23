@@ -41,8 +41,6 @@ internal object SafeParcel {
         p.writeInt(value)
     }
 
-    fun booleanField(p: Parcel, id: Int, value: Boolean) = intField(p, id, if (value) 1 else 0)
-
     fun stringField(p: Parcel, id: Int, value: String?) = sizedField(p, id) { p.writeString(value) }
 
     /** A long is an inline 8-byte value. */

@@ -7,6 +7,8 @@ class AareApp : Application() {
         super.onCreate()
         instance = this
         DiagLog.init(this)
+        // Mate's colours are read by screens that do not pass IdmateShell (the Android Auto and CarPlay styles)
+        net.prototux.aare.ui.car.Mate.init(this)
         net.prototux.aare.audio.AudioTrials.load(this)
         // which Mate runs, once per start (System L-075: bugs reported against an older version stay recognisable)
         if (android.os.Build.VERSION.SDK_INT < 28 || getProcessName() == packageName) DiagLog.add("Mate started: ${versionLine()}")

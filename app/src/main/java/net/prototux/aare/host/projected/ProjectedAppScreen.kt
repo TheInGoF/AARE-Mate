@@ -7,18 +7,18 @@ import android.view.TextureView
 import android.view.View
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
- * Shows a projected app on the car screen. A [SurfaceView] provides the render target; its surface
- * is handed to a [ProjectedHost], which binds the app and asks it to draw there. Touch on the view
- * is forwarded to the app in the surface's own pixel space (the SurfaceView fills this slot, so view
- * coordinates already match the projected display's coordinates).
+ * Shows a projected app on the car screen. A [TextureView] provides the render target; a surface on
+ * its texture is handed to a [ProjectedHost], which binds the app and asks it to draw there. Touch on
+ * the view is forwarded to the app in the surface's own pixel space (the TextureView fills this slot,
+ * so view coordinates already match the projected display's coordinates).
  *
- * The host lives for as long as this composable is on screen: it starts when the surface is created
- * and stops when the surface is destroyed or the composable leaves.
+ * The host starts when the texture is available. When the view leaves the screen (another area in
+ * front) the host is paused and parked with its texture in [ProjectedKeep], and resumed when the app
+ * comes back; without a picture yet it is stopped and its surface released.
  */
 @Composable
 fun ProjectedAppScreen(
@@ -69,6 +69,9 @@ fun ProjectedAppScreen(
                         surface = Surface(st)
                         size = w to h
                         Log.i("ProjectedHost", "surface ${w}x$h")
+                        // the same app kept at another size (the view was made anew for a new density): let go before
+                        // this one binds - stopped later it would stop the app's navigation under the running host
+                        ProjectedKeep.releaseService(app.service, key, "started afresh at another size")
                         host = hostFactory(app).also { it.insetBottom = insetPx; it.start(surface!!, w, h, densityDpi) }
                     }
                     // 18.11.2026 ("Was passiert, wenn man von 2/3 auf 3/4 wechselt oder auf Vollbild? Das müsste man ausprobieren,
@@ -120,9 +123,6 @@ fun ProjectedAppScreen(
             }
         },
     )
-
-    // Nothing to clean up here directly; the SurfaceHolder callback owns the host's lifetime.
-    DisposableEffect(app.service) { onDispose { } }
 }
 
 /**
@@ -169,6 +169,12 @@ internal object ProjectedKeep {
         kept = null
         handler.removeCallbacks(expire)
         return k
+    }
+
+    /** Lets go of a kept host of [service] that is not kept under [except]. */
+    fun releaseService(service: android.content.ComponentName, except: String, why: String) {
+        val k = kept ?: return
+        if (k.key != except && k.key.startsWith(service.flattenToString() + "@")) releaseAll(why)
     }
 
     fun releaseAll(why: String) {

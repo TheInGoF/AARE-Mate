@@ -99,7 +99,7 @@ object AndroidAutoApps {
             val cats = buildList { service?.filter?.categoriesIterator()?.forEach { add(it.substringAfterLast('.')) } }
             lines += "apps: not listed - ${app.loadLabel(pm)} (${app.packageName}), declares ${uses.joinToString("+").ifEmpty { "nothing" }}" +
                 (if (service != null) ", car service ${cats.joinToString("+").ifEmpty { "without category" }}" else "") +
-                ": " + reason(context, app.packageName, uses)
+                ": " + reason(context, app.packageName, uses, log = true)
         }
         HostRejections.refused(context).forEach { pkg ->
             val name = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
@@ -131,9 +131,12 @@ object AndroidAutoApps {
      * dem Tablet installiert sind, werden in Mate nicht angezeigt"): for an app with a car screen of templates its car
      * service is looked at closely - switched off, not open to other apps, or behind a permission.
      */
-    private fun reason(context: Context, pkg: String, uses: Set<String>): String {
+    private fun reason(context: Context, pkg: String, uses: Set<String>, log: Boolean = false): String {
         val pm = context.packageManager
-        val r = context.resources
+        // the log is English whatever the device's language (a change of language wrote the whole report anew);
+        // the phone app's page stays in the device's language
+        val r = if (!log) context.resources else context.createConfigurationContext(android.content.res.Configuration(context.resources.configuration)
+            .apply { setLocale(java.util.Locale.ENGLISH) }).resources
         if ("template" in uses) {
             @Suppress("DEPRECATION")
             val any = pm.queryIntentServices(Intent(CarAppInfo.SERVICE_ACTION).setPackage(pkg),

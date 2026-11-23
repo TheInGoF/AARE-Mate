@@ -14,7 +14,6 @@ data class CarAppInfo(
     val label: String,
     val icon: Bitmap?,
     val categories: Set<String>,
-    val minApiLevel: Int,
 ) {
     val packageName: String get() = service.packageName
     val isNavigation: Boolean get() = CATEGORY_NAVIGATION in categories
@@ -22,11 +21,7 @@ data class CarAppInfo(
     companion object {
         const val SERVICE_ACTION = "androidx.car.app.CarAppService"
         const val CATEGORY_NAVIGATION = "androidx.car.app.category.NAVIGATION"
-        const val CATEGORY_POI = "androidx.car.app.category.POI"
-        const val CATEGORY_IOT = "androidx.car.app.category.IOT"
-        const val CATEGORY_MESSAGING = "androidx.car.app.category.MESSAGING"
         const val CATEGORY_CLUSTER = "androidx.car.app.category.FEATURE_CLUSTER"
-        const val MIN_API_KEY = "androidx.car.app.minCarApiLevel"
     }
 }
 
@@ -36,7 +31,7 @@ object CarAppCatalog {
     fun query(context: Context, iconSizePx: Int = 128): List<CarAppInfo> {
         val pm = context.packageManager
         val intent = Intent(CarAppInfo.SERVICE_ACTION)
-        val flags = PackageManager.GET_META_DATA or PackageManager.GET_RESOLVED_FILTER
+        val flags = PackageManager.GET_RESOLVED_FILTER
         val found = if (Build.VERSION.SDK_INT >= 33) pm.queryIntentServices(intent, PackageManager.ResolveInfoFlags.of(flags.toLong()))
             else @Suppress("DEPRECATION") pm.queryIntentServices(intent, flags)
         return found.mapNotNull { ri ->
@@ -47,8 +42,6 @@ object CarAppCatalog {
                 ri.filter?.categoriesIterator()?.forEach { add(it) }
             }
             val appInfo = si.applicationInfo
-            val minApi = appInfo.metaData?.getInt(CarAppInfo.MIN_API_KEY, 0)?.takeIf { it > 0 }
-                ?: si.metaData?.getInt(CarAppInfo.MIN_API_KEY, 0) ?: 0
             CarAppInfo(
                 service = ComponentName(si.packageName, si.name),
                 // the service's own name, unless it is an internal word in capitals (YouTube Music's settings service
@@ -57,7 +50,6 @@ object CarAppCatalog {
                     ?: appInfo.loadLabel(pm).toString(),
                 icon = runCatching { si.loadIcon(pm).toBitmap(iconSizePx, iconSizePx) }.getOrNull(),
                 categories = categories,
-                minApiLevel = minApi,
             )
         }.distinctBy { it.service }
     }

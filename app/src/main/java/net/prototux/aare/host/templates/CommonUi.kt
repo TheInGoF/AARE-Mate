@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -175,6 +174,3 @@ internal fun CarCard(modifier: Modifier = Modifier, content: @Composable BoxScop
     val r = LocalCarDimens.current.cardRadius
     Box(modifier.clip(RoundedCornerShape(r)).background(MaterialTheme.colorScheme.surfaceContainer), content = content)
 }
-
-/** Horizontal padding of full-screen content, aligned with the header title. */
-internal val ContentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp)

@@ -19,12 +19,12 @@ import android.view.Surface
  *
  * The host binds the app's exported projection service, hands it a [Surface] to draw into, and
  * drives the projection lifecycle over Binder. The app creates its own window on the supplied
- * surface, so its pixels arrive wherever the surface is shown (a `SurfaceView` on the car screen).
+ * surface, so its pixels arrive wherever the surface is shown (a `TextureView` on the car screen).
  *
  * The app enforces a `CAPTURE_VIDEO_OUTPUT` signature-permission check on the binding host inside
- * its own process, so on a stock phone `onSetup` is rejected. Getting past it needs root (the
- * AARE Xposed module grants that one check to AARE's uid); the protocol here is identical either
- * way. See docs/maps-projection.md.
+ * its own process, so on a stock phone `onSetup` is rejected. Getting past it needs a system that
+ * lets Mate through by its package name (the ROM's car host list, `panel_auto_hosts`); the protocol
+ * here is identical either way. See docs/maps-projection.md.
  */
 class ProjectedHost(
     context: Context,
@@ -404,9 +404,9 @@ class ProjectedHost(
     private fun error(message: String) {
         Log.w(TAG, message)
         net.prototux.aare.DiagLog.error("maps: $message")
-        // Maps checks the host inside its own process: only a host the system lets through (a ROM's car host list or
-        // the Xposed module, both by package name) passes - since 2.1.1 Mate is app.idmate.mate, no longer net.prototux.aare
-        if ("CAPTURE_VIDEO_OUTPUT" in message || "SecurityException" in message || "ermission" in message)
+        // Maps checks the host inside its own process: only a host the system lets through (a ROM's car host list, by
+        // package name) passes - since 2.1.1 Mate is app.idmate.mate, no longer net.prototux.aare
+        if (isRefusal(message))
             net.prototux.aare.DiagLog.error("maps: refused Mate (${context.packageName}) as its host - the system lets another package through, not this one")
         listener.onError(message)
     }
@@ -416,6 +416,10 @@ class ProjectedHost(
         private const val FOCUS_SECOND_FLAG = 0
         /** Steps that come with every tap, key or change of light: logcat only. */
         private val QUIET = listOf("onMotionEvent", "onKeyEvent", "onConfigurationChanged", "onInputFocusChange", "car connected")
+
+        /** Whether an error of the host says the app refused Mate as its host (the permission check inside Maps). */
+        fun isRefusal(message: String): Boolean =
+            "CAPTURE_VIDEO_OUTPUT" in message || "SecurityException" in message || "ermission" in message
 
         /** The host whose app is on the car screen, and a task waiting for the app to come up. */
         @Volatile var live: ProjectedHost? = null

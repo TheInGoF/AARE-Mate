@@ -93,7 +93,6 @@ class CarRuntime(
     /** Hooks the projection session sets: navigation status to the cluster, microphone, etc. */
     var onTrip: ((CarAppConnection, Trip?) -> Unit)? = null
     var microphone: ((sink: (ByteArray, Int, Int) -> Unit, onStopped: () -> Unit) -> MicHandle?)? = null
-    var onAssistant: (() -> Unit)? = null
     /** The screen-capture consent (car audio), which also lets the phone screen be mirrored. */
     var projection: () -> MediaProjection? = { null }
     /** Guidance from a navigation app on the phone (Google Maps, Waze…) changed, or ended (null). */
@@ -110,7 +109,6 @@ class CarRuntime(
 
     // ------------------------------------------------------------------ HostEnvironment
 
-    override val driving: Boolean get() = ui.drivingRestricted
     override val night: Boolean get() = ui.night
     override var screenWidthDp by mutableIntStateOf(1280)
     override var screenHeightDp by mutableIntStateOf(720)
@@ -175,7 +173,7 @@ class CarRuntime(
         val own = intent.component?.takeIf { it.packageName == from.info.packageName }
         // a destination for the driver's navigation app: Mate Navi takes it itself when it is chosen or on the screen
         if (isNavigate && own == null && mateNaviFirst()) {
-            val r = net.prototux.aare.ui.car.navi.NaviRequests.fromUri(intent.data?.toString())
+            val r = runCatching { net.prototux.aare.ui.car.navi.NaviRequests.fromUri(intent.data?.toString()) }.getOrNull()
             if (r != null) { toMateNavi(r); return }
         }
         val target = when {
@@ -354,7 +352,8 @@ class CarRuntime(
             "size", "app_trim", "eq_on", "eq_gains" -> main.post { applyScreenSettings() }
             "wallpaper" -> main.post { ui.wallpaper = ""; applyScreenSettings() }
             // Apps shown or hidden from the phone: update the car's app list now.
-            "hidden_apps", "phone_screen", "assistant_pkg", "app_order" -> main.post { refreshApps() }
+            "hidden_apps", "phone_screen", "assistant_pkg", "app_order",
+            "standalone_apps", "standalone_app_pkgs", "browser", "car_data_app" -> main.post { refreshApps() }
         }
     }
 
@@ -366,15 +365,19 @@ class CarRuntime(
 
     fun start() {
         running += this
-        // the version again with each car connection, so it stands near every trip in the log (System L-075)
-        net.prototux.aare.DiagLog.add("car connected: Mate ${net.prototux.aare.AareApp.versionLine()}")
-        // IDmate's values (the level for the navigation's arrival) fetched the whole connection long, not only while the
-        // dashboard is on the screen (19.11.2026)
-        net.prototux.aare.dash.DashView.carStart(context)
-        // the trip log and the charge log from the car's gear, GPS and the stick (System L-076/L-077)
-        net.prototux.aare.trips.TripWatch.start(context)
-        // Shizuku started by Mate itself when it is not running (System L-063)
-        net.prototux.aare.adb.SelfAdb.ensureShizuku(context, "car connected")
+        // what belongs to the car as a whole, not to a preview on the phone: those services count no runtimes, and
+        // closing the preview during a drive would end the trip, the dashboard's data and the kept app
+        if (primary) {
+            // the version again with each car connection, so it stands near every trip in the log (System L-075)
+            net.prototux.aare.DiagLog.add("car connected: Mate ${net.prototux.aare.AareApp.versionLine()}")
+            // IDmate's values (the level for the navigation's arrival) fetched the whole connection long, not only while the
+            // dashboard is on the screen (19.11.2026)
+            net.prototux.aare.dash.DashView.carStart(context)
+            // the trip log and the charge log from the car's gear, GPS and the stick (System L-076/L-077)
+            net.prototux.aare.trips.TripWatch.start(context)
+            // Shizuku started by Mate itself when it is not running (System L-063)
+            net.prototux.aare.adb.SelfAdb.ensureShizuku(context, "car connected")
+        }
         // Messages, directions and now playing all need the listener bound: make sure it is.
         CarNotificationListener.rebind(context)
         applyScreenSettings()
@@ -396,6 +399,7 @@ class CarRuntime(
         scope.launch { watchDashboardInfo() }
         scope.launch { watchCharge() }
         scope.launch { watchParked() }
+        if (primary) scope.launch { watchCarValues() }
         scope.launch {
             CarNotificationListener.guidance.collect { g ->
                 // A navigation app hosted on the car screen shows its own guidance - but only while it really guides
@@ -422,10 +426,12 @@ class CarRuntime(
 
     fun stop() {
         running.remove(this)
-        // the projected app kept behind another area (I-081) ends with the car's connection
-        net.prototux.aare.host.projected.ProjectedKeep.releaseAll("the car's connection ended")
-        net.prototux.aare.trips.TripWatch.stop(context)
-        net.prototux.aare.dash.DashView.carStop(context)
+        if (primary) {
+            // the projected app kept behind another area (I-081) ends with the car's connection
+            net.prototux.aare.host.projected.ProjectedKeep.releaseAll("the car's connection ended")
+            net.prototux.aare.trips.TripWatch.stop(context)
+            net.prototux.aare.dash.DashView.carStop(context)
+        }
         runCatching { context.unregisterReceiver(packageReceiver) }
         settings.unregisterListener(settingsListener)
         connections.values.forEach { it.release() }
@@ -439,10 +445,17 @@ class CarRuntime(
     /** Rescans car apps (package manager work and icons on a background thread). */
     fun refreshApps() {
         scope.launch {
-            val (found, messaging) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                CarAppCatalog.query(context) to AndroidAutoApps.messagingApps(context)
+            val scan = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val pm = context.packageManager
+                AppScan(CarAppCatalog.query(context), AndroidAutoApps.messagingApps(context),
+                    net.prototux.aare.host.projected.ProjectedAppCatalog.query(context),
+                    settings.standaloneAppPackages.mapNotNull { pkg ->
+                        val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull() ?: return@mapNotNull null
+                        val icon = runCatching { pm.getApplicationIcon(info).toBitmap(128, 128) }.getOrNull()
+                        CarAppEntry(standaloneId(pkg), pkg, pm.getApplicationLabel(info).toString(), icon, CarAppKind.STANDALONE)
+                    })
             }
-            applyApps(found, messaging)
+            applyApps(scan)
             // I-013: which apps with Android Auto support are missing in the list and why - into the diagnosis log,
             // once and again when it changes (a new app, an app that refused Mate)
             val listed = ui.apps.map { it.packageName }
@@ -461,7 +474,13 @@ class CarRuntime(
         }
     }
 
-    private fun applyApps(found: List<CarAppInfo>, messaging: List<PhoneApp>) {
+    /** What [refreshApps] reads from the package manager off the main thread: car apps, messengers, projected and phone apps. */
+    private class AppScan(val found: List<CarAppInfo>, val messaging: List<PhoneApp>,
+        val projected: List<net.prototux.aare.host.projected.ProjectedAppInfo>, val standalone: List<CarAppEntry>)
+
+    private fun applyApps(scan: AppScan) {
+        val found = scan.found
+        val messaging = scan.messaging
         val hidden = settings.hiddenApps
         val assistantPkg = assistantPackage()
         carApps.clear()
@@ -501,7 +520,7 @@ class CarRuntime(
         }
         // Apps that draw their own car screen through Google's private projection (Google Maps): a navigation
         // app like the others. Works where the system lets this host pass the app's check (see docs/maps-projection.md).
-        val projected = net.prototux.aare.host.projected.ProjectedAppCatalog.query(context).filter { it.packageName !in hidden }
+        val projected = scan.projected.filter { it.packageName !in hidden }
         for (p in projected) entries += CarAppEntry(projectedId(p.packageName), p.packageName, p.label, p.icon, CarAppKind.PROJECTED)
         // Ordinary phone apps the user allowed onto the car screen (parked only; needs root/Shizuku).
         // why the cinema has none, in the log once per change (19.11.2026: "ich sehe auch nicht die Kino-App")
@@ -522,12 +541,10 @@ class CarRuntime(
                 if (cinemaWhy != null && cinemaText != R.string.cinema_missing_off) net.prototux.aare.DiagLog.Level.WARN else null, "CAR")
         }
         if (settings.standaloneApps && AppLauncher.available(context)) {
-            for (pkg in settings.standaloneAppPackages) {
+            for (entry in scan.standalone) {
+                val pkg = entry.packageName
                 if (pkg in hidden || projected.any { it.packageName == pkg }) continue
-                val info = runCatching { context.packageManager.getApplicationInfo(pkg, 0) }.getOrNull() ?: continue
-                val label = context.packageManager.getApplicationLabel(info).toString()
-                val icon = runCatching { context.packageManager.getApplicationIcon(info).toBitmap(128, 128) }.getOrNull()
-                entries += CarAppEntry(standaloneId(pkg), pkg, label, icon, CarAppKind.STANDALONE)
+                entries += entry
             }
         }
         if (settings.browser) {
@@ -660,6 +677,23 @@ class CarRuntime(
         notice(context.getString(R.string.cinema_title), context.getString(R.string.cinema_closed), durationMs = 6_000)
     }
 
+    /**
+     * The car's own speed, odometer and GPS for the dashboard's values, at most once a second - the whole connection
+     * long, not only while the dashboard is shown (P-155): the range area and IDmate's polling follow them.
+     */
+    private suspend fun watchCarValues() {
+        var last = 0L
+        net.prototux.aare.car.CarData.state.collect { s ->
+            val now = System.currentTimeMillis()
+            if (now - last < 1_000) return@collect
+            last = now
+            // the car's GPS (Android Auto) for the map, when it is fresh (System L-087)
+            val loc = carLocation?.takeIf { now - it.time < 10_000L }
+            net.prototux.aare.dash.DashView.carValues(context, s.speed?.value?.metersPerSecond?.times(3.6f), s.odometer?.value?.km,
+                loc?.latitude, loc?.longitude, loc?.takeIf { it.hasBearing() }?.bearing)
+        }
+    }
+
     /** The weather (every 30 minutes) and the next calendar event (every 5), for the rail and the dashboard. */
     private suspend fun watchDashboardInfo() {
         var lastWeather = 0L
@@ -667,7 +701,8 @@ class CarRuntime(
             val now = System.currentTimeMillis()
             if (!settings.showWeather) ui.weather = null
             else if (now - lastWeather > 30 * 60_000) {
-                val where = carLocation ?: DashboardInfo.phoneLocation(context)
+                // off the main thread, as in watchParked
+                val where = carLocation ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DashboardInfo.phoneLocation(context) }
                 if (where != null) {
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { DashboardInfo.weather(where) }?.let { ui.weather = it; lastWeather = now }
                 }
@@ -846,6 +881,22 @@ class CarRuntime(
         main.postDelayed({ ui.notices.remove(n) }, durationMs)
     }
 
+    /**
+     * What a projected app (Google Maps) reports: its first error to the driver as a notice, the area stays black
+     * otherwise and the reason was only in the log. Called from the host's worker thread.
+     */
+    private fun projectedListener(label: String) = object : net.prototux.aare.host.projected.ProjectedHost.Listener {
+        private var told = false
+        override fun onError(message: String) {
+            val refused = net.prototux.aare.host.projected.ProjectedHost.isRefusal(message)
+            main.post {
+                if (told) return@post
+                told = true
+                notice(label, context.getString(if (refused) R.string.projected_error_refused else R.string.projected_error, label), durationMs = 8_000)
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ actions from the car UI
 
     val actions = object : CarActions {
@@ -936,6 +987,12 @@ class CarRuntime(
         override fun navigateTo(place: String) {
             if (!this@CarRuntime.navigateTo(place)) notice(context.getString(R.string.notif_navigation_title), context.getString(R.string.notif_navigation_no_app_text))
         }
+        override fun placeCall(number: String) {
+            // Calls.place fails quietly without the right: the driver is told instead
+            if (context.checkSelfPermission(android.Manifest.permission.CALL_PHONE) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+                notice(context.getString(R.string.idmate_tab_phone), context.getString(R.string.phone_permissions_placeholder))
+            else Calls.place(context, number)
+        }
     }
 
     /** The chosen assistant's package, or the phone's default assistant. */
@@ -947,7 +1004,6 @@ class CarRuntime(
      * opens on the phone.
      */
     fun assistant() {
-        onAssistant?.invoke()
         val pkg = assistantPackage()
         if (pkg == null) {
             notice(context.getString(R.string.notif_assistant_title), context.getString(R.string.notif_assistant_choose_text))
@@ -1036,11 +1092,12 @@ class CarRuntime(
                                     CarAppKind.MESSAGING -> MessagingScreen(app, ui.drivingRestricted, this@CarRuntime, mod)
                                     CarAppKind.PHONE_SCREEN -> MirrorScreen(this@CarRuntime, ui.drivingRestricted, mod)
                                     CarAppKind.STANDALONE -> StandaloneAppScreen(this@CarRuntime, ui.drivingRestricted || !ui.parkedForFilms, app.packageName, mod)
-                                    CarAppKind.PROJECTED -> net.prototux.aare.host.projected.ProjectedAppCatalog.find(context, app.packageName)?.let { p ->
+                                    // the package manager asked once per app, not at every recomposition
+                                    CarAppKind.PROJECTED -> androidx.compose.runtime.remember(app.packageName) { net.prototux.aare.host.projected.ProjectedAppCatalog.find(context, app.packageName) }?.let { p ->
                                         // a new size starts the app afresh at that size
                                         androidx.compose.runtime.key(appDensityDpi) {
                                             net.prototux.aare.host.projected.ProjectedAppScreen(p, appDensityDpi, { info ->
-                                                net.prototux.aare.host.projected.ProjectedHost(context, info.service, object : net.prototux.aare.host.projected.ProjectedHost.Listener {})
+                                                net.prototux.aare.host.projected.ProjectedHost(context, info.service, projectedListener(p.label))
                                             }, mod)
                                         }
                                     }

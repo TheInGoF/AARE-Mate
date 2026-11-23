@@ -46,12 +46,6 @@ import net.prototux.aare.R
 import androidx.annotation.OptIn as AndroidXOptIn
 
 /**
- * Template renderer entry point, as the [TemplateRenderer] the host plugs in:
- * `renderTemplate(template, host, modifier)`.
- */
-val renderTemplate: TemplateRenderer = { template, host, modifier -> RenderTemplate(template, host, modifier) }
-
-/**
  * Draws any Car App Library [Template] with Compose, calling the template's delegates and the
  * [host] for everything else. Use it inside CarTheme: colours and type come from MaterialTheme.
  *

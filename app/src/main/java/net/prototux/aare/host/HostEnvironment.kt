@@ -9,9 +9,6 @@ import androidx.car.app.navigation.model.Trip
  * Called from the main thread unless noted.
  */
 interface HostEnvironment {
-    /** Car moving (driving restrictions apply). */
-    val driving: Boolean
-
     val night: Boolean
 
     /** The area apps draw in, in dp, and its density. */

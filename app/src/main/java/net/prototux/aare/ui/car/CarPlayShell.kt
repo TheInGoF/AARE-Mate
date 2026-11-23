@@ -33,6 +33,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import net.prototux.aare.R
 
 /** The rounded square of the CarPlay look. */
 private val Squircle = RoundedCornerShape(22)
@@ -117,7 +119,7 @@ private fun Dock(state: CarUiState, actions: CarActions, horizontal: Boolean = f
     val voice: @Composable () -> Unit = {
         Box(Modifier.size(52.dp).clip(CircleShape).background(if (state.listening) Color(0xFF0A84FF) else Color(0xFF2C2C2E))
             .clickable { actions.assistant() }, contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.Mic, "Voice", tint = Color.White)
+            Icon(Icons.Rounded.Mic, stringResource(R.string.assistant_mic_label), tint = Color.White)
         }
     }
     // The home button: the app grid, or the dashboard when already on it.
@@ -125,7 +127,7 @@ private fun Dock(state: CarUiState, actions: CarActions, horizontal: Boolean = f
         val home = state.screen == CarScreen.Launcher
         Box(Modifier.size(52.dp).clip(Squircle).background(Color(0xFF2C2C2E))
             .clickable { if (home) actions.goHome() else actions.openLauncher() }, contentAlignment = Alignment.Center) {
-            Icon(if (home) Icons.Rounded.SpaceDashboard else Icons.Rounded.Apps, if (home) "Dashboard" else "Home", tint = Color.White)
+            Icon(if (home) Icons.Rounded.SpaceDashboard else Icons.Rounded.Apps, stringResource(if (home) R.string.dash_menu_home else R.string.dash_menu_apps), tint = Color.White)
         }
     }
     if (horizontal) {

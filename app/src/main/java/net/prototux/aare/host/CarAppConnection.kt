@@ -90,8 +90,6 @@ class CarAppConnection(
         private set
     var navigating by mutableStateOf(false)
         private set
-    var trip by mutableStateOf<Trip?>(null)
-        private set
     /** The app wants a map surface (it called setSurfaceCallback). */
     var wantsSurface by mutableStateOf(false)
         private set
@@ -207,7 +205,6 @@ class CarAppConnection(
         surfaceOwner?.takeIf { it !== owner }?.let { surfaceDestroyed(it) }
         surfaceOwner = owner
         surface = SurfaceContainer(s, width, height, dpi)
-        withSurface += this
         sendSurface()
     }
 
@@ -216,7 +213,6 @@ class CarAppConnection(
         val container = surface
         surfaceOwner = null
         surface = null
-        withSurface -= this
         val cb = surfaceCallback ?: return
         if (container != null) call("onSurfaceDestroyed") { cb.onSurfaceDestroyed(Bundleable.create(container), it) }
     }
@@ -279,7 +275,8 @@ class CarAppConnection(
             apiLevel = minOf(appLatest, hostMax)
             Log.i(TAG, "${info.packageName}: library $libraryVersion, API $appMin..$appLatest, negotiated $apiLevel")
             val handshake = Bundleable.create(HandshakeInfo(context.packageName, apiLevel))
-            call("onHandshakeCompleted", onSuccess = { create(app) }) { app.onHandshakeCompleted(handshake, it) }
+            // it accepts this host (again): no longer listed as refusing it
+            call("onHandshakeCompleted", onSuccess = { HostRejections.forget(context, info.packageName); create(app) }) { app.onHandshakeCompleted(handshake, it) }
         }) { app.getAppInfo(it) }
     }
 
@@ -359,7 +356,7 @@ class CarAppConnection(
         if (status == Status.IDLE) return
         Log.w(TAG, "${info.packageName} died or unbound")
         // It won't send navigationEnded any more: don't leave its trip on the dashboard and cluster.
-        if (navigating) { navigating = false; trip = null; env.navigationEnded(this) }
+        if (navigating) { navigating = false; env.navigationEnded(this) }
         cleanup()
         // Unbind the dead/failed binding before any reconnect: rebinding a live ServiceConnection
         // (onBindingDied especially) leaks bindings and keeps the service alive.
@@ -509,12 +506,12 @@ class CarAppConnection(
         }
 
         override fun navigationEnded() {
-            main.post { navigating = false; trip = null; env.navigationEnded(this@CarAppConnection) }
+            main.post { navigating = false; env.navigationEnded(this@CarAppConnection) }
         }
 
         override fun updateTrip(tripBundle: Bundleable) {
             val t = runCatching { tripBundle.get() as Trip }.getOrNull() ?: return
-            main.post { trip = t; env.tripUpdated(this@CarAppConnection, t) }
+            main.post { env.tripUpdated(this@CarAppConnection, t) }
         }
     }
 
@@ -704,8 +701,6 @@ class CarAppConnection(
 
     companion object {
         private const val TAG = "AareCarApp"
-        /** The connections holding a map surface right now (main thread), for a size change to reach them all. */
-        val withSurface: MutableSet<CarAppConnection> = java.util.Collections.newSetFromMap(java.util.WeakHashMap())
         /** Microphone chunks queued for an app that reads slowly: about a second of 20 ms chunks. */
         private const val MIC_QUEUE_CHUNKS = 50
 
@@ -720,8 +715,9 @@ class CarAppConnection(
 }
 
 /**
- * The apps that refused this host in this run (they accept Google's Android Auto only). Observable: a shell can
- * step over them when it picks the app of an area. Not kept across runs - a later system may make them accept us.
+ * The apps that refused this host (they accept Google's Android Auto only). [packages]: those of this run, observable,
+ * so a shell can step over them when it picks the app of an area. [remember]/[refused]: kept across runs for the phone
+ * app. An app that completes the handshake later (a later system lets us through) is taken off both ([forget]).
  */
 object HostRejections {
     val packages = androidx.compose.runtime.mutableStateListOf<String>()
@@ -733,6 +729,13 @@ object HostRejections {
     fun remember(context: android.content.Context, pkg: String) {
         val p = context.getSharedPreferences("mate_apps", android.content.Context.MODE_PRIVATE)
         p.edit().putStringSet("refused", (p.getStringSet("refused", emptySet()).orEmpty() + pkg)).apply()
+    }
+    /** The app accepted this host: off the list of this run and the kept one. */
+    fun forget(context: android.content.Context, pkg: String) {
+        packages.remove(pkg)
+        val p = context.getSharedPreferences("mate_apps", android.content.Context.MODE_PRIVATE)
+        val kept = p.getStringSet("refused", emptySet()).orEmpty()
+        if (pkg in kept) p.edit().putStringSet("refused", kept - pkg).apply()
     }
     fun refused(context: android.content.Context): Set<String> =
         context.getSharedPreferences("mate_apps", android.content.Context.MODE_PRIVATE).getStringSet("refused", emptySet()).orEmpty()

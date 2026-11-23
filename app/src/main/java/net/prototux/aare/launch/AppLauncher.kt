@@ -95,6 +95,9 @@ class AppLauncher(private val context: Context) {
     }
     fun key(eventTime: Long, action: Int, keyCode: Int) { runCatching { host?.key(eventTime, action, keyCode) } }
 
+    /** Ends the display and the app on it; the launcher stays connected for another [start]. */
+    fun stop() { runCatching { host?.stop() } }
+
     fun release() {
         runCatching { host?.stop() }
         if (didBind) runCatching { Shizuku.unbindUserService(args, connection, true) }

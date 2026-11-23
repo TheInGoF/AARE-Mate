@@ -21,12 +21,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import net.prototux.aare.R
-import net.prototux.aare.car.CarData
 import net.prototux.aare.dash.DashView
 import net.prototux.aare.host.CarRuntime
 
@@ -37,24 +35,11 @@ import net.prototux.aare.host.CarRuntime
  */
 @Composable
 fun DashArea(runtime: CarRuntime, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
     val dpi = runtime.mateDensityDpi
     // the map dark at night, like Mate Navi's (System L-074)
     val night = net.prototux.aare.ui.theme.LocalCarNight.current
     LaunchedEffect(night) { DashView.night(night) }
-    // the car's own speed and odometer for the dashboard's values, at most once a second
-    LaunchedEffect(Unit) {
-        var last = 0L
-        CarData.state.collect { s ->
-            val now = System.currentTimeMillis()
-            if (now - last < 1_000) return@collect
-            last = now
-            // the car's GPS (Android Auto) for the map, when it is fresh (System L-087)
-            val loc = runtime.carLocation?.takeIf { now - it.time < 10_000L }
-            DashView.carValues(context, s.speed?.value?.metersPerSecond?.times(3.6f), s.odometer?.value?.km,
-                loc?.latitude, loc?.longitude, loc?.takeIf { it.hasBearing() }?.bearing)
-        }
-    }
+    // the car's own values reach the dashboard from CarRuntime, the whole connection long
     Box(modifier) {
         key(dpi) {
             AndroidView(

@@ -53,6 +53,8 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
     val context = LocalContext.current
     val launcher = remember(packageName) { AppLauncher(context) }
     var started by remember(packageName) { mutableStateOf(false) }
+    // left (onDispose): a connect still waiting in its thread must not start a display nobody stops
+    val cancelled = remember(packageName) { java.util.concurrent.atomic.AtomicBoolean(false) }
 
     DisposableEffect(packageName) {
         // Hardware / head-unit Back goes to the launched app.
@@ -74,6 +76,7 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
         onDispose {
             if (runtime.screenBack === back) runtime.screenBack = null
             runCatching { if (awake.isHeld) awake.release() }
+            cancelled.set(true)
             launcher.release()
         }
     }
@@ -86,22 +89,39 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
             androidx.compose.ui.viewinterop.AndroidView(
                 factory = { ctx ->
                     TextureView(ctx).apply {
+                        // the surface on this view's texture, one for its whole life; gone with the texture
+                        var surface: Surface? = null
+                        // one flag per texture: a start still waiting for an earlier texture of this view stays stopped
+                        var alive = java.util.concurrent.atomic.AtomicBoolean(false)
+                        val main = android.os.Handler(android.os.Looper.getMainLooper())
                         surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
-                                val surface = Surface(st)
+                                val sf = Surface(st).also { surface = it }
+                                val live = java.util.concurrent.atomic.AtomicBoolean(true).also { alive = it }
                                 // connect() blocks (binds Shizuku / spawns su), so do it off the main thread.
                                 Thread {
-                                    if (launcher.connect()) {
-                                        val id = launcher.start(surface, w, h, cinemaDpi(runtime.appDensityDpi), packageName)
-                                        started = id >= 0
+                                    if (launcher.connect() && live.get() && !cancelled.get()) {
+                                        val id = launcher.start(sf, w, h, cinemaDpi(runtime.appDensityDpi), packageName)
+                                        // gone while it started: stopped at once
+                                        if (id >= 0 && (!live.get() || cancelled.get())) { launcher.stop(); return@Thread }
+                                        main.post { started = id >= 0 }
                                         net.prototux.aare.DiagLog.add("cinema: $packageName - " + (if (id >= 0) launcher.report() else "not started: " + launcher.report().ifEmpty { "no display" }), area = "CAR")
                                     }
                                 }.apply { isDaemon = true }.start()
                             }
                             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {
-                                launcher.resize(Surface(st), w, h, cinemaDpi(runtime.appDensityDpi))
+                                val sf = surface ?: Surface(st).also { surface = it }
+                                launcher.resize(sf, w, h, cinemaDpi(runtime.appDensityDpi))
                             }
-                            override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean = true
+                            // the view gone (driving, another area): its display stopped, not left drawing into a dead surface
+                            override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+                                alive.set(false)
+                                launcher.stop()
+                                started = false
+                                surface?.release()
+                                surface = null
+                                return true
+                            }
                             override fun onSurfaceTextureUpdated(st: SurfaceTexture) = Unit
                         }
                     }
