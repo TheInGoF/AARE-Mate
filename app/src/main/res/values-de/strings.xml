@@ -1095,6 +1095,16 @@
     <string name="regions_speed">%1$s MB/s · %2$s von %3$s</string>
     <string name="storage_title">Speicherort</string>
     <string name="storage_intro">Offline-Karten und Sprachmodelle können auf der Speicherkarte liegen (die Musik hat ihren eigenen Speicherort auf der Seite Musik). Wählst du einen anderen Ort, ziehen sie dorthin um; sie werden geprüft, bevor die alten Kopien gelöscht werden.</string>
+    <string name="music_folder_title">Musik-Ordner</string>
+    <string name="music_folder_hint">Wohin geladene Musik gespeichert wird. Du kannst einen eigenen Ordner wählen oder anlegen, z. B. „Mate Musik“ auf der Speicherkarte – er bleibt auch, wenn Mate gelöscht wird. Vorhandene Titel ziehen mit um und werden geprüft, bevor die alten Kopien gehen.</string>
+    <string name="music_folder_app">Im Speicher von Mate (Gerät)</string>
+    <string name="music_folder_app_card">Im Speicher von Mate (Speicherkarte)</string>
+    <string name="music_folder_now">Ordner: %1$s</string>
+    <string name="music_folder_pick">Ordner wählen …</string>
+    <string name="music_folder_allow">Zugriff erlauben</string>
+    <string name="music_folder_access">Für einen eigenen Ordner braucht Mate den Zugriff auf alle Dateien. „Zugriff erlauben“ öffnet die Einstellung.</string>
+    <string name="music_folder_back">Zurück in den Speicher von Mate</string>
+    <string name="music_folder_unknown">Dieser Ordner lässt sich nicht nutzen. Bitte einen Ordner im Gerät oder auf der Speicherkarte wählen.</string>
     <string name="storage_intro_music">Wohin geladene Musik gespeichert wird – unabhängig vom Speicherort der Offline-Karten. Wählst du einen anderen Ort, zieht die Musik dorthin um; sie wird geprüft, bevor die alten Kopien gelöscht werden.</string>
     <string name="storage_move_ask_music">Musik nach „%1$s“ umziehen (%2$s)?</string>
     <string name="storage_card">Speicherkarte (%1$s)</string>

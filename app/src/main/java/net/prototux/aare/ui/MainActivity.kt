@@ -431,8 +431,9 @@ private fun Home() {
                             item { MusicCard(refresh) }
                             item { MusicOfflineCard(refresh) }
                             // its own place for the downloads (23.11.2026: "ein extra Speicherort … damit man die getrennt verlinken kann")
-                            item { StorageCard(busy = false, kinds = net.prototux.aare.Storage.MUSIC_KINDS, intro = R.string.storage_intro_music,
-                                moveAsk = R.string.storage_move_ask_music) {} }
+                            // its own folder on the card (System L-100, 23.11.2026: "ich möchte auf der SD-Karte wirklich einen
+                            // Ordner anlegen können für Mate Music") instead of choosing between device and card
+                            item { MusicFolderCard() }
                             item { MusicChoiceCard() }
                         }
                         Page.BAR -> {
@@ -2095,6 +2096,72 @@ private fun MusicOfflineCard(refresh: Int) {
         }
     }
 }
+
+/**
+ * Where Mate Musik keeps its downloads (System L-100): Mate's own storage, or a folder the driver picks or makes with the
+ * system's folder picker (e.g. "Mate Musik" on the memory card). A folder of one's own needs all-files access; the
+ * downloads move there, checked before the old copies go.
+ */
+@Composable
+internal fun MusicFolderCard() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var tick by remember { mutableIntStateOf(0) }
+    val folder = remember(tick) { net.prototux.aare.Storage.musicFolder(ctx) }
+    val bytes = produceState(0L, tick) { value = withContext(Dispatchers.IO) { net.prototux.aare.music.Offline.bytes(ctx) } }.value
+    var moving by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var access by remember(tick) { mutableStateOf(allFiles()) }
+    fun moveTo(to: java.io.File?) {
+        moving = 0L to bytes; error = null
+        scope.launch(Dispatchers.IO) {
+            var shown = 0L
+            val r = runCatching { net.prototux.aare.Storage.moveMusic(ctx, to) { _, d, a ->
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (now - shown > 500 || d == a) { shown = now; moving = d to a }
+            } }
+            error = r.exceptionOrNull()?.let { e -> ctx.getString(R.string.storage_move_failed, e.message ?: e.javaClass.simpleName) }
+            moving = null; tick++
+        }
+    }
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val f = uri?.let { runCatching { net.prototux.aare.Storage.folderOf(android.provider.DocumentsContract.getTreeDocumentId(it)) }.getOrNull() }
+        if (uri != null && f == null) error = ctx.getString(R.string.music_folder_unknown)
+        if (f != null) moveTo(f)
+    }
+    Section(stringResource(R.string.music_folder_title)) {
+        Text(stringResource(R.string.music_folder_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val onCard = remember(tick) { net.prototux.aare.Storage.chosen(ctx, net.prototux.aare.Storage.MUSIC).isNotEmpty() }
+        Text(if (folder != null) stringResource(R.string.music_folder_now, folder.path)
+            else stringResource(if (onCard) R.string.music_folder_app_card else R.string.music_folder_app),
+            style = MaterialTheme.typography.bodyLarge)
+        Text(android.text.format.Formatter.formatShortFileSize(ctx, bytes), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!access) Text(stringResource(R.string.music_folder_access), style = MaterialTheme.typography.bodyMedium)
+        moving?.let { (d, a) ->
+            androidx.compose.material3.LinearProgressIndicator(progress = { if (a > 0) d.toFloat() / a else 0f }, Modifier.fillMaxWidth())
+            Text(stringResource(R.string.storage_copying, android.text.format.Formatter.formatShortFileSize(ctx, d),
+                android.text.format.Formatter.formatShortFileSize(ctx, a)), style = MaterialTheme.typography.bodySmall)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.FilledTonalButton(enabled = moving == null, onClick = {
+                if (!allFiles()) {
+                    runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        android.net.Uri.parse("package:" + ctx.packageName))) }
+                        .onFailure { ctx.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+                } else pick.launch(null)
+            }) { Text(stringResource(if (access) R.string.music_folder_pick else R.string.music_folder_allow)) }
+            if (folder != null) androidx.compose.material3.TextButton(enabled = moving == null, onClick = { moveTo(null) }) {
+                Text(stringResource(R.string.music_folder_back))
+            }
+        }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    }
+    // back from the settings page: the access is read again
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) { access = allFiles(); onPauseOrDispose { } }
+}
+
+private fun allFiles() = runCatching { android.os.Environment.isExternalStorageManager() }.getOrDefault(false)
 
 /** The built-in music area: where its Plex server is connected. */
 @Composable

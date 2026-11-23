@@ -165,10 +165,12 @@ public final class Offline {
     /** Alles Geladene loeschen und die Abos beenden. */
     public static void clear(Context c) {
         Plex.prefs(c).edit().remove(KEY_LISTS).apply();
-        for (String sub : new String[] { "t", "a", "l" }) {
-            File[] fs = new File(dir(c), sub).listFiles();
-            if (fs != null) for (File f : fs) f.delete();
-        }
+        // in every place it may lie, not only the chosen one (23.11.2026: deleted on the card, 13 GB stayed in the device)
+        for (File d : net.prototux.aare.Storage.INSTANCE.musicPlaces(c.getApplicationContext()))
+            for (String sub : new String[] { "t", "a", "l" }) {
+                File[] fs = new File(d, sub).listFiles();
+                if (fs != null) for (File f : fs) f.delete();
+            }
     }
 
     /** Darf jetzt geladen werden (Netz da; bei "nur WLAN" ein Netz ohne Kosten)? */
@@ -258,7 +260,7 @@ public final class Offline {
         }
         /* aufraeumen: was in keiner abonnierten Liste mehr steht - nur wenn der Server die Abos auch kennt; sonst (anderes
            Konto, anderer Server, Listen umbenannt) wuerde alles Geladene geloescht (23.11.2026: "Musik ist gelöscht") */
-        if (found == 0 || found < subs.size()) {
+        if (found < subs.size()) {
             Log.w(TAG, "Abgleich: " + found + " von " + subs.size() + " Abos am Server gefunden, nichts geloescht");
             if (complete) Plex.prefs(c).edit().putLong(KEY_LAST, System.currentTimeMillis()).apply();
             return loaded;

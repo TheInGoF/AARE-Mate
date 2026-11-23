@@ -1106,6 +1106,16 @@
     <string name="regions_speed">%1$s MB/s · %2$s of %3$s</string>
     <string name="storage_title">Storage place</string>
     <string name="storage_intro">Offline maps and speech models can lie on the memory card (the music has a place of its own on the Music page). Choosing another place moves them there; they are checked before the old copies go.</string>
+    <string name="music_folder_title">Music folder</string>
+    <string name="music_folder_hint">Where downloaded music is kept. Pick or make a folder of your own, e.g. “Mate Music” on the memory card – it stays when Mate is removed. Titles already loaded move along and are checked before the old copies go.</string>
+    <string name="music_folder_app">In Mate’s storage (device)</string>
+    <string name="music_folder_app_card">In Mate’s storage (memory card)</string>
+    <string name="music_folder_now">Folder: %1$s</string>
+    <string name="music_folder_pick">Choose folder …</string>
+    <string name="music_folder_allow">Allow access</string>
+    <string name="music_folder_access">A folder of your own needs access to all files. “Allow access” opens the setting.</string>
+    <string name="music_folder_back">Back into Mate’s storage</string>
+    <string name="music_folder_unknown">This folder cannot be used. Please choose one on the device or the memory card.</string>
     <string name="storage_intro_music">Where downloaded music is kept - apart from the offline maps place. Choose another place and the music moves there; it is checked before the old copies go.</string>
     <string name="storage_move_ask_music">Move the music to "%1$s" (%2$s)?</string>
     <string name="storage_card">Memory card (%1$s)</string>

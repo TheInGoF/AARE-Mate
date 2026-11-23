@@ -66,6 +66,8 @@ internal object Storage {
     private fun settleMusic(c: Context) {
         val p = prefs(c)
         if (p.contains("volume_music")) return
+        // nothing subscribed: what lies in the device is left over from before (deleted while Mate looked on the card), not revived
+        if (net.prototux.aare.music.Offline.lists(c).isEmpty()) return
         val maps = p.getString("volume", "") ?: ""
         if (maps.isEmpty()) return                       // both in the device's storage: nothing to settle yet
         val root = volumes(c).firstOrNull { it.id == maps }?.root ?: p.getString("root", null)?.let(::File)
@@ -87,6 +89,7 @@ internal object Storage {
 
     /** The folder of [kind] in the chosen place (on a card even while it is out - see [cardMissing]). */
     fun dir(c: Context, kind: String): File {
+        if (kind == MUSIC) musicFolder(c)?.let { return it }
         val id = chosen(c, kind)
         if (id.isEmpty()) return internalDir(c, kind)
         val p = prefs(c)
@@ -100,6 +103,54 @@ internal object Storage {
 
     /** As [cardMissing], for [kind]'s group. */
     fun cardMissing(c: Context, kind: String): Boolean = chosen(c, kind).let { id -> id.isNotEmpty() && volumes(c).none { it.id == id } }
+
+    /**
+     * Mate Musik's own folder, chosen freely (23.11.2026: "ich möchte auf der SD-Karte wirklich einen Ordner anlegen können
+     * für Mate Music"), e.g. "Mate Musik" on the card: seen by other apps, kept when Mate goes. Needs all-files access. Null:
+     * the place of [chosen].
+     */
+    fun musicFolder(c: Context): File? = prefs(c).getString("music_folder", null)?.let(::File)
+
+    /** Every place the music may lie in (the chosen folder, the device, Mate's folder on each card) - for deleting all. */
+    fun musicPlaces(c: Context): List<File> = (listOfNotNull(musicFolder(c), internalDir(c, MUSIC)) +
+        volumes(c).filter { !it.internal }.map { File(it.root, MUSIC) } +
+        listOfNotNull(prefs(c).getString("root_music", null), prefs(c).getString("root", null)).map { File(it, MUSIC) }).distinctBy { it.absolutePath }
+
+    /** The folder a document tree of the system's picker stands for ("primary:Music/Mate", "1234-ABCD:Mate Musik"), null if none. */
+    fun folderOf(treeId: String, primary: File = Environment.getExternalStorageDirectory()): File? {
+        val vol = treeId.substringBefore(':', "").ifEmpty { return null }
+        val rest = treeId.substringAfter(':')
+        val root = if (vol == "primary") primary else File("/storage", vol)
+        return if (rest.isEmpty()) root else File(root, rest)
+    }
+
+    /**
+     * Moves the music into [to] (a folder of the driver's, or null: back into the device) and makes it the music's place;
+     * copied and checked first, the old files go after. Blocking.
+     */
+    fun moveMusic(c: Context, to: File?, progress: (Phase, Long, Long) -> Unit) {
+        val app = c.applicationContext
+        val from = dir(app, MUSIC)
+        val target = to ?: internalDir(app, MUSIC)
+        if (from.exists() && from.canonicalPath != target.canonicalPath) {
+            target.mkdirs()
+            if (!target.canWrite()) throw IOException("not writable")
+            val need = sizeOf(from)
+            if (need + 50L * 1024 * 1024 > target.usableSpace) throw IOException("room")
+            transfer(listOf(from to target), progress)
+        }
+        val e = prefs(app).edit()
+        if (to != null) e.putString("music_folder", to.path)
+        else e.remove("music_folder").putString("volume_music", "").remove("root_music")
+        e.commit()
+        if (from.exists() && from.canonicalPath != target.canonicalPath) {
+            // only Mate's own subfolders: the driver's folder may hold more
+            listOf("t", "a", "l").forEach { File(from, it).deleteRecursively() }
+            if (from.list().isNullOrEmpty()) from.delete()
+        }
+        net.prototux.aare.music.Offline.forgetDir()
+        Log.i(TAG, "music now in ${if (to == null) "device storage" else "its own folder"}")
+    }
 
     /** The device's storage first, then each card that is mounted. */
     fun volumes(c: Context): List<Volume> {
@@ -183,9 +234,18 @@ internal object Storage {
         if (MUSIC !in kinds) prefs(app).let { p -> if (!p.contains("volume_music"))
             p.edit().putString("volume_music", p.getString("volume", "") ?: "").putString("root_music", p.getString("root", null)).commit() }
         val pairs = kinds.map { dir(app, it) to target(app, to, it) }.filter { (a, b) -> a.exists() && a.canonicalPath != b.canonicalPath }
+        transfer(pairs, progress)
+        val k = kinds.first()
+        prefs(app).edit().putString(key(k), to.id).putString(rootKey(k), to.root.path).commit()
+        pairs.forEach { (a, _) -> a.deleteRecursively() }
+        if (MUSIC in kinds) net.prototux.aare.music.Offline.forgetDir()
+        Log.i(TAG, "moved, the old files are gone")
+    }
+
+    private fun transfer(pairs: List<Pair<File, File>>, progress: (Phase, Long, Long) -> Unit) {
         val files = pairs.flatMap { (a, b) -> a.walkTopDown().filter { it.isFile }.map { it to File(b, it.relativeTo(a).path) }.toList() }
         val total = files.sumOf { it.first.length() }
-        Log.i(TAG, "move to ${if (to.internal) "device storage" else "card"}: ${files.size} files, $total bytes")
+        Log.i(TAG, "move: ${files.size} files, $total bytes")
         var done = 0L
         try {
             for ((src, dst) in files) {
@@ -208,14 +268,10 @@ internal object Storage {
             }
         } catch (e: Exception) {
             Log.w(TAG, "move failed (${e.javaClass.simpleName}: ${e.message}), the copies go, nothing changed")
-            pairs.forEach { (_, b) -> b.deleteRecursively() }
+            // only the copies made (a driver's folder may hold more)
+            files.forEach { (_, dst) -> dst.delete() }
             throw e
         }
-        val k = kinds.first()
-        prefs(app).edit().putString(key(k), to.id).putString(rootKey(k), to.root.path).commit()
-        pairs.forEach { (a, _) -> a.deleteRecursively() }
-        if (MUSIC in kinds) net.prototux.aare.music.Offline.forgetDir()
-        Log.i(TAG, "moved, the old files are gone")
     }
 
     internal fun target(c: Context, to: Volume, kind: String) = if (to.internal) internalDir(c, kind) else File(to.root, kind)

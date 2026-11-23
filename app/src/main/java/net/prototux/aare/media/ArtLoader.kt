@@ -170,7 +170,7 @@ internal class ArtLoader(private val context: Context) {
             val f = runCatching { java.io.File(path).canonicalPath }.getOrNull() ?: return false
             // with Mate Musik's folder on the device and Mate's folders on memory cards (downloads there, System L-086)
             return (listOfNotNull(context.filesDir, context.cacheDir, context.noBackupFilesDir, context.getExternalFilesDir(null)) +
-                    context.getExternalFilesDirs(null).filterNotNull())
+                    context.getExternalFilesDirs(null).filterNotNull() + listOfNotNull(net.prototux.aare.Storage.musicFolder(context)))
                 .mapNotNull { runCatching { it.canonicalPath }.getOrNull() }.any { f.startsWith(it + java.io.File.separator) }
         }
 
