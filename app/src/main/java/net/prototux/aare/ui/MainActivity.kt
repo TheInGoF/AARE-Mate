@@ -6,11 +6,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.ImageDecoder
-import android.graphics.Matrix
-import android.media.ExifInterface
 import android.media.projection.MediaProjectionConfig
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
@@ -143,11 +138,9 @@ import androidx.core.graphics.drawable.toBitmap
 import net.prototux.aare.launch.AppLauncher
 import net.prototux.aare.car.CarData
 import net.prototux.aare.service.ProjectionService
-import net.prototux.aare.ui.car.WALLPAPER_NAMES
 import net.prototux.aare.ui.theme.PhoneTheme
 import rikka.shizuku.Shizuku
 import java.text.DateFormat
-import kotlin.math.roundToInt
 
 /** The phone side: what's connected, what's set up, and the settings. */
 class MainActivity : ComponentActivity() {
@@ -927,7 +920,7 @@ private fun Setup(state: ProjectionService.State, refresh: Int, recheck: () -> U
     @Suppress("UNUSED_EXPRESSION") refresh
     val perms = runtimePerms.all(::granted)
     val notificationAccess = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
-    val audio = CaptureMethods.audioPolicyAvailable(ctx) || CaptureMethods.shizukuAvailable() || CaptureMethods.rootAvailable(ctx) || state.audioCapture
+    val audio = CaptureMethods.audioPolicyAvailable(ctx) || CaptureMethods.shizukuAvailable() || state.audioCapture
     if (perms && notificationAccess && audio) return
 
     Section(stringResource(R.string.setup_finish_title)) {
@@ -1337,28 +1330,14 @@ private fun EvRouteChoice(settings: Settings) {
  * screen page, with the bar and with the navigation choice.
  */
 /**
- * The bar in one place (overall look and feel review, 18.11.2026): where it sits, dark or not, the "Fehler markieren"
- * button in its switcher - before, its place and colour were under "Autobildschirm" and the size twice on both pages.
+ * The bar in one place (overall look and feel review, 18.11.2026): the "Fehler markieren" button in its switcher -
+ * before, it was under "Autobildschirm" and the size twice on both pages. Its place and the dark bar went with the
+ * other car styles (E-044).
  */
-/** The built-in backgrounds by name in the app's language (review 18.11.2026: "Dusk", "Forest", "Ocean" stood in English). */
-@Composable
-private fun wallpaperName(key: String): String = when (key) {
-    "dusk" -> stringResource(R.string.setup_wallpaper_dusk)
-    "forest" -> stringResource(R.string.setup_wallpaper_forest)
-    "ocean" -> stringResource(R.string.setup_wallpaper_ocean)
-    else -> key.replaceFirstChar(Char::uppercase)
-}
-
 @Composable
 private fun BarSettings(settings: Settings) {
-    var rail by remember { mutableStateOf(settings.railPosition) }
-    var darkBar by remember { mutableStateOf(settings.darkBar) }
     var mark by remember { mutableStateOf(settings.faultMarkButton) }
     Section(stringResource(R.string.setup_section_look)) {
-        Choices(stringResource(R.string.setup_choice_bar), listOf(Settings.RAIL_AUTO to stringResource(R.string.setup_choice_bar_auto), Settings.RAIL_LEFT to stringResource(R.string.setup_choice_left), Settings.RAIL_RIGHT to stringResource(R.string.setup_choice_right), Settings.RAIL_BOTTOM to stringResource(R.string.setup_choice_bottom)), rail) {
-            rail = it; settings.railPosition = it
-        }
-        Toggle(stringResource(R.string.setup_toggle_dark_bar_title), stringResource(R.string.setup_toggle_dark_bar_subtitle), darkBar) { darkBar = it; settings.darkBar = it }
         Toggle(stringResource(R.string.setup_toggle_fault_mark_title), stringResource(R.string.setup_toggle_fault_mark_subtitle), mark) {
             mark = it; settings.faultMarkButton = it
         }
@@ -2235,20 +2214,6 @@ private fun CarScreenSettings(settings: Settings, refresh: Int) {
     var phoneScreen by remember { mutableStateOf(settings.phoneScreen) }
     var passenger by remember { mutableStateOf(settings.ignoreDriving) }
     var weather by remember { mutableStateOf(settings.showWeather) }
-    var wallpaper by remember { mutableStateOf(settings.wallpaper) }
-    val scope = rememberCoroutineScope()
-    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) scope.launch {
-            val ok = withContext(Dispatchers.IO) { saveWallpaper(ctx, uri) }
-            if (ok) {
-                // Through "none", so the car reloads the photo even if one was already set.
-                settings.wallpaper = "none"; settings.wallpaper = Settings.WALLPAPER_CUSTOM
-                wallpaper = Settings.WALLPAPER_CUSTOM
-            } else {
-                Toast.makeText(ctx, R.string.setup_wallpaper_failed, Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
     var calendar by remember { mutableStateOf(settings.showCalendar) }
     @Suppress("UNUSED_EXPRESSION") refresh
     val touch = AndroidSettings.Secure.getString(ctx.contentResolver, AndroidSettings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
@@ -2267,12 +2232,6 @@ private fun CarScreenSettings(settings: Settings, refresh: Int) {
             Toggle(stringResource(R.string.views_animations), stringResource(R.string.views_animations_sub), anim) { anim = it; settings.carAnimations = it }
         }
         Section(stringResource(R.string.setup_section_dashboard)) {
-            Choices(stringResource(R.string.setup_choice_wallpaper), listOf("none" to stringResource(R.string.setup_wallpaper_none)) + WALLPAPER_NAMES.map { it to wallpaperName(it) } +
-                listOf(Settings.WALLPAPER_CUSTOM to stringResource(R.string.setup_wallpaper_photo)), wallpaper) { choice ->
-                if (choice == Settings.WALLPAPER_CUSTOM) photoPicker.launch("image/*")
-                else { wallpaper = choice; settings.wallpaper = choice }
-            }
-            Spacer(Modifier.height(8.dp))
             Toggle(stringResource(R.string.setup_toggle_weather_title), stringResource(R.string.setup_toggle_weather_subtitle), weather) {
                 weather = it; settings.showWeather = it
             }
@@ -2298,64 +2257,6 @@ private fun CarScreenSettings(settings: Settings, refresh: Int) {
             }
         }
     }
-}
-
-/** Copies the chosen photo into AARE's files, at most 1920 pixels on its longest side, as the car's wallpaper. */
-private fun saveWallpaper(context: android.content.Context, uri: Uri): Boolean {
-    // Written to a temporary file and renamed over the current one only once complete, so a photo
-    // that can't be read or written (a full disk) leaves the current wallpaper alone.
-    val tmp = java.io.File(context.filesDir, Settings.WALLPAPER_FILE + ".tmp")
-    val ok = runCatching {
-        val bmp = decodeWallpaper(context, uri, 1920)
-        tmp.outputStream().use { check(bmp.compress(Bitmap.CompressFormat.JPEG, 90, it)) }
-        check(tmp.renameTo(java.io.File(context.filesDir, Settings.WALLPAPER_FILE)))
-    }.isSuccess
-    if (!ok) tmp.delete()
-    return ok
-}
-
-/**
- * Decodes [uri] upright (cameras store portrait photos sideways with an EXIF orientation tag) and
- * already scaled down towards [maxPx], so a 200 MP photo is never decoded at full size.
- */
-private fun decodeWallpaper(context: android.content.Context, uri: Uri, maxPx: Int): Bitmap {
-    val resolver = context.contentResolver
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        // ImageDecoder applies the EXIF orientation itself.
-        return ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver, uri)) { decoder, info, _ ->
-            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE // compress() needs a software bitmap
-            val (w, h) = info.size.width to info.size.height
-            val scale = maxPx.toFloat() / maxOf(w, h)
-            if (scale < 1f) decoder.setTargetSize((w * scale).roundToInt().coerceAtLeast(1), (h * scale).roundToInt().coerceAtLeast(1))
-        }
-    }
-    // Android 8: a power-of-two sample size, then the exact scale and the EXIF rotation in one matrix.
-    // Each pass opens its own stream: a content stream can be read only once.
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    resolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, bounds) }
-    var sample = 1
-    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxPx) sample *= 2
-    val src = resolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) }
-        ?: error("can't decode the photo")
-    val orientation = runCatching {
-        resolver.openInputStream(uri)!!.use { ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL) }
-    }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
-    val scale = minOf(1f, maxPx.toFloat() / maxOf(src.width, src.height))
-    val m = Matrix().apply {
-        postScale(scale, scale)
-        when (orientation) {
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> postScale(-1f, 1f)
-            ExifInterface.ORIENTATION_ROTATE_180 -> postRotate(180f)
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> postScale(1f, -1f)
-            ExifInterface.ORIENTATION_TRANSPOSE -> { postRotate(90f); postScale(-1f, 1f) }
-            ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
-            ExifInterface.ORIENTATION_TRANSVERSE -> { postRotate(-90f); postScale(-1f, 1f) }
-            ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(-90f)
-        }
-    }
-    val out = Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
-    if (out !== src) src.recycle()
-    return out
 }
 
 /** Car audio: the capture methods, best first, and what each needs. */
@@ -2384,11 +2285,9 @@ private fun AudioSettings(settings: Settings, state: ProjectionService.State, re
     val policy = CaptureMethods.audioPolicyAvailable(ctx)
     val shizuku = CaptureMethods.shizukuAvailable()
     val shizukuAsk = CaptureMethods.shizukuNeedsPermission()
-    val root = CaptureMethods.rootAvailable(ctx)
     val best = when {
         policy -> CaptureMethod.AUDIO_POLICY
         shizuku -> CaptureMethod.SHIZUKU_POLICY
-        root -> CaptureMethod.SHIZUKU
         state.audioCapture -> CaptureMethod.PLAYBACK_CAPTURE
         else -> null
     }
@@ -2424,36 +2323,29 @@ private fun AudioSettings(settings: Settings, state: ProjectionService.State, re
             Check(methodLabel(if (shizuku) CaptureMethod.SHIZUKU_POLICY else CaptureMethod.SHIZUKU),
                 when {
                     shizuku -> stringResource(R.string.audio_shizuku_ready)
-                    root -> stringResource(R.string.audio_root_ready)
                     Build.VERSION.SDK_INT < Build.VERSION_CODES.S -> stringResource(R.string.audio_shizuku_needs_android12)
                     shizukuAsk -> stringResource(R.string.audio_shizuku_tap_allow)
                     CaptureMethods.shizukuInstalled(ctx) && net.prototux.aare.adb.SelfAdb.paired(ctx) -> stringResource(R.string.self_adb_check_start)
                     CaptureMethods.shizukuInstalled(ctx) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> stringResource(R.string.self_adb_check_pair)
                     CaptureMethods.shizukuInstalled(ctx) -> stringResource(R.string.audio_shizuku_not_running)
-                    else -> stringResource(R.string.audio_shizuku_or_root_hint)
+                    else -> stringResource(R.string.audio_shizuku_install_hint)
                 },
-                shizuku || root) {
+                shizuku) {
                 when {
                     shizukuAsk -> runCatching { Shizuku.requestPermission(SHIZUKU_REQUEST) }
-                    shizuku || root -> Unit
-                    // Check for root (prompts su on a rooted phone); otherwise point to Shizuku.
-                    else -> CaptureMethods.checkRoot { granted ->
-                        android.os.Handler(android.os.Looper.getMainLooper()).post {
-                            if (granted) { settings.rootAudio = true; recheck() }
-                            // installed but not started (after every restart): open Shizuku to start it - the download
-                            // page only when it is missing (17.11.2026: "öffnet immer den Browser, obwohl installiert")
-                            // System L-063: Mate starts Shizuku itself - paired once over wireless debugging
-                            else if (CaptureMethods.shizukuInstalled(ctx) && net.prototux.aare.adb.SelfAdb.paired(ctx))
-                                net.prototux.aare.adb.SelfAdb.startByHand(ctx)
-                            else if (CaptureMethods.shizukuInstalled(ctx) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                net.prototux.aare.adb.SelfAdb.startPairing(ctx)
-                                ctx.startSafely(Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
-                            }
-                            else if (CaptureMethods.shizukuInstalled(ctx))
-                                ctx.packageManager.getLaunchIntentForPackage(CaptureMethods.SHIZUKU_PACKAGE)?.let { ctx.startSafely(it) }
-                            else ctx.startSafely(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/")))
-                        }
+                    shizuku -> Unit
+                    // installed but not started (after every restart): open Shizuku to start it - the download
+                    // page only when it is missing (17.11.2026: "öffnet immer den Browser, obwohl installiert")
+                    // System L-063: Mate starts Shizuku itself - paired once over wireless debugging
+                    CaptureMethods.shizukuInstalled(ctx) && net.prototux.aare.adb.SelfAdb.paired(ctx) ->
+                        net.prototux.aare.adb.SelfAdb.startByHand(ctx)
+                    CaptureMethods.shizukuInstalled(ctx) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                        net.prototux.aare.adb.SelfAdb.startPairing(ctx)
+                        ctx.startSafely(Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
                     }
+                    CaptureMethods.shizukuInstalled(ctx) ->
+                        ctx.packageManager.getLaunchIntentForPackage(CaptureMethods.SHIZUKU_PACKAGE)?.let { ctx.startSafely(it) }
+                    else -> ctx.startSafely(Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/")))
                 }
             }
             Check(methodLabel(CaptureMethod.PLAYBACK_CAPTURE),
@@ -2628,12 +2520,12 @@ private fun AppGroup(title: String) {
     Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 16.dp, bottom = 4.dp))
 }
 
-/** Opt-in: launch ordinary phone apps on the car screen (parked only; needs root or Shizuku). */
+/** Opt-in: launch ordinary phone apps on the car screen (parked only; needs Shizuku). */
 @Composable
 private fun StandaloneAppsSection(settings: Settings, ctx: android.content.Context) {
     var enabled by remember { mutableStateOf(settings.standaloneApps) }
     var allowed by remember { mutableStateOf(settings.standaloneAppPackages) }
-    val available = remember { AppLauncher.available(ctx) }
+    val available = remember { AppLauncher.available() }
     Section(stringResource(R.string.standalone_section_title)) {
         Text(stringResource(R.string.standalone_section_warning), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(8.dp))
@@ -2641,7 +2533,7 @@ private fun StandaloneAppsSection(settings: Settings, ctx: android.content.Conte
             enabled = it; settings.standaloneApps = it
         }
         if (enabled && !available) {
-            Text(stringResource(R.string.standalone_need_root), style = MaterialTheme.typography.bodySmall,
+            Text(stringResource(R.string.standalone_need_shizuku), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
         }
         if (enabled) {

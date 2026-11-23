@@ -39,7 +39,7 @@ AARE has separate methods for carrying phone audio **over AAP**:
 | Samsung Separate app sound → car Bluetooth | Galaxy OS routes chosen app sound straight to the paired car Bluetooth audio device | Available in Samsung One UI; owner has heard music + nav prompts in this configuration |
 | AARE screen-capture audio | Captured media/game/unknown-use audio → head unit's AAP media stream | Does **not** capture ordinary `USAGE_ASSISTANCE_NAVIGATION_GUIDANCE` |
 | AARE Shizuku capture | Phone-wide PCM via AAP (combined media) | Separate AARE implementation; not required to explain the phone Bluetooth result |
-| AARE privileged system routing | AAP media and guidance streams | Requires a privileged/root setup; not shown working in this field report |
+| AARE privileged system routing | AAP media and guidance streams | Requires Mate built into the system image as a privileged app; not shown working in this field report |
 
 If **both** AARE's AAP audio streaming and the independent Bluetooth output are enabled, test whether sound is doubled or audio focus changes before using it in a car. If the vehicle already receives the desired sound directly from Bluetooth, AARE's **Car audio** setting may not be needed; it does **not** control Samsung's separate app sound settings.
 

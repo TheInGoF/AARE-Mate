@@ -212,17 +212,6 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("force_h264", false)
         set(v) = prefs.edit { putBoolean("force_h264", v) }
 
-    /** Where the car screen's bar goes: next to the driver ([RAIL_AUTO]), [RAIL_LEFT], [RAIL_RIGHT] or [RAIL_BOTTOM]. */
-    var railPosition: String
-        get() = prefs.getString("rail_position", null)
-            ?: if (prefs.contains("rail_right")) (if (prefs.getBoolean("rail_right", false)) RAIL_RIGHT else RAIL_LEFT) else RAIL_AUTO
-        set(v) = prefs.edit { putString("rail_position", v); remove("rail_right") }
-
-    /** The car screen's layout: [STYLE_AUTO] (Android Auto's) or [STYLE_CARPLAY] (an easter egg). */
-    var carStyle: String
-        get() = prefs.getString("car_style", STYLE_IDMATE) ?: STYLE_IDMATE   // this build: the IDmate layout unless another is chosen
-        set(v) = prefs.edit { putString("car_style", v) }
-
     /**
      * Passenger mode: ignore the car's "driving" signal, so a passenger can type a destination or
      * browse long lists while moving. The driver must not use the screen then.
@@ -241,20 +230,10 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("show_calendar", true)
         set(v) = prefs.edit { putBoolean("show_calendar", v) }
 
-    /** Behind the dashboard: none, one of the built-in gradients, or [WALLPAPER_CUSTOM] (filesDir/wallpaper.jpg). */
-    var wallpaper: String
-        get() = prefs.getString("wallpaper", "none") ?: "none"
-        set(v) = prefs.edit { putString("wallpaper", v) }
-
-    /** Keep the car screen's bar dark even with day colors. */
     /** Combustion car (O99): no dashboard (its data is for electric cars) - Mate shows its basic areas only. */
     var combustion: Boolean
         get() = prefs.getBoolean("combustion", false)
         set(v) = prefs.edit { putBoolean("combustion", v) }
-
-    var darkBar: Boolean
-        get() = prefs.getBoolean("dark_bar", false)
-        set(v) = prefs.edit { putBoolean("dark_bar", v) }
 
     /** Car screen colors: follow the car's day/night signal ([THEME_AUTO]), or always [THEME_DARK] / [THEME_LIGHT]. */
     var carTheme: String
@@ -275,11 +254,6 @@ class Settings(context: Context) {
     var phoneBluetoothAddress: String
         get() = prefs.getString("phone_bt_address", "") ?: ""
         set(v) = prefs.edit { putString("phone_bt_address", v) }
-
-    /** Capture car audio through su (a rooted phone), once the user has allowed it in the audio settings. */
-    var rootAudio: Boolean
-        get() = prefs.getBoolean("root_audio", false)
-        set(v) = prefs.edit { putBoolean("root_audio", v) }
 
     /**
      * Package of the assistant the steering-wheel voice button opens (a car app such as Lapin, or a
@@ -579,19 +553,9 @@ class Settings(context: Context) {
         /** The factors of the five trim steps -2..2. */
         val TRIMS = floatArrayOf(0.8f, 0.9f, 1f, 1.1f, 1.25f)
         const val BROWSER_DEFAULT_URL = "https://duckduckgo.com/"
-        const val RAIL_AUTO = "auto"
-        const val RAIL_LEFT = "left"
-        const val RAIL_RIGHT = "right"
-        const val RAIL_BOTTOM = "bottom"
         const val THEME_AUTO = "auto"
         const val THEME_DARK = "dark"
         const val THEME_LIGHT = "light"
-        const val STYLE_AUTO = "auto"
-        const val STYLE_CARPLAY = "carplay"
-        const val STYLE_IDMATE = "idmate"
-        const val WALLPAPER_CUSTOM = "custom"
-        /** The user's wallpaper photo, in the app's files. */
-        const val WALLPAPER_FILE = "wallpaper.jpg"
     }
 
     fun registerListener(l: SharedPreferences.OnSharedPreferenceChangeListener) = prefs.registerOnSharedPreferenceChangeListener(l)

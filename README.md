@@ -146,7 +146,6 @@ publishes `mate-<version>.apk` with release notes.
 | `app/.../ui/MainActivity.kt` | the tablet app: setup and settings |
 | `kartenserver/` | the map server stack (Docker): gate with device tokens, tiles, Valhalla, Photon, traffic, region packs |
 | `headunit/` | AARE's desktop head unit for tests without a car (`./headunit.sh`) |
-| `xposed/`, `tools/magisk/` | modules for rooted devices from AARE, not used by Mate (Mate works without root) |
 | `docs/` | notes from AARE and Mate, [upstream.md](docs/upstream.md), screenshots |
 
 Every visible and spoken text lives in resources (`values/` English, `values-de/` German), so a

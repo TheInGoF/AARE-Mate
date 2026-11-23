@@ -39,12 +39,9 @@ import net.prototux.aare.ui.theme.LocalCarDimens
 @Composable
 internal fun CarSettingsScreen(settings: Settings, modifier: Modifier) {
     var theme by remember { mutableStateOf(settings.carTheme) }
-    var rail by remember { mutableStateOf(settings.railPosition) }
-    var style by remember { mutableStateOf(settings.carStyle) }
     var banners by remember { mutableStateOf(settings.messageBanners) }
     var aloud by remember { mutableStateOf(settings.readMessagesAloud) }
     var audio by remember { mutableStateOf(settings.carAudio) }
-    var darkBar by remember { mutableStateOf(settings.darkBar) }
     var passenger by remember { mutableStateOf(settings.ignoreDriving) }
     LazyColumn(
         modifier.background(MaterialTheme.colorScheme.background),
@@ -57,17 +54,6 @@ internal fun CarSettingsScreen(settings: Settings, modifier: Modifier) {
                 theme = it; settings.carTheme = it
             }
         }
-        item {
-            Choice(stringResource(R.string.setup_choice_bar), listOf(Settings.RAIL_AUTO to stringResource(R.string.setup_choice_bar_auto), Settings.RAIL_LEFT to stringResource(R.string.setup_choice_left), Settings.RAIL_RIGHT to stringResource(R.string.setup_choice_right), Settings.RAIL_BOTTOM to stringResource(R.string.setup_choice_bottom)), rail) {
-                rail = it; settings.railPosition = it
-            }
-        }
-        item {
-            Choice(stringResource(R.string.setup_choice_style), listOf(Settings.STYLE_AUTO to stringResource(R.string.setup_style_android_auto), Settings.STYLE_CARPLAY to stringResource(R.string.setup_style_carplay), Settings.STYLE_IDMATE to stringResource(R.string.setup_style_idmate)), style) {
-                style = it; settings.carStyle = it
-            }
-        }
-        item { SwitchRow(stringResource(R.string.setup_switch_dark_bar), darkBar) { darkBar = it; settings.darkBar = it } }
         item { SwitchRow(stringResource(R.string.setup_switch_passenger), passenger) { passenger = it; settings.ignoreDriving = it } }
         item { SwitchRow(stringResource(R.string.setup_switch_message_notifications), banners) { banners = it; settings.messageBanners = it } }
         item { SwitchRow(stringResource(R.string.msg_toggle_read_aloud_title), aloud) { aloud = it; settings.readMessagesAloud = it } }

@@ -1,7 +1,6 @@
 package net.prototux.aare.ui.car
 
 import android.text.format.DateFormat
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,11 +30,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,25 +85,6 @@ internal fun CalendarCard(event: NextEvent, onNavigate: (String) -> Unit, modifi
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-    }
-}
-
-/** Built-in wallpapers: soft gradients that keep the cards readable by day and by night. */
-private val WALLPAPERS = mapOf(
-    "dusk" to listOf(Color(0xFF2B1B3D), Color(0xFF6B3A5B), Color(0xFFC2735A)),
-    "forest" to listOf(Color(0xFF0F2A1D), Color(0xFF1F4D36), Color(0xFF4F7A4A)),
-    "ocean" to listOf(Color(0xFF071E3D), Color(0xFF1F4E79), Color(0xFF3E8DB8)),
-)
-val WALLPAPER_NAMES = WALLPAPERS.keys.toList()
-
-/** The dashboard's wallpaper, filling [modifier]; nothing for "none". */
-@Composable
-internal fun Wallpaper(ui: CarUiState, modifier: Modifier) {
-    val image = ui.wallpaperImage
-    when {
-        ui.wallpaper == net.prototux.aare.Settings.WALLPAPER_CUSTOM && image != null ->
-            Image(image.asImageBitmap(), null, modifier, contentScale = ContentScale.Crop)
-        else -> WALLPAPERS[ui.wallpaper]?.let { colors -> Box(modifier.background(Brush.linearGradient(colors))) }
     }
 }
 

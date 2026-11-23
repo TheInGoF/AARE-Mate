@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
  * its speakers and microphone. Android does not tell an app its own address, so the handshake was simply left out
  * unless the address had been typed into the phone app (and its hint said to leave it empty where the car works).
  *
- * Now Mate asks where it may: the system's setting through Shizuku or root (both read it), once, and keeps it.
+ * Now Mate asks where it may: the system's setting through Shizuku, once, and keeps it.
  */
 object OwnBluetooth {
     private const val TAG = "AareBt"
@@ -74,13 +74,13 @@ object OwnBluetooth {
     /** The address from what a shell command printed, or null. */
     fun parse(out: String?): String? = out?.lineSequence()?.map { it.trim() }?.firstOrNull { valid(it) }?.uppercase()
 
-    /** Asked through Shizuku, then root; null when neither is there or neither tells. Waits [timeoutMs] at most. */
+    /** Asked through Shizuku; null when it is not there or does not tell. Waits [timeoutMs] at most. */
     fun fromShell(timeoutMs: Long = 2500): String? {
         val pool = Executors.newSingleThreadExecutor()
         return try {
             pool.submit(Callable {
                 val cmd = arrayOf("settings", "get", "secure", "bluetooth_address")
-                shizuku(cmd) ?: su(cmd.joinToString(" "))
+                shizuku(cmd)
             }).get(timeoutMs, TimeUnit.MILLISECONDS)
         } catch (e: Exception) {
             Log.i(TAG, "own address not read: ${e.javaClass.simpleName}")
@@ -100,13 +100,6 @@ object OwnBluetooth {
         p.waitFor()
         parse(out)
     }.onFailure { Log.i(TAG, "Shizuku: ${it.javaClass.simpleName}") }.getOrNull()
-
-    private fun su(cmd: String): String? = runCatching {
-        val p = ProcessBuilder("su", "-c", cmd).redirectErrorStream(true).start()
-        val out = p.inputStream.bufferedReader().use { it.readText() }
-        p.waitFor()
-        parse(out)
-    }.getOrNull()
 
     /**
      * The address for the handshake: typed in, readable by the app, or asked from the shell (kept then). Says in the

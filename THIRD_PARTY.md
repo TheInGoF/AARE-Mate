@@ -35,7 +35,6 @@ behalten ihre eigene Lizenz.
 | Bouncy Castle (bcprov) | Bouncy Castle Licence (MIT) |
 | HiddenApiBypass, LSPosed | Apache-2.0 |
 | sherpa-onnx (speech recognition and voices on the device), k2-fsa; includes ONNX Runtime | Apache-2.0 (ONNX Runtime: MIT) |
-| libxposed API (only the optional Xposed module, not part of the app) | Apache-2.0 |
 
 ## Downloaded at run time / Zur Laufzeit geladen
 

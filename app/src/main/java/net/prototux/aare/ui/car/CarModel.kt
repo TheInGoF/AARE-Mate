@@ -87,9 +87,6 @@ class CarUiState {
     val history = mutableStateListOf<CarNotice>()
     /** Notifications not seen in the notification centre yet. */
     var unseen by mutableStateOf(0)
-    /** The dashboard's wallpaper: a built-in name, or "custom" with [wallpaperImage]. */
-    var wallpaper by mutableStateOf("none")
-    var wallpaperImage by mutableStateOf<Bitmap?>(null)
     /** The hosted navigation app's trip (next step, distances), for the cluster's turn card. */
     var trip by mutableStateOf<androidx.car.app.navigation.model.Trip?>(null)
     /** The package that sent [trip]: its maneuver icons are opened on that app's behalf. */
@@ -106,18 +103,8 @@ class CarUiState {
     var assistantAppId by mutableStateOf<String?>(null)
     /** Turn-by-turn from a navigation app running on the phone (Google Maps, Waze…). */
     var phoneGuidance by mutableStateOf<PhoneGuidance?>(null)
-    /** Right-hand drive: the rail goes to the right, next to the driver. */
-    var railOnRight by mutableStateOf(false)
     /** The driver sits on the right (right-hand drive): the voice button goes on that side. */
     var driverOnRight by mutableStateOf(false)
-    /** The rail stays dark even with day colors (a setting). */
-    var darkBar by mutableStateOf(false)
-    /** The CarPlay-style layout (an easter egg, *Settings > Style*). */
-    var carPlayStyle by mutableStateOf(false)
-    /** The IDmate layout: a slim tab bar along the bottom and an app drawer (*Settings > Style*). */
-    var idmateStyle by mutableStateOf(false)
-    /** The rail runs along the bottom instead of a side. */
-    var railBottom by mutableStateOf(false)
 
     fun app(id: String?): CarAppEntry? = apps.firstOrNull { it.id == id }
 }

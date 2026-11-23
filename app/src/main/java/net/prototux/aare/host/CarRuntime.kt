@@ -49,7 +49,7 @@ import net.prototux.aare.ui.car.CarCall
 import net.prototux.aare.ui.car.CarNotice
 import net.prototux.aare.ui.car.CarScreen
 import net.prototux.aare.ui.car.CarSettingsScreen
-import net.prototux.aare.ui.car.CarShell
+import net.prototux.aare.ui.car.IdmateShell
 import net.prototux.aare.ui.car.CarUiState
 import net.prototux.aare.ui.car.NotificationsScreen
 import net.prototux.aare.ui.car.NowPlaying
@@ -305,7 +305,7 @@ class CarRuntime(
         applyScreenSettings()
     }
 
-    /** Applies the theme and bar position settings (also when they change during a drive). */
+    /** Applies the theme and size settings (also when they change during a drive). */
     private fun applyScreenSettings() {
         val night = when (settings.carTheme) {
             Settings.THEME_DARK -> true
@@ -321,36 +321,15 @@ class CarRuntime(
         appTrim = settings.appTrim(ui.headUnitName)
         // two layers (System L-007): the car's measurement and the preset of what plays
         net.prototux.aare.audio.CarSound.apply(context, ui.headUnitName)
-        val position = settings.railPosition
         // Passenger mode lifts the driving restrictions (keyboard, list lengths, phone screen).
         ui.drivingRestricted = carDriving && !settings.ignoreDriving
-        ui.carPlayStyle = settings.carStyle == Settings.STYLE_CARPLAY
-        ui.idmateStyle = settings.carStyle == Settings.STYLE_IDMATE
-        ui.darkBar = settings.darkBar
-        val wallpaper = settings.wallpaper
-        if (wallpaper != ui.wallpaper || (wallpaper == Settings.WALLPAPER_CUSTOM && ui.wallpaperImage == null)) {
-            ui.wallpaper = wallpaper
-            ui.wallpaperImage = null
-            if (wallpaper == Settings.WALLPAPER_CUSTOM) scope.launch {
-                ui.wallpaperImage = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    runCatching { android.graphics.BitmapFactory.decodeFile(java.io.File(context.filesDir, Settings.WALLPAPER_FILE).path) }.getOrNull()
-                }
-            }
-        }
-        ui.railBottom = position == Settings.RAIL_BOTTOM
         ui.driverOnRight = rightHandDrive
-        ui.railOnRight = when (position) {
-            Settings.RAIL_LEFT -> false
-            Settings.RAIL_RIGHT -> true
-            else -> rightHandDrive
-        }
     }
 
     private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
-            "car_theme", "rail_position", "car_style", "dark_bar", "ignore_driving" -> main.post { applyScreenSettings() }
+            "car_theme", "ignore_driving" -> main.post { applyScreenSettings() }
             "size", "app_trim", "eq_on", "eq_gains" -> main.post { applyScreenSettings() }
-            "wallpaper" -> main.post { ui.wallpaper = ""; applyScreenSettings() }
             // Apps shown or hidden from the phone: update the car's app list now.
             "hidden_apps", "phone_screen", "assistant_pkg", "app_order",
             "standalone_apps", "standalone_app_pkgs", "browser", "car_data_app" -> main.post { refreshApps() }
@@ -522,17 +501,17 @@ class CarRuntime(
         // app like the others. Works where the system lets this host pass the app's check (see docs/maps-projection.md).
         val projected = scan.projected.filter { it.packageName !in hidden }
         for (p in projected) entries += CarAppEntry(projectedId(p.packageName), p.packageName, p.label, p.icon, CarAppKind.PROJECTED)
-        // Ordinary phone apps the user allowed onto the car screen (parked only; needs root/Shizuku).
+        // Ordinary phone apps the user allowed onto the car screen (parked only; needs Shizuku).
         // why the cinema has none, in the log once per change (19.11.2026: "ich sehe auch nicht die Kino-App")
         // which of Shizuku's steps is missing (19.11.2026: parked for sure, "cinema: no apps - Shizuku or root not available")
         val shizuku = net.prototux.aare.audio.CaptureMethods
         val (cinemaWhy, cinemaText) = when {
             !settings.standaloneApps -> "phone apps on the car screen are switched off" to R.string.cinema_missing_off
             settings.standaloneAppPackages.isEmpty() -> "no phone app chosen for the car screen" to R.string.cinema_missing_none
-            AppLauncher.available(context) -> null to 0
+            AppLauncher.available() -> null to 0
             shizuku.shizukuNeedsPermission() -> "Shizuku runs but has not allowed Mate" to R.string.cinema_missing_permission
             shizuku.shizukuInstalled(context) -> "Shizuku is installed but not started (it has to be started after every restart of the tablet)" to R.string.cinema_missing_start
-            else -> "Shizuku is not installed and root not allowed" to R.string.cinema_missing_install
+            else -> "Shizuku is not installed" to R.string.cinema_missing_install
         }
         ui.cinemaMissing = if (cinemaText != 0) context.getString(cinemaText) else null
         if (cinemaWhy != lastCinemaWhy) {
@@ -540,7 +519,7 @@ class CarRuntime(
             net.prototux.aare.DiagLog.add("cinema: " + (cinemaWhy?.let { "no apps - $it" } ?: "${settings.standaloneAppPackages.size} phone app(s) chosen, shown while parked"),
                 if (cinemaWhy != null && cinemaText != R.string.cinema_missing_off) net.prototux.aare.DiagLog.Level.WARN else null, "CAR")
         }
-        if (settings.standaloneApps && AppLauncher.available(context)) {
+        if (settings.standaloneApps && AppLauncher.available()) {
             for (entry in scan.standalone) {
                 val pkg = entry.packageName
                 if (pkg in hidden || projected.any { it.packageName == pkg }) continue
@@ -1055,7 +1034,7 @@ class CarRuntime(
         val scaled = androidx.compose.ui.unit.Density(base.density * shellScale, base.fontScale)
         CarTheme(night = ui.night) {
             CompositionLocalProvider(LocalCarDimens provides LocalCarDimens.current, androidx.compose.ui.platform.LocalDensity provides scaled) {
-                CarShell(
+                IdmateShell(
                     state = ui,
                     actions = actions,
                     appContent = { app, outer ->

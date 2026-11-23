@@ -4,11 +4,10 @@ import android.view.Surface;
 
 /**
  * The privileged helper that puts an ordinary phone app on the car screen: it runs with adb-level
- * (Shizuku) or root rights, creates a virtual display rendering into the car screen's [Surface],
- * launches the chosen app on it, and injects the car's touches and keys into it.
+ * (Shizuku) rights, creates a virtual display rendering into the car screen's [Surface], launches
+ * the chosen app on it, and injects the car's touches and keys into it.
  *
- * Implemented by LaunchHostService; invoked over a Shizuku-bound binder, or in-process by the su
- * app_process helper (LaunchMain), which hands this same binder back to the app over a broadcast.
+ * Implemented by LaunchHostService; invoked over a Shizuku-bound binder.
  */
 interface ILaunchHost {
     /** Create the display into [surface] and launch [packageName] on it. Returns the virtual display id, or -1. */

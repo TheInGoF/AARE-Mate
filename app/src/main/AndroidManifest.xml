@@ -66,7 +66,7 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- Only granted when AARE is installed as a privileged app (tools/magisk): car audio like
+    <!-- Only granted when Mate is built into the system image as a privileged app: car audio like
          Android Auto, through an audio policy. Ignored on a normal install. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_ROUTING"
         tools:ignore="ProtectedPermissions" />

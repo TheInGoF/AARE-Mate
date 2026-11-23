@@ -72,7 +72,6 @@ import net.prototux.aare.audio.PcmSource
 import net.prototux.aare.audio.PlaybackCaptureSource
 import net.prototux.aare.audio.ShizukuPolicySource
 import net.prototux.aare.audio.ShizukuSource
-import net.prototux.aare.audio.SuSource
 import net.prototux.aare.audio.MicRouter
 import net.prototux.aare.R
 import net.prototux.aare.host.CarRuntime
@@ -856,11 +855,7 @@ class CarSession(
                 if (method == CaptureMethod.AUDIO_POLICY) AudioPolicySource(context, usages, rate, ch)
                 else ShizukuPolicySource(context, usages, rate, ch)
             }
-            CaptureMethod.SHIZUKU -> when {
-                guidance -> return
-                CaptureMethods.shizukuAvailable() -> ShizukuSource(context, rate, ch)
-                else -> SuSource(context, rate, ch)
-            }
+            CaptureMethod.SHIZUKU -> if (guidance) return else ShizukuSource(context, rate, ch)
             CaptureMethod.PLAYBACK_CAPTURE -> if (guidance || p == null) return else PlaybackCaptureSource(p, rate, ch)
             null -> {
                 if (!guidance) runtime.notice(context.getString(R.string.audio_settings_title), context.getString(R.string.audio_notice_setup_hint))
@@ -1155,7 +1150,7 @@ class CarSession(
             if (context.checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) == android.content.pm.PackageManager.PERMISSION_GRANTED)
                 context.getSystemService(android.bluetooth.BluetoothManager::class.java)?.adapter?.address else null
         }.getOrNull()
-        // typed in, readable, or asked from the system through Shizuku or root (18.11.2026, OwnBluetooth)
+        // typed in, readable, or asked from the system through Shizuku (18.11.2026, OwnBluetooth)
         return OwnBluetooth.forCar(context, settings, listOf(fromSecure, fromAdapter))
     }
 

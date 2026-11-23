@@ -24,4 +24,3 @@ rootProject.name = "AARE"
 include(":aap")
 include(":app")
 include(":headunit")
-include(":xposed")

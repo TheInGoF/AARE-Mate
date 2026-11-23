@@ -17,7 +17,6 @@ import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import net.prototux.aare.BuildConfig
-import net.prototux.aare.Settings
 import rikka.shizuku.Shizuku
 import java.io.IOException
 import java.io.InputStream
@@ -35,12 +34,12 @@ interface PcmSource {
 
 /** How AARE captures the phone's audio, best first. */
 enum class CaptureMethod(val label: String) {
-    /** Android Auto's own way: an audio policy (privileged app, see tools/magisk). Music and navigation voice apart. */
+    /** Android Auto's own way: an audio policy (privileged app in the system image). Music and navigation voice apart. */
     AUDIO_POLICY("System audio routing (like Android Auto)"),
     /** The same audio policy, registered by a Shizuku (adb rights) process: the shell holds MODIFY_AUDIO_ROUTING. */
     SHIZUKU_POLICY("Shizuku, music and navigation apart (like Android Auto)"),
-    /** The phone's whole output through Shizuku (adb rights) or root (su): navigation voice included, mixed with music. */
-    SHIZUKU("Shizuku or root"),
+    /** The phone's whole output through Shizuku (adb rights): navigation voice included, mixed with music. */
+    SHIZUKU("Shizuku"),
     /** Screen-capture consent: media only, apps may opt out, no navigation voice. */
     PLAYBACK_CAPTURE("Screen-capture permission"),
 }
@@ -68,28 +67,11 @@ object CaptureMethods {
         Shizuku.pingBinder() && !Shizuku.isPreV11() && Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED
     }.getOrDefault(false)
 
-    /** The user allowed capturing car audio through su (a rooted phone), confirmed by [checkRoot]. */
-    fun rootAvailable(context: Context): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && Settings(context).rootAudio
-
-    /** Runs `su -c id` off the main thread; [onResult] gets true if root is granted (uid 0). */
-    fun checkRoot(onResult: (Boolean) -> Unit) {
-        Thread {
-            val granted = runCatching {
-                val p = ProcessBuilder("su", "-c", "id").redirectErrorStream(true).start()
-                val out = p.inputStream.bufferedReader().use { it.readText() }
-                if (!p.waitFor(10, TimeUnit.SECONDS)) p.destroy()
-                out.contains("uid=0")
-            }.getOrDefault(false)
-            onResult(granted)
-        }.apply { isDaemon = true }.start()
-    }
-
     /** The best method available now, skipping [exclude] (methods that already failed). */
     fun best(context: Context, projection: MediaProjection?, exclude: Set<CaptureMethod> = emptySet()): CaptureMethod? = when {
         CaptureMethod.AUDIO_POLICY !in exclude && audioPolicyAvailable(context) -> CaptureMethod.AUDIO_POLICY
         CaptureMethod.SHIZUKU_POLICY !in exclude && shizukuAvailable() -> CaptureMethod.SHIZUKU_POLICY
-        CaptureMethod.SHIZUKU !in exclude && (shizukuAvailable() || rootAvailable(context)) -> CaptureMethod.SHIZUKU
+        CaptureMethod.SHIZUKU !in exclude && shizukuAvailable() -> CaptureMethod.SHIZUKU
         // Capturing other apps' sound arrived in Android 10.
         CaptureMethod.PLAYBACK_CAPTURE !in exclude && projection != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> CaptureMethod.PLAYBACK_CAPTURE
         else -> null
@@ -138,7 +120,7 @@ class PlaybackCaptureSource(private val projection: MediaProjection, private val
 /**
  * Android Auto's way: an audio policy whose mix takes the matching usages away from the phone's
  * speaker and loops them back to a recorder. Registering one needs MODIFY_AUDIO_ROUTING: a
- * privileged app (tools/magisk) or the shell, which Shizuku runs [ShellAudioService] as.
+ * privileged app (built into the system image) or the shell, which Shizuku runs [ShellAudioService] as.
  */
 internal object AudioPolicyCapture {
     private const val RULE_MATCH_ATTRIBUTE_USAGE = 0x1
@@ -198,7 +180,7 @@ internal object AudioPolicyCapture {
     }
 }
 
-/** [AudioPolicyCapture] in AARE itself: needs AARE installed in /system/priv-app (tools/magisk). */
+/** [AudioPolicyCapture] in Mate itself: needs Mate built into the system image as a privileged app. */
 class AudioPolicySource(
     private val context: Context,
     private val usages: IntArray,
@@ -334,49 +316,6 @@ class ShizukuPolicySource(
     private val key = usages.sorted().hashCode()
     override fun open(service: IShellAudio): ParcelFileDescriptor? = service.startPolicy(key, rate, channels, usages)
     override fun close(service: IShellAudio) = service.stopPolicy(key)
-}
-
-/**
- * The phone's whole output, recorded by [SuAudioMain] in a root process AARE starts with `su` and
- * `app_process` (the scrcpy/Shizuku way). The same capture as [ShizukuSource], for rooted phones
- * (KernelSU, Magisk, APatch…) without the Shizuku app or the Magisk module. PCM arrives on the
- * process's stdout.
- */
-class SuSource(private val context: Context, private val rate: Int, private val channels: Int) : PcmSource {
-    private var process: Process? = null
-    private var stream: InputStream? = null
-
-    override fun start(): Boolean {
-        val apk = context.applicationInfo.sourceDir
-        val cmd = "CLASSPATH='$apk' app_process / ${SuAudioMain::class.java.name} $rate $channels"
-        val p = runCatching { ProcessBuilder("su", "-c", cmd).start() }
-            .onFailure {
-                Log.w(TAG, "su launch", it)
-                // no su on this device (e.g. settings carried over from a rooted one): root capture is off again
-                net.prototux.aare.Settings(context).rootAudio = false
-            }.getOrNull() ?: return false
-        process = p
-        stream = p.inputStream
-        // Drain stderr so a chatty app_process can't fill its pipe and stall the capture.
-        Thread {
-            runCatching { p.errorStream.bufferedReader().forEachLine { if (BuildConfig.DEBUG) Log.d(TAG, "su: $it") } }
-        }.apply { isDaemon = true }.start()
-        return true
-    }
-
-    override fun read(buf: ByteArray, offset: Int, length: Int): Int = try {
-        stream?.read(buf, offset, length) ?: -1
-    } catch (_: IOException) {
-        -1
-    }
-
-    override fun release() {
-        // Closing our end breaks the helper's stdout pipe, so it stops; destroy() kills the su shell.
-        runCatching { stream?.close() }
-        runCatching { process?.destroy() }
-        stream = null
-        process = null
-    }
 }
 
 private const val TAG = "AareCapture"

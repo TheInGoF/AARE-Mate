@@ -209,7 +209,7 @@ dependencies {
     // Ferrostar talks to the routing service through OkHttp (its own dependency is runtime only)
     implementation("com.squareup.okhttp3:okhttp:5.3.2")
     // Car audio without the screen-capture consent: through Shizuku (adb rights), or Android's
-    // audio-policy interface when installed as a privileged app (tools/magisk).
+    // audio-policy interface when built into the system image as a privileged app.
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
     implementation(libs.hiddenapibypass)

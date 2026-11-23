@@ -15,14 +15,14 @@ import android.view.Surface
 import kotlin.system.exitProcess
 
 /**
- * Puts an ordinary phone app on the car screen, from a process with adb-level (Shizuku) or root
- * rights. It creates a virtual display that renders into the car screen's [Surface], launches the
- * chosen app there, and injects the car's touches and keys into that display.
+ * Puts an ordinary phone app on the car screen, from a process with adb-level (Shizuku) rights. It
+ * creates a virtual display that renders into the car screen's [Surface], launches the chosen app
+ * there, and injects the car's touches and keys into that display.
  *
  * DEVICE-TESTED, NOT verified here: creating a display an arbitrary app can run on
  * (VIRTUAL_DISPLAY_FLAG_TRUSTED and friends) and injecting input into it use hidden framework APIs
- * whose exact shape and permission requirements vary by Android version and by whether this runs as
- * root (su) or shell (Shizuku). Everything is wrapped so a failure logs and degrades rather than
+ * whose exact shape and permission requirements vary by Android version and by the uid Shizuku
+ * runs it as. Everything is wrapped so a failure logs and degrades rather than
  * crashing, but the privileged path WILL need on-device iteration. This is the scrcpy approach,
  * adapted to feed AARE's car screen.
  */
@@ -33,7 +33,7 @@ class LaunchHostService : ILaunchHost.Stub {
 
     constructor() : this(null)
 
-    /** Shizuku passes a Context when the service has this constructor; the su helper passes null. */
+    /** Shizuku passes a Context when the service has this constructor; without one the system context is used. */
     constructor(context: Context?) {
         this.injectedContext = context
         exemptHiddenApis()

@@ -41,10 +41,10 @@ The projection service runs a check on **every** transaction: the binding host m
 or hold `android.permission.CAPTURE_VIDEO_OUTPUT`. That permission is `signature`, so an ordinary
 app can't hold it, and the first `onSetup` is rejected with a `SecurityException` on a stock phone.
 
-The protocol code here is identical whether or not that check passes. Getting past it needs root:
-the AARE Xposed module grants exactly that one check to AARE's uid inside the Maps process (see
-[xposed.md](xposed.md)). There is no non-root path — a shell/Shizuku process can't bind the service
-at all, because ActivityManager won't bind a service for a process it doesn't track as an app.
+The protocol code here is identical whether or not that check passes. Mate has no way past it: the
+hook module AARE had for rooted phones is not part of Mate, and a shell/Shizuku process can't bind
+the service at all, because ActivityManager won't bind a service for a process it doesn't track as
+an app.
 
 ## The code
 
@@ -146,6 +146,5 @@ bottom edge under the floating controls, Maps keeps its buttons, logo and speed 
 ## Waze is a different path
 
 Waze uses the **public** Car App Library (`WazeCarAppService`), so it needs none of this. It is
-rejected only by its host allowlist (`HostValidator`), which the Xposed module's `isValidHost` hook
-clears for AARE. Once that hook is active, Waze should appear and connect through AARE's existing
-Car App Library host.
+rejected only by its host allowlist (`HostValidator`); AARE's hook module for rooted phones cleared
+that check, Mate has no such module.

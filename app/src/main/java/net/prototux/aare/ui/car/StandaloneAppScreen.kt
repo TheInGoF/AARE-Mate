@@ -98,7 +98,7 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
                             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
                                 val sf = Surface(st).also { surface = it }
                                 val live = java.util.concurrent.atomic.AtomicBoolean(true).also { alive = it }
-                                // connect() blocks (binds Shizuku / spawns su), so do it off the main thread.
+                                // connect() blocks (binds Shizuku), so do it off the main thread.
                                 Thread {
                                     if (launcher.connect() && live.get() && !cancelled.get()) {
                                         val id = launcher.start(sf, w, h, cinemaDpi(runtime.appDensityDpi), packageName)

@@ -161,7 +161,7 @@ private fun idmateColors() = darkColorScheme(
 )
 
 /**
- * The car screen in the IDmate style (*Settings > Style*): the apps get the whole display. The
+ * The car screen in the IDmate style (the only one since E-044): the apps get the whole display. The
  * controls float over the content in the bottom corner next to the driver, on a patch dimmed to
  * 70 % so that they stay readable over any app: the voice button, one button that names the area
  * in front and opens the switcher, the time and the phone's status. With the driver on the right
@@ -848,12 +848,12 @@ private fun areas(
     // the tile only while the car stands parked for sure (18.11.2026: "Der Bereich Kino, der sollte nur im Stand angezeigt
     // werden, wenn alle Bedingungen erfüllt sind")
     // parked, but no app can come (Shizuku not started, 19.11.2026): the area all the same, saying why
-    if (cinema.isEmpty() && state.parkedForFilms && state.cinemaMissing != null && !net.prototux.aare.launch.AppLauncher.available(LocalContext.current))
+    if (cinema.isEmpty() && state.parkedForFilms && state.cinemaMissing != null && !net.prototux.aare.launch.AppLauncher.available())
         out += Area(Icons.Rounded.Movie, stringResource(R.string.cinema_title), inner == Inner.CINEMA_MISSING) { show(Inner.CINEMA_MISSING) }
     // parked and a way to show phone apps there: the cinema's app menu (any app of the tablet, the chosen ones first)
     val canShow = cinema.isNotEmpty() || (state.parkedForFilms && state.cinemaMissing == null) ||
-        net.prototux.aare.launch.AppLauncher.available(LocalContext.current)
-    if (state.parkedForFilms && canShow && !(cinema.isEmpty() && state.cinemaMissing != null && !net.prototux.aare.launch.AppLauncher.available(LocalContext.current)))
+        net.prototux.aare.launch.AppLauncher.available()
+    if (state.parkedForFilms && canShow && !(cinema.isEmpty() && state.cinemaMissing != null && !net.prototux.aare.launch.AppLauncher.available()))
         out += Area(Icons.Rounded.Movie, stringResource(R.string.cinema_title), inner == Inner.CINEMA || cinema.any { it.id == shown }) { show(Inner.CINEMA) }
     return out
 }
