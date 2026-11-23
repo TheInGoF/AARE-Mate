@@ -648,7 +648,8 @@
     <string name="internet_notice_title">Internet</string>
     <string name="internet_notice_portal">The Wi\u2011Fi is waiting for a confirmation. On the tablet, tap \u201cSign in to network\u201d \u2013 until then music, search and routes won\u2019t load.</string>
     <string name="internet_notice_wifi">The Wi\u2011Fi has no internet. Music, search and routes load once another network is there.</string>
-    <string name="internet_notice_wifi_stuck">The tablet hangs on a Wi-Fi without internet (for example the car one) instead of mobile data. Disconnect that Wi-Fi on the tablet or open its sign-in page - Shizuku keeps running.</string>
+    <string name="internet_notice_wifi_stuck">The tablet hangs in a Wi-Fi without internet (e.g. the car’s). Mate itself now loads over mobile data; other apps only once the Wi-Fi is left on the tablet or its login page is opened.</string>
+    <string name="internet_notice_mobile_stuck">Mobile data gets nothing through (no coverage or data used up?). Music, search and routes load again with a network; offline music and maps go on.</string>
     <string name="internet_notice_offline">No internet connection. Music, search and routes load once there is a network again.</string>
     <string name="internet_notice_back">Internet is back.</string>
     <string name="music_error_offline">No internet connection: music from the server needs a network.</string>
