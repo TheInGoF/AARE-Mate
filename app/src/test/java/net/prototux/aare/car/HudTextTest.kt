@@ -4,25 +4,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The small head-up display (17.11.2026, "B 86: Zw…"): pieces of at most 9 characters, the road's number first. */
+/** The small head-up display (17.11.2026, "B 86: Zw…"): pieces of at most 9 characters, the turn's words and the road's numbers. */
 class HudTextTest {
     private val de = hudWords("values-de")
 
-    @Test fun roadAndPlaces() {
-        assertEquals(listOf("B 86", "Hamburg", "Sangerha."), HudText.pieces("B 86: Hamburg, Sangerhausen"))
-    }
-    @Test fun exitNumber() {
-        assertEquals(listOf("Ausf. 25", "Eisenach"), HudText.pieces("Ausfahrt 25 · Eisenach", de))
-    }
-    @Test fun shortStaysWhole() {
-        assertEquals(listOf("A 4"), HudText.pieces("A 4"))
-    }
-    @Test fun everyPieceFits() {
-        HudText.pieces("Richtung Hohenstein-Ernstthal, Glauchau-Ost, Bad Elster").forEach { assertTrue(it, it.length <= HudText.MAX) }
-    }
     @Test fun takesTurns() {
-        assertEquals("B 86", HudText.at("B 86: Hamburg", 0))
-        assertEquals("Hamburg", HudText.at("B 86: Hamburg", HudText.STEP_MS))
+        assertEquals("rechts ab", HudText.at(listOf("rechts ab", "B 86"), 0))
+        assertEquals("B 86", HudText.at(listOf("rechts ab", "B 86"), HudText.STEP_MS))
+        assertEquals("", HudText.at(emptyList(), 0))
     }
 
     /** 18.11.2026: far from the turn the line also says it in words ("andere Apps sagen dann halt in 73 Kilometer rechts abbiegen"). */
@@ -39,9 +28,7 @@ class HudTextTest {
         listOf("TYPE_TURN_SHARP_LEFT", "TYPE_TURN_SLIGHT_RIGHT", "TYPE_MERGE_LEFT", "TYPE_U_TURN_LEFT", "TYPE_ON_RAMP_NORMAL_LEFT", "TYPE_FORK_RIGHT").forEach {
             val w = NavStatusBridge.words(type(it), 0, de)!!
             org.junit.Assert.assertTrue("$it: \"$w\" fits the line", w.length <= HudText.MAX)
-            org.junit.Assert.assertEquals("shown whole", listOf(w), HudText.pieces(w))
         }
-        org.junit.Assert.assertEquals(listOf("rechts ab", "Dr.-Frie.", "Ring"), HudText.pieces("rechts ab · Dr.-Friedrichs Ring").take(3))
     }
 
     /** 18.11.2026: no names any more - "rechts abbiegen auf die B75, auffahren auf die A24" (the log: "B 86: Zw…"). */

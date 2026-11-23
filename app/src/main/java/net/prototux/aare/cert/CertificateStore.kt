@@ -3,6 +3,7 @@ package net.prototux.aare.cert
 import android.content.Context
 import android.net.Uri
 import android.util.Base64
+import net.prototux.aare.R
 import net.prototux.aare.aap.PhoneIdentity
 import net.prototux.aare.aap.cert.SelfSignedCertificate
 import java.io.File
@@ -25,7 +26,8 @@ import java.security.spec.PKCS8EncodedKeySpec
  */
 class CertificateStore(private val context: Context) {
 
-    class Entry(val name: String, val identity: PhoneIdentity, val removable: Boolean = true) {
+    /** [name] to show (the fixed entries' in the app's language), [key] the same in every language (for the log and to find it again). */
+    class Entry(val name: String, val identity: PhoneIdentity, val removable: Boolean = true, val key: String = name) {
         val subject: String get() = identity.certificate.subjectX500Principal.name
         val notAfter get() = identity.certificate.notAfter
         val selfSigned: Boolean get() = identity.certificate.subjectX500Principal == identity.certificate.issuerX500Principal
@@ -41,7 +43,7 @@ class CertificateStore(private val context: Context) {
      */
     fun entries(): List<Entry> {
         val imported = dir.listFiles { f -> f.isDirectory && f.name != "_generated" }.orEmpty().sortedBy { it.name }.mapNotNull { load(it) }
-        return imported + listOfNotNull(builtIn) + Entry(GENERATED, generated(), removable = false)
+        return imported + listOfNotNull(builtIn) + generatedEntry(generated())
     }
 
     /** Whether a Google-issued certificate (downloaded or imported) is available to offer. */
@@ -54,7 +56,7 @@ class CertificateStore(private val context: Context) {
                 CertificateFactory.getInstance("X.509").generateCertificates(input).map { it as X509Certificate }
             }
             val key = parsePkcs8(context.assets.open("$BUILT_IN_DIR/key.pem").bufferedReader().use { it.readText() })
-            Entry(BUILT_IN, PhoneIdentity(chain.first(), key, chain.drop(1)), removable = false)
+            Entry(context.getString(R.string.cert_name_built_in), PhoneIdentity(chain.first(), key, chain.drop(1)), removable = false, key = BUILT_IN)
         }.getOrNull()
     }
 
@@ -110,7 +112,7 @@ class CertificateStore(private val context: Context) {
     }
 
     fun remove(entry: Entry) {
-        dir.listFiles().orEmpty().firstOrNull { load(it)?.name == entry.name && it.name != "_generated" }?.deleteRecursively()
+        dir.listFiles().orEmpty().firstOrNull { load(it)?.key == entry.key && it.name != "_generated" }?.deleteRecursively()
     }
 
     private fun newDir(name: String): File {
@@ -131,12 +133,16 @@ class CertificateStore(private val context: Context) {
         val chain = CertificateFactory.getInstance("X.509")
             .generateCertificates(File(d, "chain.pem").inputStream()).map { it as X509Certificate }
         val key = parsePkcs8(File(d, "key.pem").readText())
-        Entry(if (d.name == "_generated") GENERATED else d.name, PhoneIdentity(chain.first(), key, chain.drop(1)), removable = d.name != "_generated")
+        val identity = PhoneIdentity(chain.first(), key, chain.drop(1))
+        if (d.name == "_generated") generatedEntry(identity) else Entry(d.name, identity)
     }.getOrNull()
 
+    private fun generatedEntry(identity: PhoneIdentity) =
+        Entry(context.getString(R.string.cert_name_generated), identity, removable = false, key = GENERATED)
+
     companion object {
-        private const val GENERATED = "Generated (self-signed)"
-        private const val BUILT_IN = "AARE (built in)"
+        private const val GENERATED = "generated (self-signed)"
+        private const val BUILT_IN = "built in"
         private const val BUILT_IN_DIR = "phone_identity"
         /** Marks a certificate directory written by [importDownloaded]. */
         private const val DOWNLOADED_MARKER = "downloaded"

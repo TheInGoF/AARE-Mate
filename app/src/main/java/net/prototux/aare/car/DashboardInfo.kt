@@ -9,6 +9,7 @@ import android.location.Location
 import android.location.LocationManager
 import android.provider.CalendarContract
 import android.util.Log
+import net.prototux.aare.R
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -70,7 +71,7 @@ object DashboardInfo {
                 arrayOf(CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN, CalendarContract.Instances.ALL_DAY,
                     CalendarContract.Instances.EVENT_LOCATION),
                 "${CalendarContract.Instances.VISIBLE} = 1", null, "${CalendarContract.Instances.ALL_DAY} ASC, ${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
-                if (c.moveToFirst()) NextEvent(c.getString(0).orEmpty().ifBlank { "Event" }, c.getLong(1), c.getInt(2) == 1, c.getString(3).orEmpty()) else null
+                if (c.moveToFirst()) NextEvent(c.getString(0).orEmpty().ifBlank { context.getString(R.string.calendar_untitled) }, c.getLong(1), c.getInt(2) == 1, c.getString(3).orEmpty()) else null
             }
         }.getOrNull()
     }

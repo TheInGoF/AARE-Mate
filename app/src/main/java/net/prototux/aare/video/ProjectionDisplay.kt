@@ -65,11 +65,6 @@ class ProjectionDisplay(
         presentation = p
     }
 
-    /** Swaps the target surface (e.g. after the encoder restarted). */
-    fun setSurface(surface: Surface?) {
-        display.surface = surface
-    }
-
     fun dispatchTouch(event: MotionEvent) {
         main.post {
             if (event.actionMasked == MotionEvent.ACTION_DOWN) CarFocusVisibility.keyInput = false

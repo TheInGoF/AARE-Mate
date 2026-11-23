@@ -9,24 +9,23 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
 import io.github.muntashirakon.adb.android.AdbMdns
 import net.prototux.aare.DiagLog
 import net.prototux.aare.R
+import net.prototux.aare.aap.cert.SelfSignedCertificate
 import net.prototux.aare.audio.CaptureMethods
 import java.io.File
-import java.math.BigInteger
 import java.security.KeyFactory
-import java.security.KeyPairGenerator
 import java.security.PrivateKey
 import java.security.cert.Certificate
 import java.security.cert.CertificateFactory
 import java.security.spec.PKCS8EncodedKeySpec
-import java.util.Date
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
-import javax.security.auth.x500.X500Principal
 
 /**
  * System L-063 (Ingo, 19.11.2026: "Gibt es keine Möglichkeit, Shizuku mit der Mate-App zu starten? … Ohne Root, ohne
@@ -50,6 +49,18 @@ object SelfAdb {
     @Volatile private var pairingPort = 0
     @Volatile private var mdns: AdbMdns? = null
     @Volatile private var lastTry = 0L
+    private val main = Handler(Looper.getMainLooper())
+    /** The search for the pairing service ends after this long without a pairing; starting the pairing again restarts it. */
+    private const val SEARCH_MS = 5 * 60_000L
+    private val endSearch = Runnable { stopSearch("no pairing within 5 minutes") }
+
+    private fun stopSearch(why: String) {
+        main.removeCallbacks(endSearch)
+        val m = mdns ?: return
+        mdns = null
+        runCatching { m.stop() }
+        DiagLog.add("shizuku by Mate: pairing search stopped ($why)")
+    }
 
     /** Whether Mate has paired with the tablet's wireless debugging once. */
     fun paired(context: Context): Boolean = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("paired", false)
@@ -66,6 +77,7 @@ object SelfAdb {
         val app = context.applicationContext
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) { DiagLog.add("shizuku by Mate: needs Android 11 (wireless debugging)"); return }
         pairingPort = 0
+        main.removeCallbacks(endSearch)
         mdns?.stop()
         mdns = AdbMdns(app, AdbMdns.SERVICE_TYPE_TLS_PAIRING) { _, port ->
             if (port > 0 && port != pairingPort) {
@@ -74,6 +86,7 @@ object SelfAdb {
                 note(app, app.getString(R.string.self_adb_pair_found), ask = true)
             }
         }.also { it.start() }
+        main.postDelayed(endSearch, SEARCH_MS)
         note(app, app.getString(R.string.self_adb_pair_open), ask = true)
         DiagLog.add("shizuku by Mate: pairing started, waiting for the code")
     }
@@ -84,12 +97,15 @@ object SelfAdb {
         val digits = code.filter(Char::isDigit)
         work.execute {
             val port = pairingPort
-            if (port <= 0) { note(app, app.getString(R.string.self_adb_pair_no_service), ask = true); return@execute }
+            if (port <= 0) {
+                if (mdns == null) startPairing(app) // the search had ended: look again
+                note(app, app.getString(R.string.self_adb_pair_no_service), ask = true); return@execute
+            }
             note(app, app.getString(R.string.self_adb_pairing), ask = false)
             val ok = runCatching { Manager(app).use { it.pair("127.0.0.1", port, digits) } }
                 .onFailure { DiagLog.add("shizuku by Mate: pairing failed - ${it.javaClass.simpleName}: ${it.message}") }.getOrDefault(false)
-            if (!ok) { note(app, app.getString(R.string.self_adb_pair_failed), ask = true); return@execute }
-            mdns?.stop(); mdns = null
+            if (!ok) { stopSearch("pairing failed"); note(app, app.getString(R.string.self_adb_pair_failed), ask = true); return@execute }
+            stopSearch("paired")
             app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("paired", true).apply()
             DiagLog.add("shizuku by Mate: paired")
             val started = startNow(app, "after pairing")
@@ -99,15 +115,15 @@ object SelfAdb {
 
     /**
      * Shizuku started by Mate when it is not running and Mate has paired: in the background, at most once a minute.
-     * [why] for the log (car connected, phone app opened).
+     * [why] for the log (car connected, phone app opened). [done] runs once the try is over (or nothing was to do).
      */
-    fun ensureShizuku(context: Context, why: String) {
+    fun ensureShizuku(context: Context, why: String, done: () -> Unit = {}) {
         val app = context.applicationContext
-        if (CaptureMethods.shizukuAvailable() || !paired(app) || !CaptureMethods.shizukuInstalled(app)) return
+        if (CaptureMethods.shizukuAvailable() || !paired(app) || !CaptureMethods.shizukuInstalled(app)) { done(); return }
         val now = System.currentTimeMillis()
-        if (now - lastTry < 60_000) return
+        if (now - lastTry < 60_000) { done(); return }
         lastTry = now
-        work.execute { startNow(app, why) }
+        work.execute { try { startNow(app, why) } finally { done() } }
     }
 
     /** Started from the phone app's button: without the once-a-minute limit. */
@@ -198,19 +214,9 @@ internal fun selfAdbKey(dir: File): Pair<PrivateKey, Certificate> {
     val keyFile = File(dir, "key.pk8"); val certFile = File(dir, "cert.der")
     if (!keyFile.exists() || !certFile.exists()) {
         dir.mkdirs()
-        val pair = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
-        @Suppress("DEPRECATION")
-        val gen = org.bouncycastle.x509.X509V3CertificateGenerator().apply {
-            val name = X500Principal("CN=Mate")
-            setSerialNumber(BigInteger.valueOf(System.currentTimeMillis()))
-            setIssuerDN(name); setSubjectDN(name)
-            setNotBefore(Date(System.currentTimeMillis() - 86_400_000L))
-            setNotAfter(Date(System.currentTimeMillis() + 30L * 365 * 86_400_000L))
-            setPublicKey(pair.public)
-            setSignatureAlgorithm("SHA256withRSA")
-        }
-        @Suppress("DEPRECATION")
-        val c = gen.generate(pair.private)
+        val gen = SelfSignedCertificate.generate("Mate")
+        val pair = gen.keyPair
+        val c = gen.certificate
         keyFile.writeBytes(pair.private.encoded)
         certFile.writeBytes(c.encoded)
     }

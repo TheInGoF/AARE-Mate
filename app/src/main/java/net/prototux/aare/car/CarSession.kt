@@ -107,8 +107,11 @@ class CarSession(
 
     interface Listener {
         fun onStatus(session: CarSession, status: String)
-        /** [pinRefusal] is set when the phone refused the head unit's certificate. */
-        fun onEnded(session: CarSession, reason: String, certificateRejected: Boolean, pinRefusal: PinRefusal?)
+        /**
+         * [reason] for the log only (English); [failed] when the session broke off rather than ended normally.
+         * [pinRefusal] is set when the phone refused the head unit's certificate.
+         */
+        fun onEnded(session: CarSession, reason: String, failed: Boolean, certificateRejected: Boolean, pinRefusal: PinRefusal?)
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -254,8 +257,6 @@ class CarSession(
         Log.i(TAG, "asking the car for its own screen")
         ch.requestNativeFocus()
     }
-
-    val rttMs: Long get() = aap.lastRttMs
 
     // ------------------------------------------------------------------ AAP callbacks (reader thread)
 
@@ -499,7 +500,7 @@ class CarSession(
         val refusal = session.pinRefusal
         main.post {
             teardown()
-            listener.onEnded(this, reason, rejected, refusal)
+            listener.onEnded(this, reason, error != null, rejected, refusal)
         }
     }
 
@@ -1034,7 +1035,7 @@ class CarSession(
     private fun turnImage(m: androidx.car.app.navigation.model.Maneuver, w: Int, h: Int): ByteArray? {
         val icon = m.icon ?: return null
         val img = runtime.icons.load(icon, maxOf(w, h), runtime.ui.tripPackage) ?: return null
-        val bmp = Bitmap.createScaledBitmap(img.asAndroidBitmapCompat(), w, h, true)
+        val bmp = Bitmap.createScaledBitmap(img.asAndroidBitmap(), w, h, true)
         return ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
     }
 
@@ -1274,8 +1275,6 @@ class CarSession(
         }
     }
 }
-
-private fun androidx.compose.ui.graphics.ImageBitmap.asAndroidBitmapCompat(): Bitmap = asAndroidBitmap()
 
 /** Frames per second of the video to the car (30 or 60, as it was agreed): Mate Navi draws its map at this rate. */
 @Volatile

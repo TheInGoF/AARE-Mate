@@ -102,11 +102,12 @@ class PhoneStatusBridge(
     private val ringMain = Handler(android.os.Looper.getMainLooper())
 
     fun stop() {
-        ringMain.post { CarRingtone.stop("the car is gone") }
+        // first stopped, then the ring: a refresh() under way cannot start it again after this
         running = false
+        handler.removeCallbacksAndMessages(null)
+        ringMain.post { CarRingtone.stop("the car is gone") }
         runCatching { context.unregisterReceiver(batteryReceiver) }
         runCatching { context.unregisterReceiver(callReceiver) }
-        handler.removeCallbacksAndMessages(null)
         thread.quitSafely()
     }
 
@@ -170,6 +171,7 @@ class PhoneStatusBridge(
             val ringNow = state == TelephonyManager.CALL_STATE_RINGING
             ringMain.post {
                 if (ringNow) {
+                    if (!running) return@post
                     val st = net.prototux.aare.Settings(context)
                     CarRingtone.start(context, CarRingtone.tone(st.carRingtone), st.carRingtoneVolume / 100f)
                 } else CarRingtone.stop(if (state == TelephonyManager.CALL_STATE_OFFHOOK) "the call was answered" else "the call is gone")

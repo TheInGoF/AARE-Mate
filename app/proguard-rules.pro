@@ -4,6 +4,10 @@
 -keep class net.prototux.aare.audio.ShellAudioService { <init>(...); *; }
 -keep class net.prototux.aare.launch.LaunchHostService { <init>(...); *; }
 
+# Started as root by name with app_process (su), main() is called by nobody in the app: keep it (System I-105b).
+-keep class net.prototux.aare.launch.LaunchMain { public static void main(java.lang.String[]); }
+-keep class net.prototux.aare.audio.SuAudioMain { public static void main(java.lang.String[]); }
+
 # Hidden framework members are reached by reflection; our own classes are not, but keep line numbers
 # so crash reports stay readable.
 -keepattributes SourceFile,LineNumberTable

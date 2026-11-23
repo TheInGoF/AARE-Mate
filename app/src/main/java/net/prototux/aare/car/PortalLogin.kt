@@ -5,7 +5,14 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.os.SystemClock
 import net.prototux.aare.DiagLog
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
+import java.net.InetSocketAddress
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLEncoder
 
@@ -110,29 +117,158 @@ internal object PortalLogin {
 
     private class Answer(val code: Int, val location: String?, val body: String)
 
+    /** Keeps the cookies [setCookies] and finds where [body] sends on by itself. */
+    private fun answer(code: Int, location: String?, setCookies: List<String>, body: String, cookies: MutableMap<String, String>): Answer {
+        setCookies.forEach { v -> v.substringBefore(';').split('=', limit = 2).takeIf { it.size == 2 }?.let { cookies[it[0].trim()] = it[1].trim() } }
+        // a page that sends on by itself (<meta http-equiv="refresh" content="0; url=...">)
+        val meta = Regex("(?is)http-equiv\\s*=\\s*[\"']?refresh[^>]*url\\s*=\\s*([^\"'>]+)").find(body)?.groupValues?.get(1)?.trim()
+        return Answer(code, location ?: meta, body)
+    }
+
     private fun open(n: Network, url: String, cookies: Map<String, String>): HttpURLConnection =
         (n.openConnection(URL(url)) as HttpURLConnection).apply {
-            connectTimeout = 6_000; readTimeout = 6_000; instanceFollowRedirects = false
-            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) Mate")
-            if (cookies.isNotEmpty()) setRequestProperty("Cookie", cookies.entries.joinToString("; ") { it.key + "=" + it.value })
+            connectTimeout = TIMEOUT_MS; readTimeout = TIMEOUT_MS; instanceFollowRedirects = false
+            setRequestProperty("User-Agent", AGENT)
+            if (cookies.isNotEmpty()) setRequestProperty("Cookie", cookieHeader(cookies))
         }
 
     private fun read(c: HttpURLConnection, cookies: MutableMap<String, String>): Answer = try {
         val code = c.responseCode
-        c.headerFields["Set-Cookie"]?.forEach { v -> v.substringBefore(';').split('=', limit = 2).takeIf { it.size == 2 }?.let { cookies[it[0].trim()] = it[1].trim() } }
-        val body = runCatching { (if (code >= 400) c.errorStream else c.inputStream)?.bufferedReader()?.use { r -> r.readText().take(200_000) } }.getOrNull() ?: ""
-        // a page that sends on by itself (<meta http-equiv="refresh" content="0; url=...">)
-        val meta = Regex("(?is)http-equiv\\s*=\\s*[\"']?refresh[^>]*url\\s*=\\s*([^\"'>]+)").find(body)?.groupValues?.get(1)?.trim()
-        Answer(code, c.getHeaderField("Location") ?: meta, body)
+        val body = runCatching { (if (code >= 400) c.errorStream else c.inputStream)?.bufferedReader()?.use { r -> r.readText().take(MAX_CHARS) } }.getOrNull() ?: ""
+        answer(code, c.getHeaderField("Location"), c.headerFields["Set-Cookie"].orEmpty(), body, cookies)
     } finally { c.disconnect() }
 
-    private fun get(n: Network, url: String, cookies: MutableMap<String, String>) = read(open(n, url, cookies), cookies)
+    private fun get(n: Network, url: String, cookies: MutableMap<String, String>): Answer =
+        if (plain(url)) plainRequest(n, url, null, cookies, null) else read(open(n, url, cookies), cookies)
 
     private fun post(n: Network, url: String, body: String, cookies: MutableMap<String, String>, referer: String): Answer {
+        if (plain(url)) return plainRequest(n, url, body, cookies, referer)
         val c = open(n, url, cookies)
         c.requestMethod = "POST"; c.doOutput = true
         c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded"); c.setRequestProperty("Referer", referer)
         c.outputStream.use { it.write(body.toByteArray()) }
         return read(c, cookies)
+    }
+
+    private const val TIMEOUT_MS = 6_000
+    private const val TOTAL_MS = 20_000L
+    private const val MAX_CHARS = 200_000
+    private const val MAX_BYTES = 600_000
+    private const val AGENT = "Mozilla/5.0 (Linux; Android) Mate"
+
+    private fun cookieHeader(cookies: Map<String, String>) = cookies.entries.joinToString("; ") { it.key + "=" + it.value }
+
+    private fun plain(url: String) = runCatching { URL(url).protocol.equals("http", true) }.getOrDefault(false)
+
+    /**
+     * A small HTTP/1.1 request over the Wi-Fi's own sockets, for the check page and login pages that are plain http.
+     * The app's network security config keeps HttpURLConnection HTTPS only (plain HTTP is refused there), so these few
+     * pages go this way; everything else stays HTTPS only. [body] null sends a GET, else a form POST.
+     */
+    private fun plainRequest(n: Network, url: String, body: String?, cookies: MutableMap<String, String>, referer: String?): Answer {
+        val u = URL(url)
+        val port = if (u.port > 0) u.port else 80
+        val path = u.file.ifEmpty { "/" }
+        val address = n.getAllByName(u.host).first()
+        val deadline = SystemClock.elapsedRealtime() + TOTAL_MS
+        n.socketFactory.createSocket().use { s ->
+            s.connect(InetSocketAddress(address, port), TIMEOUT_MS)
+            s.soTimeout = TIMEOUT_MS
+            val payload = body?.toByteArray(Charsets.UTF_8)
+            val head = StringBuilder()
+            head.append(if (payload != null) "POST" else "GET").append(' ').append(path).append(" HTTP/1.1\r\n")
+            head.append("Host: ").append(u.host).append(if (u.port > 0 && u.port != 80) ":${u.port}" else "").append("\r\n")
+            head.append("User-Agent: ").append(AGENT).append("\r\n")
+            head.append("Accept: text/html,*/*\r\n")
+            head.append("Accept-Encoding: identity\r\n")
+            head.append("Connection: close\r\n")
+            if (cookies.isNotEmpty()) head.append("Cookie: ").append(cookieHeader(cookies)).append("\r\n")
+            if (payload != null) {
+                head.append("Content-Type: application/x-www-form-urlencoded\r\n")
+                head.append("Content-Length: ").append(payload.size).append("\r\n")
+                if (referer != null) head.append("Referer: ").append(referer).append("\r\n")
+            }
+            head.append("\r\n")
+            val out = BufferedOutputStream(s.getOutputStream())
+            out.write(head.toString().toByteArray(Charsets.ISO_8859_1))
+            if (payload != null) out.write(payload)
+            out.flush()
+
+            val input = BufferedInputStream(s.getInputStream())
+            var code: Int
+            var headers: List<Pair<String, String>>
+            do { // skip interim answers (100 Continue)
+                val status = line(input, deadline) ?: throw IOException("no status line")
+                code = status.split(' ').getOrNull(1)?.toIntOrNull() ?: throw IOException("bad status line")
+                headers = generateSequence { line(input, deadline)?.takeIf { it.isNotEmpty() } }
+                    .take(200).mapNotNull { h -> h.indexOf(':').takeIf { it > 0 }?.let { h.substring(0, it).trim() to h.substring(it + 1).trim() } }.toList()
+            } while (code in 100..199)
+            fun header(name: String) = headers.firstOrNull { it.first.equals(name, true) }?.second
+            val bytes = when {
+                code == 204 || code == 304 -> ByteArray(0)
+                header("Transfer-Encoding")?.contains("chunked", true) == true -> chunked(input, deadline)
+                else -> header("Content-Length")?.toLongOrNull()?.let { exactly(input, it, deadline) } ?: rest(input, deadline)
+            }
+            val cs = header("Content-Type")?.let { Regex("(?i)charset=\"?([\\w.:-]+)").find(it)?.groupValues?.get(1) }
+                ?.let { runCatching { charset(it) }.getOrNull() } ?: Charsets.UTF_8
+            val text = String(bytes, cs).take(MAX_CHARS)
+            return answer(code, header("Location"), headers.filter { it.first.equals("Set-Cookie", true) }.map { it.second }, text, cookies)
+        }
+    }
+
+    private fun due(deadline: Long) { if (SystemClock.elapsedRealtime() > deadline) throw SocketTimeoutException("page took too long") }
+
+    /** One header line without its line end, null at the end of the stream. */
+    private fun line(input: InputStream, deadline: Long): String? {
+        val b = ByteArrayOutputStream()
+        while (true) {
+            due(deadline)
+            val c = input.read()
+            if (c < 0) return if (b.size() == 0) null else b.toString("ISO-8859-1")
+            if (c == '\n'.code) return b.toString("ISO-8859-1").trimEnd('\r')
+            if (b.size() >= 8_192) throw IOException("header line too long")
+            b.write(c)
+        }
+    }
+
+    /** Up to [count] bytes (at most [MAX_BYTES]). */
+    private fun exactly(input: InputStream, count: Long, deadline: Long): ByteArray {
+        val want = count.coerceIn(0, MAX_BYTES.toLong()).toInt()
+        val b = ByteArray(want)
+        var got = 0
+        while (got < want) {
+            due(deadline)
+            val r = input.read(b, got, want - got)
+            if (r < 0) break
+            got += r
+        }
+        return b.copyOf(got)
+    }
+
+    /** All bytes until the server closes (at most [MAX_BYTES]). */
+    private fun rest(input: InputStream, deadline: Long): ByteArray {
+        val b = ByteArrayOutputStream()
+        val buf = ByteArray(8_192)
+        while (b.size() < MAX_BYTES) {
+            due(deadline)
+            val r = input.read(buf, 0, minOf(buf.size, MAX_BYTES - b.size()))
+            if (r < 0) break
+            b.write(buf, 0, r)
+        }
+        return b.toByteArray()
+    }
+
+    /** A body sent in chunks (at most [MAX_BYTES]). */
+    private fun chunked(input: InputStream, deadline: Long): ByteArray {
+        val b = ByteArrayOutputStream()
+        while (b.size() < MAX_BYTES) {
+            val size = line(input, deadline)?.substringBefore(';')?.trim()?.toLongOrNull(16) ?: break
+            if (size <= 0) break
+            val part = exactly(input, minOf(size, (MAX_BYTES - b.size()).toLong()), deadline)
+            b.write(part)
+            if (part.size.toLong() < size) break
+            line(input, deadline) // the line end after the chunk
+        }
+        return b.toByteArray()
     }
 }

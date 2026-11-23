@@ -15,8 +15,8 @@ import android.util.Log
  * and hands its binder back to the app with a targeted broadcast (the libsu way — a LocalSocket
  * can't carry a live binder), then stays alive on a Looper to serve it.
  *
- * Kept out of R8 by the release build having no minification (see SuAudioMain's note), so the class
- * and method survive under this exact name for app_process to find.
+ * The release build keeps the class and its main() under this exact name for app_process to find
+ * (a rule in proguard-rules.pro: nothing in the app calls main(), so R8 would remove it).
  */
 object LaunchMain {
     @JvmStatic

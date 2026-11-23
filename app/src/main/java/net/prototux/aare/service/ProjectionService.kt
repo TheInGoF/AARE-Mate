@@ -119,7 +119,7 @@ class ProjectionService : Service() {
         // No session runs yet: undo a Do Not Disturb left on by a drive that crashed, now rather than at the next drive.
         DrivingMode.recover(this)
         createChannel()
-        _state.update { it.copy(running = true) }
+        _state.update { it.copy(running = true, status = getString(R.string.notif_status_not_connected)) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -157,7 +157,8 @@ class ProjectionService : Service() {
         if (lanSession) { lanSession = false; settings.headUnitServerLan = false }
         tcpServer?.stop()
         projection?.stop()
-        wakeLock?.takeIf { it.isHeld }?.release()
+        // the session's onEnded is ignored from here on: release the locks and watchers it would have released
+        releaseWakeLock()
         scope.cancel()
         _state.value = State()
         super.onDestroy()
@@ -251,7 +252,7 @@ class ProjectionService : Service() {
                         if (session == null) continue
                         return@launch
                     }
-                    _state.update { it.copy(status = getString(R.string.notif_status_not_connected), lastError = e.message) }
+                    _state.update { it.copy(status = getString(R.string.notif_status_not_connected), lastError = getString(R.string.error_wireless_failed)) }
                     return@launch
                 }
             }
@@ -380,7 +381,7 @@ class ProjectionService : Service() {
         }
         lastSessionWireless = wireless
         val cert = certs.pick(settings.certificateIndex)
-        log("connecting ${transport.name} with certificate \"${cert.name}\"")
+        log("connecting ${transport.name} with certificate \"${cert.key}\"")
         acquireWakeLock()
         sessionStart = SystemClock.elapsedRealtime()
         val s = CarSession(this, transport, cert.identity, settings, media, { projection }, wireless, peerKey, trustOnFirstUse, sessionListener, mirror)
@@ -396,7 +397,7 @@ class ProjectionService : Service() {
             updateNotification(status)
         }
 
-        override fun onEnded(session: CarSession, reason: String, certificateRejected: Boolean, pinRefusal: PinRefusal?) {
+        override fun onEnded(session: CarSession, reason: String, failed: Boolean, certificateRejected: Boolean, pinRefusal: PinRefusal?) {
             if (destroyed || this@ProjectionService.session !== session) return
             this@ProjectionService.session = null
             releaseWakeLock()
@@ -421,7 +422,7 @@ class ProjectionService : Service() {
             if (certificateRejected) {
                 // Offer the next certificate next time: strict head units only accept Google-issued ones.
                 settings.certificateIndex = settings.certificateIndex + 1
-                log("head unit rejected the certificate; next connection offers \"${certs.pick(settings.certificateIndex).name}\"")
+                log("head unit rejected the certificate; next connection offers \"${certs.pick(settings.certificateIndex).key}\"")
                 // Strict head units accept only a Google-issued certificate. If we don't have one yet,
                 // offer to fetch it, so the user needn't open Advanced before connecting.
                 if (!certs.hasGoogleCertificate() && !certDownloadPrompted) {
@@ -431,7 +432,11 @@ class ProjectionService : Service() {
             }
             pinRefusal?.let { log("head unit ${it.peerKey} showed certificate SHA-256 ${it.fingerprint}") }
             log("disconnected: $why")
-            _state.update { it.copy(connected = false, status = getString(R.string.notif_status_not_connected), video = "", lastError = why.takeIf { r -> "stopped" !in r && "ended" !in r }, pendingTrust = pinRefusal) }
+            _state.update { it.copy(connected = false, status = getString(R.string.notif_status_not_connected), video = "", lastError = when {
+                pinRefusal != null -> why
+                failed -> getString(R.string.error_connection_lost)
+                else -> null
+            }, pendingTrust = pinRefusal) }
             updateNotification(getString(R.string.notif_status_not_connected))
             // A USB link that dropped while still plugged in usually comes back: retry a few times.
             // Not a refused certificate: it would be refused again until the user trusts it.
@@ -654,7 +659,7 @@ class ProjectionService : Service() {
                 if (destroyed) return@post
                 result.onSuccess { entry ->
                     // Offer the downloaded certificate first on the next connection.
-                    settings.certificateIndex = certs.entries().indexOfFirst { it.name == entry.name }.coerceAtLeast(0)
+                    settings.certificateIndex = certs.entries().indexOfFirst { it.key == entry.key }.coerceAtLeast(0)
                     certDownloadPrompted = false
                     val address = lastWirelessAddress
                     if (lastSessionWireless && address != null && session == null) {

@@ -15,7 +15,7 @@ import java.io.OutputStream
  * Wired head units switch the phone to USB accessory mode (AOA) with the strings
  * manufacturer "Android", model "Android Auto", then talk AAP over the bulk endpoints.
  */
-class UsbAccessoryTransport(usb: UsbManager, val accessory: UsbAccessory) : Transport {
+class UsbAccessoryTransport(usb: UsbManager, accessory: UsbAccessory) : Transport {
     private val fd: ParcelFileDescriptor = usb.openAccessory(accessory)
         ?: throw AapException("cannot open USB accessory ${accessory.model} (permission?)")
 
@@ -37,10 +37,5 @@ class UsbAccessoryTransport(usb: UsbManager, val accessory: UsbAccessory) : Tran
         runCatching { fd.close() }
         runCatching { input.close() }
         runCatching { output.close() }
-    }
-
-    companion object {
-        fun isAndroidAuto(a: UsbAccessory) =
-            a.manufacturer.equals("Android", true) && (a.model ?: "").startsWith("Android Auto", true)
     }
 }

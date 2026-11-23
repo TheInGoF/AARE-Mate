@@ -2,48 +2,16 @@ package net.prototux.aare.car
 
 /**
  * Text for the car's small head-up display (17.11.2026, photo: "B 93: Zw…" - "Das ist ein kleines Head-up-Display, da
- * passt nicht viel Text rein ... da sind ungefähr 6, 7 Ziffern Platz. Vielleicht schalten wir die durch"): a road or
- * instruction cut into pieces of at most [MAX] characters - the road's number first ("B 93", "A 72", "Ausf. 25"), then
- * the places one by one, a longer word shortened with a dot - shown one after the other, [STEP_MS] each.
+ * passt nicht viel Text rein ... da sind ungefähr 6, 7 Ziffern Platz. Vielleicht schalten wir die durch"): pieces of at
+ * most [MAX] characters - since 18.11.2026 the turn in words and the road's numbers ([line]), no names - shown one after
+ * the other, [STEP_MS] each.
  */
 object HudText {
     const val MAX = 9
     const val STEP_MS = 3_000L
-    private val NUMBER = Regex("""^(?:[ABLKS]|E|St|Kr)\s?\d+[a-z]?$""")
 
     /** "Exit 25" in the words of [w] (the language library), English where there are none. */
     private fun exitShort(n: String, w: HudWords?) = (w?.exitShort ?: "Exit %s").format(n)
-
-    /** The pieces of [text], in the order to show them; [text] itself when it fits. */
-    fun pieces(text: String, w: HudWords? = null): List<String> {
-        val t = text.trim().replace(Regex("\\s+"), " ")
-        if (t.length <= MAX) return listOfNotNull(t.ifEmpty { null })
-        val out = ArrayList<String>()
-        // "Ausfahrt 25" / "Abfahrt 25" -> "Ausf. 25" (the library's short form)
-        val parts = t.split(Regex("\\s*(?:[:,;/·|]|\\s-\\s|\\s–\\s)\\s*")).map { it.trim() }.filter { it.isNotEmpty() }
-        for (p in parts) {
-            val exit = Regex("""^(?:Ausfahrt|Abfahrt|Exit)\s+(\S+)""", RegexOption.IGNORE_CASE).find(p)
-            when {
-                exit != null -> out += exitShort(exit.groupValues[1], w)
-                p.length <= MAX -> out += p
-                NUMBER.matches(p) -> out += p
-                else -> {
-                    // word by word, short words kept together ("Bad Elster")
-                    var cur = ""
-                    for (w in p.split(' ')) {
-                        val word = if (w.length > MAX) w.take(MAX - 1) + "." else w
-                        cur = when {
-                            cur.isEmpty() -> word
-                            cur.length + 1 + word.length <= MAX -> "$cur $word"
-                            else -> { out += cur; word }
-                        }
-                    }
-                    if (cur.isNotEmpty()) out += cur
-                }
-            }
-        }
-        return out.distinct()
-    }
 
     private val REF = Regex("""(?<![\p{L}\d])(A|B|L|K|S|St|Kr|E)\s?(\d{1,4}[a-z]?)(?![\p{L}\d])""")
     private val EXIT = Regex("""(?:Ausfahrt|Abfahrt|Anschlussstelle|Exit)\s+(\d+[a-z]?)""", RegexOption.IGNORE_CASE)
@@ -95,10 +63,4 @@ object HudText {
 
     /** The piece of [pieces] to show at [nowMs] (they take turns every [STEP_MS]). */
     fun at(pieces: List<String>, nowMs: Long): String = if (pieces.isEmpty()) "" else pieces[((nowMs / STEP_MS) % pieces.size).toInt()]
-
-    /** The piece to show at [nowMs] (they take turns every [STEP_MS]). */
-    fun at(text: String, nowMs: Long): String {
-        val p = pieces(text)
-        return if (p.isEmpty()) "" else p[((nowMs / STEP_MS) % p.size).toInt()]
-    }
 }

@@ -12,7 +12,7 @@ import kotlin.system.exitProcess
  *
  * It reuses [ShellAudioService] (the remote-submix capture, which drops the root process to the
  * shell uid so CAPTURE_AUDIO_OUTPUT is granted), so there is no separate root capture to maintain.
- * No minification in release (optimization disabled), so the class survives under this exact name.
+ * The release build keeps the class and its main() under this exact name by a rule in proguard-rules.pro.
  */
 object SuAudioMain {
     @JvmStatic

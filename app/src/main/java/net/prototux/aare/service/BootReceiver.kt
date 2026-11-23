@@ -4,12 +4,15 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 
-/** Re-arms wireless listening after a reboot, if the user enabled it. */
+/** After a reboot: starts the idle service (if the developer server is on) and plans the start of Shizuku. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         ProjectionService.startIdleIfEnabled(context)
-        // after a restart Shizuku is gone: Mate starts it itself once Wi-Fi is there (System L-063)
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ net.prototux.aare.adb.SelfAdb.ensureShizuku(context, "tablet started") }, 45_000)
+        // after a restart Shizuku is gone: Mate starts it itself once a network is there (System L-063)
+        if (!ShizukuStartJob.schedule(context)) {
+            val app = context.applicationContext
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ net.prototux.aare.adb.SelfAdb.ensureShizuku(app, "tablet started") }, 45_000)
+        }
     }
 }
