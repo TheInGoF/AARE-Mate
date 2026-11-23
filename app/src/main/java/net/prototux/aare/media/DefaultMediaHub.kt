@@ -51,9 +51,6 @@ class DefaultMediaHub(context: Context, scope: CoroutineScope) : MediaHub {
 
     override val apps: StateFlow<List<MediaApp>> = discovery.apps
 
-    /** Apps declaring `<uses name="media"/>` for Android Auto; [apps] also has the others. */
-    val carMediaApps: StateFlow<List<MediaApp>> = discovery.carMediaApps
-
     /** False while we lack notification access, i.e. only our own connection is tracked. */
     val sessionAccess: StateFlow<Boolean> = tracker.available
 
@@ -127,7 +124,7 @@ class DefaultMediaHub(context: Context, scope: CoroutineScope) : MediaHub {
     }
 
     /** An audio book or a podcast: by the app, or by a piece that runs for a quarter of an hour and more. */
-    private fun longForm(s: PlaybackSource, info: PlaybackInfo) =
+    internal fun longForm(s: PlaybackSource, info: PlaybackInfo) =
         info.durationMs >= 15 * 60_000L || LONG_FORM_APPS.containsMatchIn(s.packageName)
 
     override fun playPause() {
@@ -139,7 +136,11 @@ class DefaultMediaHub(context: Context, scope: CoroutineScope) : MediaHub {
     }
 
     override fun seekBy(deltaMs: Long) {
-        val s = target() ?: return
+        seekBy(target() ?: return, deltaMs)
+    }
+
+    /** Like [seekBy], in [s] (the source a screen shows, which need not be the one playing). */
+    internal fun seekBy(s: PlaybackSource, deltaMs: Long) {
         val st = s.state.value
         val info = st.info ?: return
         if (!st.canSeek) return

@@ -3,6 +3,8 @@ package net.prototux.aare.media
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,5 +24,12 @@ class ArtFileTest {
         // out of Mate's storage, also by ".."
         assertFalse(ArtLoader.allowed(ctx, Uri.fromFile(File("/system/etc/hosts")), ctx.packageName))
         assertFalse(ArtLoader.allowed(ctx, Uri.parse("file://" + ctx.filesDir.path + "/../../../system/etc/hosts"), ctx.packageName))
+    }
+
+    /** art() only gets as far as [ArtLoader.allowed] when a file address has a cache key at all. */
+    @Test fun fileAddressHasKey() {
+        val cover = File(File(ctx.filesDir, "offline/a").apply { mkdirs() }, "mate-test.jpg").apply { writeBytes(byteArrayOf(1)) }
+        assertNotNull(ArtLoader.artKey(Uri.fromFile(cover), null, ctx.packageName, 256))
+        assertNull(ArtLoader.artKey(Uri.parse("http://example.com/a.jpg"), null, ctx.packageName, 256))
     }
 }

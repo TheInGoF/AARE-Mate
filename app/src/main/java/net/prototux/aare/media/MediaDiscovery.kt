@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.xmlpull.v1.XmlPullParser
 
 /**
  * Finds media apps: services answering the media3 MediaLibraryService or the legacy
@@ -30,11 +29,6 @@ import org.xmlpull.v1.XmlPullParser
 internal class MediaDiscovery(private val context: Context, private val scope: CoroutineScope) {
     private val _apps = MutableStateFlow<List<MediaApp>>(emptyList())
     val apps: StateFlow<List<MediaApp>> = _apps.asStateFlow()
-
-    private val _carMedia = MutableStateFlow<List<MediaApp>>(emptyList())
-
-    /** The subset that declares `<uses name="media"/>` in its Android Auto descriptor. */
-    val carMediaApps: StateFlow<List<MediaApp>> = _carMedia.asStateFlow()
 
     private var scan: Job? = null
     private var registered = false
@@ -64,9 +58,7 @@ internal class MediaDiscovery(private val context: Context, private val scope: C
         scan?.cancel()
         scan = scope.launch {
             delay(250)
-            val (all, car) = withContext(Dispatchers.IO) { scan() }
-            _apps.value = all
-            _carMedia.value = all.filter { it.packageName in car }
+            _apps.value = withContext(Dispatchers.IO) { scan() }
         }
     }
 
@@ -76,7 +68,7 @@ internal class MediaDiscovery(private val context: Context, private val scope: C
         registered = false
     }
 
-    private fun scan(): Pair<List<MediaApp>, Set<String>> {
+    private fun scan(): List<MediaApp> {
         val pm = context.packageManager
         val services = LinkedHashMap<String, ResolveInfo>()
         for (action in listOf(ACTION_MEDIA3_LIBRARY, ACTION_LEGACY_BROWSER)) {
@@ -87,12 +79,10 @@ internal class MediaDiscovery(private val context: Context, private val scope: C
                 services.putIfAbsent(si.packageName, ri)
             }
         }
-        val car = HashSet<String>()
-        val apps = services.values.mapNotNull { ri ->
+        return services.values.mapNotNull { ri ->
             val si = ri.serviceInfo
             try {
                 val appInfo = pm.appInfo(si.packageName)
-                if (declaresCarMedia(pm, appInfo)) car += si.packageName
                 MediaApp(
                     packageName = si.packageName,
                     service = ComponentName(si.packageName, si.name),
@@ -107,24 +97,6 @@ internal class MediaDiscovery(private val context: Context, private val scope: C
                 null
             }
         }.sortedBy { it.label.lowercase() }
-        return apps to car
-    }
-
-    /** Reads the `com.google.android.gms.car.application` descriptor and looks for `<uses name="media"/>`. */
-    private fun declaresCarMedia(pm: PackageManager, appInfo: ApplicationInfo): Boolean {
-        val res = appInfo.metaData?.getInt(META_CAR_APPLICATION, 0)?.takeIf { it != 0 } ?: return false
-        return try {
-            pm.getResourcesForApplication(appInfo).getXml(res).use { xml ->
-                var type = xml.eventType
-                while (type != XmlPullParser.END_DOCUMENT) {
-                    if (type == XmlPullParser.START_TAG && xml.name == "uses" && xml.getAttributeValue(null, "name") == "media") return true
-                    type = xml.next()
-                }
-                false
-            }
-        } catch (e: Exception) {
-            false
-        }
     }
 
     private fun PackageManager.services(intent: Intent): List<ResolveInfo> =
@@ -139,7 +111,6 @@ internal class MediaDiscovery(private val context: Context, private val scope: C
         private const val TAG = "AareMediaApps"
         const val ACTION_MEDIA3_LIBRARY = "androidx.media3.session.MediaLibraryService"
         const val ACTION_LEGACY_BROWSER = "android.media.browse.MediaBrowserService"
-        private const val META_CAR_APPLICATION = "com.google.android.gms.car.application"
         private const val ICON_PX = 128
     }
 }

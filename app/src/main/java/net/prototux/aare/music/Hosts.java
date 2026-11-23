@@ -1,10 +1,8 @@
 /*
- * Musik in Mate: Adresse im eigenen Netz oder VPN? Nur dorthin darf unverschluesselt verbunden werden.
- * (Frueher fuer unverschluesselte Verbindungen ins eigene Netz; Mate spricht nur noch HTTPS.)
+ * Musik in Mate: Adresse im eigenen Netz oder VPN? Mate spricht nur HTTPS; isPrivate dient nur noch der
+ * Test-Umleitung von plex.tv (MusicSetupActivity).
  */
 package net.prototux.aare.music;
-
-import net.prototux.aare.R;
 
 final class Hosts {
     private Hosts() { }

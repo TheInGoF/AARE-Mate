@@ -5,7 +5,7 @@
  * Suche: Titel ueber den Suchdienst von Plex.
  *
  * Kennungen: "root", "pl:<ratingKey>" (Liste), "tr:<ratingKey Liste>:<Nummer>" (Titel in seiner Liste),
- * "sr:<Nummer>" (Treffer der letzten Suche).
+ * "sr:<Nummer>" (Treffer der letzten Suche), "vr:<Nummer>" (Titel eines Sprachwunschs, nur in der Warteschlange).
  */
 package net.prototux.aare.music;
 
@@ -92,7 +92,7 @@ public final class MusicService extends MediaLibraryService {
                     MediaSession.MediaItemsWithStartPosition q = s.mCallback.resolve(
                             list ? "pl:" + n.getKey() : album ? "at:" + n.getKey() + ":0" : "sa:" + n.getKey(), C.TIME_UNSET);
                     if (!q.mediaItems.isEmpty()) {
-                        said = album && !n.getArtist().isEmpty() ? n.getName() + " von " + n.getArtist() : n.getName();
+                        said = album && !n.getArtist().isEmpty() ? s.getString(R.string.music_voice_by, n.getName(), n.getArtist()) : n.getName();
                         /* erst ansagen, dann spielen: vorbereitet wird sofort, gestartet, wenn "Spiele ..." gesprochen ist */
                         final long after = 1500 + 70L * said.length();
                         s.mMain.post(() -> {
@@ -129,10 +129,12 @@ public final class MusicService extends MediaLibraryService {
                     }
                     Log.i(TAG, "Titelsuche \"" + q + "\" -> " + tracks.size());
                     if (!tracks.isEmpty()) {
-                        s.mFound = tracks;
-                        MediaSession.MediaItemsWithStartPosition qq = s.mCallback.resolve("sr:0", C.TIME_UNSET);
+                        /* eigene Kennungen ("vr:"): die Treffer einer Suche am Bildschirm ("sr:", mFound) bleiben, wie sie sind */
+                        List<MediaItem> items = new ArrayList<>();
+                        for (int i = 0; i < tracks.size(); i++) items.add(s.track("vr:" + i, tracks.get(i), plex, true));
+                        MediaSession.MediaItemsWithStartPosition qq = new MediaSession.MediaItemsWithStartPosition(items, 0, C.TIME_UNSET);
                         Plex.Item t = tracks.get(0);
-                        said = t.artist != null && !t.artist.isEmpty() ? t.title + " von " + t.artist : t.title;
+                        said = t.artist != null && !t.artist.isEmpty() ? s.getString(R.string.music_voice_by, t.title, t.artist) : t.title;
                         final long after = 1500 + 70L * said.length();
                         s.mMain.post(() -> { s.mPlayer.pause(); s.mPlayer.setMediaItems(qq.mediaItems, qq.startIndex, qq.startPositionMs); s.mPlayer.prepare(); });
                         s.mMain.postDelayed(() -> s.mPlayer.play(), after);
@@ -285,8 +287,8 @@ public final class MusicService extends MediaLibraryService {
     /** Titel und Stelle der Wiedergabe sichern. Treffer einer Suche ("sr:") gibt es nach einem Neustart nicht mehr. */
     private void remember() {
         MediaItem item = mPlayer.getCurrentMediaItem();
-        /* Treffer einer Suche und die Mischung eines Genres lassen sich nach einem Neustart nicht wieder aufbauen */
-        if (item == null || item.mediaId.startsWith("sr:") || item.mediaId.startsWith("gk:")) return;
+        /* Treffer einer Suche (auch per Sprache) und die Mischung eines Genres lassen sich nach einem Neustart nicht wieder aufbauen */
+        if (item == null || item.mediaId.startsWith("sr:") || item.mediaId.startsWith("vr:") || item.mediaId.startsWith("gk:")) return;
         Plex.prefs(this).edit().putString("last_id", item.mediaId)
                 .putLong("last_pos", Math.max(0, mPlayer.getCurrentPosition())).apply();
     }
@@ -569,7 +571,7 @@ public final class MusicService extends MediaLibraryService {
                             List<Plex.Item> l = Offline.list(MusicService.this, key);
                             if (l == null) continue;
                             out.add(folder("pl:" + key, Offline.title(MusicService.this, key),
-                                    getString(R.string.music_offline_sub, l.size()), null));
+                                    getResources().getQuantityString(R.plurals.music_offline_sub, l.size(), l.size()), null));
                         }
                         return LibraryResult.ofItemList(page(out.build(), page, pageSize), params);
                     }
@@ -685,8 +687,14 @@ public final class MusicService extends MediaLibraryService {
                         List<Plex.Item> found = mFound;
                         if (i >= 0 && i < found.size()) t = found.get(i);
                     } else if (id.startsWith("tr:")) {
-                        List<Plex.Item> one = plex.tracks(p[1], Integer.parseInt(p[2]), 1);
-                        if (!one.isEmpty()) t = one.get(0);
+                        /* abonnierte Liste: vom Geraet, auch ohne Netz */
+                        int at = Integer.parseInt(p[2]);
+                        List<Object[]> off = offlineTracks(p[1]);
+                        if (off != null) for (Object[] o : off) if ((int) o[0] == at) { t = (Plex.Item) o[1]; break; }
+                        if (t == null) {
+                            List<Plex.Item> one = plex.tracks(p[1], at, 1);
+                            if (!one.isEmpty()) t = one.get(0);
+                        }
                     } else if (id.startsWith("at:")) {
                         List<Plex.Item> all = plex.albumTracks(p[1]);
                         int i = Integer.parseInt(p[2]);

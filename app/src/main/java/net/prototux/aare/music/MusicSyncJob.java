@@ -13,7 +13,6 @@ import android.content.Context;
  */
 public final class MusicSyncJob extends JobService {
     private static final int ID = 0x4d53;   /* "MS" */
-    private Thread mWork;
 
     /** Plant den Abgleich (neu), wenn Listen abonniert sind; sonst hebt es ihn auf. Mehrfach aufrufen schadet nicht. */
     public static void schedule(Context c) {
@@ -30,11 +29,11 @@ public final class MusicSyncJob extends JobService {
 
     @Override
     public boolean onStartJob(JobParameters params) {
-        mWork = new Thread(() -> {
+        Thread work = new Thread(() -> {
             int r = Offline.sync(this, null);
             jobFinished(params, r < 0);
         }, "music-sync");
-        mWork.start();
+        work.start();
         return true;
     }
 

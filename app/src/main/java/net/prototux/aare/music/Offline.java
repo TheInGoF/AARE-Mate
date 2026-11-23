@@ -165,6 +165,12 @@ public final class Offline {
     /** Alles Geladene loeschen und die Abos beenden. */
     public static void clear(Context c) {
         Plex.prefs(c).edit().remove(KEY_LISTS).apply();
+        /* ein laufender Abgleich hoert auf und raeumt hinterher noch einmal ab (er arbeitet mit den Abos von vorher) */
+        sCancel = true;
+        deleteFiles(c);
+    }
+
+    private static void deleteFiles(Context c) {
         // in every place it may lie, not only the chosen one (23.11.2026: deleted on the card, 13 GB stayed in the device)
         for (File d : net.prototux.aare.Storage.INSTANCE.musicPlaces(c.getApplicationContext()))
             for (String sub : new String[] { "t", "a", "l" }) {
@@ -190,6 +196,8 @@ public final class Offline {
 
     private static final Object SYNC = new Object();
     private static volatile boolean sRunning;
+    /** Gesetzt von clear(): der laufende Abgleich bricht ab. */
+    private static volatile boolean sCancel;
 
     public static boolean running() { return sRunning; }
 
@@ -201,9 +209,12 @@ public final class Offline {
         if (sRunning) return 0;
         synchronized (SYNC) {
             sRunning = true;
+            sCancel = false;
             try {
                 return syncNow(c.getApplicationContext(), p);
             } finally {
+                /* waehrend des Abgleichs alles geloescht: was er seitdem geschrieben hat, auch */
+                if (sCancel) deleteFiles(c);
                 sRunning = false;
                 if (p != null) p.on(null);
             }
@@ -221,6 +232,7 @@ public final class Offline {
         try {
             List<Plex.Item> all = plex.playlists();
             for (Plex.Item pl : all) {
+                if (sCancel) return 0;
                 if (!subs.contains(pl.key)) continue;
                 found++;
                 List<Plex.Item> tracks = new ArrayList<>();
@@ -229,6 +241,7 @@ public final class Offline {
                     tracks.addAll(part);
                     if (part.size() < 500) break;
                 }
+                if (sCancel) return 0;
                 writeList(c, pl.key, pl.title, tracks);
                 LinkedHashSet<String> thumbs = new LinkedHashSet<>();
                 for (Plex.Item t : tracks) { keep.add(safe(t.key)); if (t.thumb != null) thumbs.add(t.thumb); }
@@ -236,6 +249,7 @@ public final class Offline {
                 int i = 0;
                 for (Plex.Item t : tracks) {
                     i++;
+                    if (sCancel) return 0;
                     if (track(c, t.key) != null || t.part == null) continue;
                     if (!netOk(c)) { complete = false; break; }
                     if (p != null) p.on(pl.title + ": " + i + " / " + tracks.size());
@@ -248,6 +262,7 @@ public final class Offline {
                     }
                 }
                 for (String th : thumbs) {
+                    if (sCancel) return 0;
                     if (art(c, th) != null || !netOk(c)) continue;
                     try { download(plex.art(th, 640).toString(), new File(new File(dir(c), "a"), artName(th))); }
                     catch (IOException ignored) { }
@@ -258,6 +273,7 @@ public final class Offline {
             Log.w(TAG, "Abgleich: " + e.getClass().getSimpleName());
             return -1;
         }
+        if (sCancel) return 0;
         /* aufraeumen: was in keiner abonnierten Liste mehr steht - nur wenn der Server die Abos auch kennt; sonst (anderes
            Konto, anderer Server, Listen umbenannt) wuerde alles Geladene geloescht (23.11.2026: "Musik ist gelöscht") */
         if (found < subs.size()) {

@@ -368,19 +368,25 @@ internal class MediaConnection(
 
     // Where the last track was put in: several in a row keep the order they were chosen in.
     private var enqueuedAt = -1
+    // ... and which it was: a new queue since (an album started, a voice wish, a mix) no longer has it there
+    private var enqueuedId: String? = null
 
     /** Puts [item] right behind what plays (behind the ones put in before it); starts it when nothing plays. */
     fun enqueue(item: MediaItem) {
         val b = browser ?: return connect()
         if (b.mediaItemCount == 0) return play(item)
         val now = b.currentMediaItemIndex
-        val at = (if (enqueuedAt in (now + 1) until b.mediaItemCount) enqueuedAt + 1 else now + 1).coerceAtMost(b.mediaItemCount)
+        val follow = enqueuedAt in (now + 1) until b.mediaItemCount && b.getMediaItemAt(enqueuedAt).mediaId == enqueuedId
+        val at = (if (follow) enqueuedAt + 1 else now + 1).coerceAtMost(b.mediaItemCount)
         b.addMediaItem(at, item)
         enqueuedAt = at
+        enqueuedId = item.mediaId
     }
 
     fun play(item: MediaItem) {
         val b = browser ?: return connect()
+        enqueuedAt = -1
+        enqueuedId = null
         val legacy = legacyController()
         if (legacy != null) {
             // The app sees this command under Mate's own name (the system checks it), so one that lets only

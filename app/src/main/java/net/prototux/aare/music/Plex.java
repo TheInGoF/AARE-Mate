@@ -1,7 +1,7 @@
 /*
  * Musik in Mate: Zugang zum eigenen Plex-Server (MusicService) und die wenigen Abfragen, die sie
  * braucht: Wiedergabelisten, deren Titel, Suche. Adresse und Token kommen aus der Anmeldung am Plex-Konto
- * (PlexAccount) oder traegt der Benutzer am Tablet von Hand ein; das Token wird nie protokolliert oder angezeigt. Unverschluesselt nur ins eigene Netz bzw. VPN (Hosts.isPrivate).
+ * (PlexAccount) oder traegt der Benutzer am Tablet von Hand ein; das Token wird nie protokolliert oder angezeigt. Nur HTTPS (clean).
  *
  * Plex liefert mit "Accept: application/json" JSON: {"MediaContainer":{"Metadata":[...]}}.
  */
@@ -37,6 +37,27 @@ final class Plex {
         int stars;              /* Bewertung des Benutzers in halben Sternen: 0 = keine, 10 = fuenf Sterne */
         String part;            /* Pfad der Audiodatei am Server, nur bei Titeln */
         String thumb;           /* Pfad des Bildes */
+    }
+
+    /**
+     * Ein Fehler von plex.tv oder vom Server mit einem Text fuer die Oberflaeche ([text]); die Meldung selbst ist
+     * englisch und nur fuers Protokoll.
+     */
+    static final class Failure extends IOException {
+        final int text;
+        final Object[] args;
+
+        Failure(String log, int text, Object... args) {
+            super(log);
+            this.text = text;
+            this.args = args;
+        }
+
+        /** Warum es nicht ging, in der Sprache der Oberflaeche; bei anderen Fehlern deren Meldung bzw. Art. */
+        static String text(Context c, IOException e) {
+            if (e instanceof Failure) return c.getString(((Failure) e).text, ((Failure) e).args);
+            return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        }
     }
 
     final String url, token;
@@ -80,8 +101,13 @@ final class Plex {
         return true;
     }
 
+    /**
+     * Abmelden: nur Zugang und was zum Server gehoert. Abonnierte Listen, ihre Dateien und die Einstellungen bleiben
+     * (die loescht Offline.clear eigens).
+     */
     static void clear(Context c) {
-        prefs(c).edit().clear().apply();
+        prefs(c).edit().remove("url").remove("token").remove("account").remove("server")
+                .remove("last_id").remove("last_pos").remove("last_mix").apply();
     }
 
     /** Adresse einer Datei oder eines Bildes mit Token (fuer den Player; erscheint in keinem Protokoll der App). */
@@ -130,9 +156,9 @@ final class Plex {
                 }
             }
         } catch (JSONException e) {
-            throw new IOException("unerwartete Antwort von Plex");
+            throw new Failure("unexpected answer from Plex", R.string.music_plex_unexpected);
         }
-        throw new IOException("keine Musik-Bibliothek am Server");
+        throw new Failure("no music library on the server", R.string.music_plex_no_library);
     }
 
     /** Ein Ausschnitt aller Kuenstler (type 8) bzw. Alben (type 9), nach Namen sortiert. */
@@ -182,7 +208,7 @@ final class Plex {
                 if (!it.key.isEmpty() && !it.title.isEmpty()) out.add(it);
             }
         } catch (JSONException e) {
-            throw new IOException("unerwartete Antwort von Plex");
+            throw new Failure("unexpected answer from Plex", R.string.music_plex_unexpected);
         }
         return out;
     }
@@ -212,7 +238,7 @@ final class Plex {
                     + "/items?X-Plex-Container-Start=0&X-Plex-Container-Size=0")).getJSONObject("MediaContainer");
             return c.optInt("totalSize", c.optInt("size", 0));
         } catch (JSONException e) {
-            throw new IOException("unerwartete Antwort von Plex");
+            throw new Failure("unexpected answer from Plex", R.string.music_plex_unexpected);
         }
     }
 
@@ -249,7 +275,7 @@ final class Plex {
         try {
             return new JSONObject(get("/")).getJSONObject("MediaContainer").optString("friendlyName", "Plex");
         } catch (JSONException e) {
-            throw new IOException("Antwort ist kein Plex-Server");
+            throw new Failure("answer is not from a Plex server", R.string.music_plex_not_server);
         }
     }
 
@@ -280,7 +306,7 @@ final class Plex {
                 if (!it.key.isEmpty()) out.add(it);
             }
         } catch (JSONException e) {
-            throw new IOException("unerwartete Antwort von Plex");
+            throw new Failure("unexpected answer from Plex", R.string.music_plex_unexpected);
         }
         return out;
     }
@@ -306,7 +332,7 @@ final class Plex {
                 break;
             }
         } catch (JSONException e) {
-            throw new IOException("unerwartete Antwort von Plex");
+            throw new Failure("unexpected answer from Plex", R.string.music_plex_unexpected);
         }
         return out;
     }
@@ -345,13 +371,13 @@ final class Plex {
                 c.getOutputStream().write(form.getBytes("UTF-8"));
             }
             int code = c.getResponseCode();
-            if (code == 401) throw new IOException("Plex: Zugang ungueltig (401)");
-            if (code != 200 && code != 201) throw new IOException("Plex: HTTP " + code);
+            if (code == 401) throw new Failure("Plex: access denied (401)", R.string.music_plex_denied);
+            if (code != 200 && code != 201) throw new Failure("Plex: HTTP " + code, R.string.music_plex_http, code);
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             try (InputStream in = c.getInputStream()) {
                 byte[] buf = new byte[8192];
                 for (int n; (n = in.read(buf)) > 0; ) {
-                    if (out.size() + n > 32 * 1024 * 1024) throw new IOException("Plex: Antwort zu gross");
+                    if (out.size() + n > 32 * 1024 * 1024) throw new Failure("Plex: answer too large", R.string.music_plex_too_large);
                     out.write(buf, 0, n);
                 }
             }

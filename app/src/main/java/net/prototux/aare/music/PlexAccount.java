@@ -58,10 +58,6 @@ final class PlexAccount {
         return id;
     }
 
-    static boolean signedIn(Context c) {
-        return Plex.prefs(c).getString("account", null) != null;
-    }
-
     /** Neuen Code holen. */
     static Pin start(Context c) throws IOException {
         try {
@@ -71,7 +67,7 @@ final class PlexAccount {
             p.code = o.getString("code");
             return p;
         } catch (JSONException e) {
-            throw new IOException("unerwartete Antwort von plex.tv");
+            throw new Plex.Failure("unexpected answer from plex.tv", R.string.music_plex_unexpected);
         }
     }
 
@@ -82,7 +78,7 @@ final class PlexAccount {
             String t = o.isNull("authToken") ? null : o.optString("authToken", null);
             return t == null || t.isEmpty() ? null : t;
         } catch (JSONException e) {
-            throw new IOException("unerwartete Antwort von plex.tv");
+            throw new Plex.Failure("unexpected answer from plex.tv", R.string.music_plex_unexpected);
         }
     }
 
@@ -106,14 +102,14 @@ final class PlexAccount {
                         JSONObject n = conns.getJSONObject(k);
                         boolean relay = n.optBoolean("relay"), local = n.optBoolean("local");
                         if ((relay ? 2 : local ? 0 : 1) != rank) continue;
-                        String uri = Plex.clean(n.optString("uri"));     /* https, http nur im eigenen Netz */
+                        String uri = Plex.clean(n.optString("uri"));     /* nur https (Plex.clean) */
                         if (uri != null && !s.uris.contains(uri)) s.uris.add(uri);
                     }
                 }
                 if (!s.id.isEmpty() && !s.uris.isEmpty()) out.add(s);
             }
         } catch (JSONException e) {
-            throw new IOException("unerwartete Antwort von plex.tv");
+            throw new Plex.Failure("unexpected answer from plex.tv", R.string.music_plex_unexpected);
         }
         return out;
     }

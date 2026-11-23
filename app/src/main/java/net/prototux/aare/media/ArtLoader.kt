@@ -149,8 +149,8 @@ internal class ArtLoader(private val context: Context) {
     companion object {
         private val said = HashSet<String>()
         /**
-         * Whether [uri], supplied by [owner], may be opened with our identity. Never file:// (it would
-         * read our private files) and never plain http. A content URI must belong to [owner], or be one
+         * Whether [uri], supplied by [owner], may be opened with our identity. file:// only for Mate's
+         * own files supplied by Mate itself, never plain http. A content URI must belong to [owner], or be one
          * [owner] granted us access to; our own providers are never followed.
          */
         fun allowed(context: Context, uri: Uri, owner: String?): Boolean = when (uri.scheme) {
@@ -228,6 +228,8 @@ internal class ArtLoader(private val context: Context) {
 
         private val SCHEMES = setOf(
             ContentResolver.SCHEME_CONTENT, ContentResolver.SCHEME_ANDROID_RESOURCE, "https",
+            // Mate Musik's downloaded covers; [allowed] admits only Mate's own files
+            ContentResolver.SCHEME_FILE,
         )
     }
 }

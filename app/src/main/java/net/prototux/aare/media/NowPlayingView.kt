@@ -179,19 +179,20 @@ private fun Controls(hub: DefaultMediaHub, source: PlaybackSource, state: Source
         val hasQueue = state.queue.isNotEmpty()
         val slots = ((maxWidth - PLAY_SIZE - touch * 2) / touch).toInt() - (if (hasQueue) 1 else 0)
         // Audio books and podcasts are wound, not skipped (O158): -10 s and +30 s, where the app has no such button
-        val wind = hub.longForm && state.canSeek && state.actions.none { WIND.containsMatchIn(it.label) || WIND.containsMatchIn(it.id) }
+        // judged and wound in the source shown here, not in whichever the hub follows
+        val wind = state.info?.let { hub.longForm(source, it) } == true && state.canSeek && state.actions.none { WIND.containsMatchIn(it.label) || WIND.containsMatchIn(it.id) }
         val actions = state.actions.take((slots - if (wind) 2 else 0).coerceAtLeast(0))
         val left = actions.take((actions.size + 1) / 2)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
             left.forEach { ActionButton(hub, it) }
-            if (wind) CircleButton(Icons.Rounded.Replay10, stringResource(R.string.media_action_back10), onClick = { hub.seekBy(-10_000) })
+            if (wind) CircleButton(Icons.Rounded.Replay10, stringResource(R.string.media_action_back10), onClick = { hub.seekBy(source, -10_000) })
             CircleButton(Icons.Rounded.SkipPrevious, stringResource(R.string.media_action_previous), onClick = source::previous, enabled = state.canPrevious)
             CircleButton(
                 if (state.showPause) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, stringResource(if (state.showPause) R.string.media_action_pause else R.string.media_action_play),
                 onClick = source::playPause, filled = true, size = PLAY_SIZE,
             )
             CircleButton(Icons.Rounded.SkipNext, stringResource(R.string.media_action_next), onClick = source::next, enabled = state.canNext)
-            if (wind) CircleButton(Icons.Rounded.Forward30, stringResource(R.string.media_action_forward30), onClick = { hub.seekBy(30_000) })
+            if (wind) CircleButton(Icons.Rounded.Forward30, stringResource(R.string.media_action_forward30), onClick = { hub.seekBy(source, 30_000) })
             actions.drop(left.size).forEach { ActionButton(hub, it) }
             if (hasQueue) CircleButton(Icons.AutoMirrored.Rounded.QueueMusic, stringResource(R.string.media_queue_title), onClick = { setView(MediaView.QUEUE) })
         }
