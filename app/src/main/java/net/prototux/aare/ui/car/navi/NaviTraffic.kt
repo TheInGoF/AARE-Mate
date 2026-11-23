@@ -5,10 +5,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.rounded.Block
-import androidx.compose.material.icons.rounded.CarCrash
-import androidx.compose.material.icons.rounded.CarRepair
-import androidx.compose.material.icons.rounded.Construction
-import androidx.compose.material.icons.rounded.Traffic
 import androidx.compose.material.icons.rounded.Warning
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -88,7 +84,7 @@ internal object NaviTraffic {
                 val fields = java.net.URLEncoder.encode("{incidents{geometry{type,coordinates},properties{iconCategory}}}", "UTF-8")
                 // the box formatted on its own: the encoded fields hold "%7B..." that format() would take for its own
                 val box = "%.5f,%.5f,%.5f,%.5f".format(java.util.Locale.ROOT, minLon, minLat, maxLon, maxLat)
-                val url = "$base/verkehr/traffic/services/5/incidentDetails?bbox=$box&fields=$fields&categoryFilter=8&timeValidityFilter=present&language=de-DE"
+                val url = "$base/verkehr/traffic/services/5/incidentDetails?bbox=$box&fields=$fields&categoryFilter=8&timeValidityFilter=present&language=${net.prototux.aare.Language.tag()}"
                 val body = client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { if (it.isSuccessful) it.body.string() else null } ?: continue
                 val incidents = org.json.JSONObject(body).optJSONArray("incidents") ?: continue
                 for (i in 0 until incidents.length()) {
@@ -380,7 +376,7 @@ internal object NaviTraffic {
                 val box = "%.5f,%.5f,%.5f,%.5f".format(java.util.Locale.ROOT, chunk.minOf { it.longitude } - 0.01, chunk.minOf { it.latitude } - 0.01,
                     chunk.maxOf { it.longitude } + 0.01, chunk.maxOf { it.latitude } + 0.01)
                 val fields = java.net.URLEncoder.encode("{incidents{geometry{type,coordinates},properties{iconCategory,magnitudeOfDelay,delay,events{description}}}}", "UTF-8")
-                val url = "$base/verkehr/traffic/services/5/incidentDetails?bbox=$box&fields=$fields&categoryFilter=$KINDS&timeValidityFilter=present&language=de-DE"
+                val url = "$base/verkehr/traffic/services/5/incidentDetails?bbox=$box&fields=$fields&categoryFilter=$KINDS&timeValidityFilter=present&language=${net.prototux.aare.Language.tag()}"
                 val body = client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { if (it.isSuccessful) it.body.string() else null } ?: continue
                 val list = org.json.JSONObject(body).optJSONArray("incidents") ?: continue
                 for (i in 0 until list.length()) {

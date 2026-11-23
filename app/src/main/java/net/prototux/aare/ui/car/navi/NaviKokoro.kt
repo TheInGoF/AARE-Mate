@@ -8,7 +8,7 @@ import java.util.concurrent.Executors
  * Mate Navi's announcements in the chosen Kokoro voice (O230, 17.11.2026: "richte die Sprachsynthese mit Kokoro ein",
  * answer "Navi-Ansagen ja, vorab berechnen"). Kokoro needs 2-3 s to the first sound on the S6 Lite - too late for a
  * turn - so the next announcements of the route are computed as soon as they are known and kept; at their moment the
- * finished sound is played. One not ready in time is spoken by the phone's voice (NaviSpeaker).
+ * finished sound is played. One not ready in time is left out (NaviSpeaker, System I-092), not spoken by the phone's voice.
  */
 internal object NaviKokoro {
     private const val TAG = "MateNavi"

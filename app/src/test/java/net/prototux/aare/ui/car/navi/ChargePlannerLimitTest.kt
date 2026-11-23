@@ -22,7 +22,7 @@ class ChargePlannerLimitTest {
     }
 
     @Test fun overTheLimitWhenNothingElseReaches() {
-        val plan = ChargePlanner.plan(track, car, 60.0, chargersAt(200), ChargePlanner.Rules(chargeUpTo = 80.0))
+        val plan = ChargeChain.plan(track, car, 60.0, chargersAt(200), ChargePlanner.Rules(chargeUpTo = 80.0)).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }
         assertEquals(1, plan.stops.size)
         val st = plan.stops.single()
         assertTrue(st.overLimit)
@@ -31,7 +31,7 @@ class ChargePlannerLimitTest {
     }
 
     @Test fun limitHoldsWhenAnotherChargerReaches() {
-        val plan = ChargePlanner.plan(track, car, 60.0, chargersAt(200, 400), ChargePlanner.Rules(chargeUpTo = 80.0))
+        val plan = ChargeChain.plan(track, car, 60.0, chargersAt(200, 400), ChargePlanner.Rules(chargeUpTo = 80.0)).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }
         assertEquals(2, plan.stops.size)
         plan.stops.forEach { assertFalse(it.overLimit); assertTrue(it.leavePercent <= 80.0 + 1e-9) }
     }
@@ -42,37 +42,6 @@ class ChargePlannerLimitTest {
         val above = ChargePlanner.replay(track, car, 60.0, listOf(c), ChargePlanner.Rules(chargeUpTo = 80.0), setOf(c))
         assertEquals(80.0, capped.stops.single().leavePercent, 1e-9)
         assertTrue(above.stops.single().overLimit)
-    }
-    /** A stop just before the destination that charges almost nothing goes: a little more at the stop before instead. */
-    @Test fun tinyStopBeforeTheEndLeftOut() {
-        val look = chargersAt(200, 510)
-        val a = look(Position(longitude = 200 / 111.32, latitude = 0.0), 10.0, 0).single()
-        val b = look(Position(longitude = 510 / 111.32, latitude = 0.0), 10.0, 0).single()
-        val both = ChargePlanner.replay(track, car, 60.0, listOf(a, b), ChargePlanner.Rules(chargeUpTo = 80.0))
-        assertTrue("second charges ${both.stops[1].chargeMinutes} min", both.stops[1].chargeMinutes < 5.0)
-        val kept = ChargePlanner.prune(track, car, 60.0, listOf(a, b), ChargePlanner.Rules(chargeUpTo = 80.0))
-        assertEquals(listOf(a), kept)
-        val plan = ChargePlanner.replay(track, car, 60.0, kept, ChargePlanner.Rules(chargeUpTo = 80.0), kept.toSet())
-        assertTrue("arrives with ${plan.arrivePercent}", plan.arrivePercent >= 10.0 - 0.5)
-        assertTrue(plan.stops.single().leavePercent <= 90.0)
-    }
-
-    /** Also when the stop before is reached below the reserve already (9 %, nothing nearer): it is not made worse. */
-    @Test fun tinyStopLeftOutWhenTheFirstIsLowAlready() {
-        val low = EnergyModel.Car(capacityWh = 77_000, socPercent = 56.0)
-        val look = chargersAt(200, 510)
-        val a = look(Position(longitude = 200 / 111.32, latitude = 0.0), 10.0, 0).single()
-        val b = look(Position(longitude = 510 / 111.32, latitude = 0.0), 10.0, 0).single()
-        assertTrue(ChargePlanner.replay(track, low, 56.0, listOf(a, b), ChargePlanner.Rules(chargeUpTo = 80.0)).stops[0].arrivePercent < 10.0)
-        assertEquals(listOf(a), ChargePlanner.prune(track, low, 56.0, listOf(a, b), ChargePlanner.Rules(chargeUpTo = 80.0)))
-    }
-
-    /** A stop that is needed stays: without it the stop before would have to charge to 98 %. */
-    @Test fun neededStopKept() {
-        val look = chargersAt(150, 350)
-        val a = look(Position(longitude = 150 / 111.32, latitude = 0.0), 10.0, 0).single()
-        val b = look(Position(longitude = 350 / 111.32, latitude = 0.0), 10.0, 0).single()
-        assertEquals(listOf(a, b), ChargePlanner.prune(track, car, 60.0, listOf(a, b), ChargePlanner.Rules(chargeUpTo = 80.0)))
     }
 }
 
@@ -91,13 +60,13 @@ class ChargePlannerNetworkTest {
     }
 
     @Test fun preferredWins() {
-        val plan = ChargePlanner.plan(track, car, 60.0, near, ChargePlanner.Rules(preferred = setOf("enbw")))
+        val plan = ChargeChain.plan(track, car, 60.0, near, ChargePlanner.Rules(preferred = setOf("enbw"))).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }
         assertEquals("enbw", plan.stops.first().charger.network)
     }
 
     @Test fun strongestWithoutPreference() {
-        assertEquals("ionity", ChargePlanner.plan(track, car, 60.0, near, ChargePlanner.Rules()).stops.first().charger.network)
-        assertEquals("ionity", ChargePlanner.plan(track, car, 60.0, near, ChargePlanner.Rules(preferred = setOf("tesla"))).stops.first().charger.network)
+        assertEquals("ionity", ChargeChain.plan(track, car, 60.0, near, ChargePlanner.Rules()).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }.stops.first().charger.network)
+        assertEquals("ionity", ChargeChain.plan(track, car, 60.0, near, ChargePlanner.Rules(preferred = setOf("tesla"))).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }.stops.first().charger.network)
     }
 }
 
@@ -153,21 +122,21 @@ class ChargePlannerOnlyTest {
 
     @Test fun chosenEarlyBeatsOtherLate() {
         // reach ~214 km: IONITY at 80 km (early half), EnBW at 190 km (late half)
-        val plan = ChargePlanner.plan(track, car, 60.0, near(listOf(at(80, "IONITY GmbH"), at(190, "EnBW"))), only)
+        val plan = ChargeChain.plan(track, car, 60.0, near(listOf(at(80, "IONITY GmbH"), at(190, "EnBW"))), only).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }
         assertTrue(plan.stops.isNotEmpty())
         plan.stops.forEach { assertEquals("ionity", it.charger.network) }
         assertTrue("arrives with ${plan.arrivePercent}", plan.arrivePercent >= 9.5)
     }
 
     @Test fun othersOnlyWhenTheChosenDoNotReach() {
-        val plan = ChargePlanner.plan(track, car, 60.0, near(listOf(at(190, "EnBW"))), only)
+        val plan = ChargeChain.plan(track, car, 60.0, near(listOf(at(190, "EnBW"))), only).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }
         assertEquals("enbw", plan.stops.single().charger.network)
         assertTrue(only.outside(plan.stops.single().charger))
     }
 
     @Test fun alternativesOnlyOfTheChosen() {
         val all = listOf(at(190, "IONITY GmbH"), at(175, "Shell Recharge"), at(200, "Tesla Germany GmbH"))
-        val stop = ChargePlanner.plan(track, car, 60.0, near(all), only).stops.first()
+        val stop = ChargeChain.plan(track, car, 60.0, near(all), only).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }.stops.first()
         val alts = ChargePlanner.alternatives(track, stop, listOf(stop.charger), near(all), only)
         assertTrue(alts.isNotEmpty())
         alts.forEach { assertTrue(it.charger.network in setOf("tesla", "ionity")) }
@@ -186,17 +155,17 @@ class ChargePlannerRatingTest {
     private val near: (Position, Double, Int) -> List<Charger> = { p, r, _ -> listOf(tesla, ionity, enbw).filter { ChargerIndex.distanceM(it.at, p) <= r } }
 
     @Test fun strongestWithoutRating() {
-        val plan = ChargePlanner.plan(track, car, 60.0, near, ChargePlanner.Rules(preferred = setOf("tesla", "ionity"), only = true))
+        val plan = ChargeChain.plan(track, car, 60.0, near, ChargePlanner.Rules(preferred = setOf("tesla", "ionity"), only = true)).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }
         assertEquals("ionity", plan.stops.first().charger.network)
     }
 
     @Test fun favouriteWins() {
         val r = ChargePlanner.Rules(preferred = setOf("tesla", "ionity"), only = true, rating = { if (it === tesla) 5 else 0 })
-        assertEquals("tesla", ChargePlanner.plan(track, car, 60.0, near, r).stops.first().charger.network)
+        assertEquals("tesla", ChargeChain.plan(track, car, 60.0, near, r).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }.stops.first().charger.network)
     }
 
     @Test fun filterBeatsRating() {
         val r = ChargePlanner.Rules(preferred = setOf("tesla", "ionity"), only = true, rating = { if (it === enbw) 5 else 0 })
-        assertTrue(ChargePlanner.plan(track, car, 60.0, near, r).stops.first().charger.network != "enbw")
+        assertTrue(ChargeChain.plan(track, car, 60.0, near, r).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }.stops.first().charger.network != "enbw")
     }
 }

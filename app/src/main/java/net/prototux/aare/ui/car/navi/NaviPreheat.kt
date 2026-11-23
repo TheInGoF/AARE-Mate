@@ -56,7 +56,7 @@ internal object NaviPreheat {
      * [START_RATE_K_MIN].
      */
     class Rates(private val seen: Map<Int, List<Double>> = emptyMap()) {
-        private fun band(c: Double) = Math.floorDiv(c.toInt(), BAND_C) * BAND_C
+        private fun band(c: Double) = Math.floorDiv(Math.floor(c).toInt(), BAND_C) * BAND_C
 
         fun at(outsideC: Double?): Double {
             if (seen.isEmpty() || outsideC == null) return seen.values.flatten().takeIf { it.isNotEmpty() }?.average() ?: START_RATE_K_MIN

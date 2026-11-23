@@ -13,8 +13,11 @@ import org.maplibre.spatialk.geojson.Position
  * [CALM_M] of the last change. Only then the caller asks the map server for the route over the new stops.
  *
  * It also notes for [ChargeBuffer] what the model missed on each stretch driven between charging (step D).
+ *
+ * [check] and [retrack] run off the main thread while the screen reads [levelAt], [spreadAt] and [alongM]: the changing
+ * state is kept under the object's lock, and [track] is read once per look (it may be swapped meanwhile).
  */
-internal class ChargeRolling(private var track: ChargePlanner.Track, private val car: EnergyModel.Car,
+internal class ChargeRolling(track: ChargePlanner.Track, private val car: EnergyModel.Car,
                              private val rules: ChargePlanner.Rules, private val near: (Position, Double, Int) -> List<Charger>,
                              startSoc: Double, chain: List<Charger>, private val own: List<Charger> = emptyList(),
                              /** The hit list's miss per 100 km of earlier drives (ChargeBuffer.missPer100), null: none yet. */
@@ -33,8 +36,10 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
     /** What a check found; [why] in words for the log (level now against the plan, old and new stop). */
     class Decision(val kind: Kind, val chain: List<Charger>, val result: ChargeChain.Result?, val why: String, val urgent: Boolean = false)
 
+    @Volatile private var track: ChargePlanner.Track = track
+
     /** The stops still ahead, in order. */
-    var chain: List<Charger> = chain; private set
+    @Volatile var chain: List<Charger> = chain; private set
     /** How many times the stops changed (each one request to the map server). */
     var moves = 0; private set
 
@@ -54,30 +59,32 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
     private var proposal: Charger? = null
 
     /** The model's percent used on the present track from [fromM] to [toM]. */
-    private fun used(fromM: Double, toM: Double) = (whAt(toM) - whAt(fromM)) / car.capacityWh * 100.0
+    private fun used(fromM: Double, toM: Double): Double { val t = track; return (whAt(t, toM) - whAt(t, fromM)) / car.capacityWh * 100.0 }
 
-    private fun whAt(m: Double): Double {
-        val i = indexAt(m)
-        if (i <= 0) return track.wh[0]
-        val a = track.metres[i - 1]; val b = track.metres[i]
+    private fun whAt(t: ChargePlanner.Track, m: Double): Double {
+        val i = indexAt(t, m)
+        if (i <= 0) return t.wh[0]
+        val a = t.metres[i - 1]; val b = t.metres[i]
         val k = if (b > a) ((m - a) / (b - a)).coerceIn(0.0, 1.0) else 1.0
-        return track.wh[i - 1] + (track.wh[i] - track.wh[i - 1]) * k
+        return t.wh[i - 1] + (t.wh[i] - t.wh[i - 1]) * k
     }
 
     /** Seconds the plan's model takes from [fromM] to [toM] along the present track (minutes to a charger). */
-    fun secondsBetween(fromM: Double, toM: Double): Double = secAt(toM) - secAt(fromM)
+    fun secondsBetween(fromM: Double, toM: Double): Double { val t = track; return secAt(t, toM) - secAt(t, fromM) }
 
-    private fun secAt(m: Double): Double {
-        val i = indexAt(m)
-        if (i <= 0) return track.seconds[0]
-        val a = track.metres[i - 1]; val b = track.metres[i]
+    private fun secAt(t: ChargePlanner.Track, m: Double): Double {
+        val i = indexAt(t, m)
+        if (i <= 0) return t.seconds[0]
+        val a = t.metres[i - 1]; val b = t.metres[i]
         val k = if (b > a) ((m - a) / (b - a)).coerceIn(0.0, 1.0) else 1.0
-        return track.seconds[i - 1] + (track.seconds[i] - track.seconds[i - 1]) * k
+        return t.seconds[i - 1] + (t.seconds[i] - t.seconds[i - 1]) * k
     }
 
-    private fun indexAt(m: Double): Int {
-        var lo = 0; var hi = track.size - 1
-        while (lo < hi) { val mid = (lo + hi) ushr 1; if (track.metres[mid] < m) lo = mid + 1 else hi = mid }
+    private fun indexAt(m: Double): Int = indexAt(track, m)
+
+    private fun indexAt(t: ChargePlanner.Track, m: Double): Int {
+        var lo = 0; var hi = t.size - 1
+        while (lo < hi) { val mid = (lo + hi) ushr 1; if (t.metres[mid] < m) lo = mid + 1 else hi = mid }
         return lo
     }
 
@@ -85,7 +92,7 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
      * What the car really took against the model since [refSoc]: above 1 it takes more. Trusted the more the further it
      * has gone - quicker when it takes more (to be safe), slower when it takes less.
      */
-    fun scale(drivenM: Double, soc: Double): Double {
+    @Synchronized fun scale(drivenM: Double, soc: Double): Double {
         val model = modelEarlier + usedBefore + used(refM, drivenM)
         val km = kmEarlier + kmBefore + (drivenM - refM) / 1000
         if (model < MIN_USED) return 1.0
@@ -95,7 +102,7 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
     }
 
     /** The route changed (the stops moved, a new route from here): the plan goes on on [newTrack] from its start. */
-    fun retrack(newTrack: ChargePlanner.Track, drivenM: Double, newChain: List<Charger> = chain) {
+    @Synchronized fun retrack(newTrack: ChargePlanner.Track, drivenM: Double, newChain: List<Charger> = chain) {
         usedBefore += used(refM, drivenM); kmBefore += (drivenM - refM) / 1000; refM = 0.0
         planUsedBefore += used(planM, drivenM); planM = 0.0
         track = newTrack; chain = newChain; lastCheckM = -1e9
@@ -107,7 +114,7 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
      * the plan: "Wenn die Route sagt, okay, er braucht noch 36% und ich habe 40, dann komme ich mit 4 an"). The plan's
      * model along the way, times what the car really took so far ([scale]).
      */
-    fun levelAt(drivenM: Double, soc: Double, toM: Double): Double = soc - used(drivenM, toM) * scale(drivenM, soc)
+    @Synchronized fun levelAt(drivenM: Double, soc: Double, toM: Double): Double = soc - used(drivenM, toM) * scale(drivenM, soc)
 
     /**
      * How sure [levelAt] is, as ± percent (N-019 step 1, E-029: "Anzeige ‚Ankunft 11 % ± 2' mit schrumpfendem ±"): the
@@ -115,7 +122,7 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
      * start, down to [REL_LEARNED] once the drive has shown how the car takes it (the same trust as [scale]). Shrinks as
      * the way ahead gets shorter and the drive longer.
      */
-    fun spreadAt(drivenM: Double, soc: Double, toM: Double): Double {
+    @Synchronized fun spreadAt(drivenM: Double, soc: Double, toM: Double): Double {
         val ahead = maxOf(0.0, used(drivenM, toM) * scale(drivenM, soc))
         val km = kmEarlier + kmBefore + (drivenM - refM) / 1000
         val trust = minOf(1.0, km / TRUST_DOWN_KM)
@@ -133,10 +140,10 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
     fun modelUsed(fromM: Double, toM: Double) = used(fromM, toM)
 
     /** The route over the new stops could not be had: the stops of before stay ([MOVE] undone, no further change for a while). */
-    fun undo(old: List<Charger>) { chain = old; moves-- }
+    @Synchronized fun undo(old: List<Charger>) { chain = old; moves-- }
 
     /** Arrived: the last stretch for [ChargeBuffer]. */
-    fun arrived(drivenM: Double, soc: Double) = noteStretch(drivenM, soc)
+    @Synchronized fun arrived(drivenM: Double, soc: Double) = noteStretch(drivenM, soc)
 
     private fun noteStretch(drivenM: Double, soc: Double) {
         val model = usedBefore + used(refM, drivenM)
@@ -148,7 +155,7 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
      * The check at [drivenM] along the track with the car's [soc]; null between checks ([force]: now). A level that rose
      * since the last one is a charging: the stretch before it is noted and a new one starts.
      */
-    fun check(drivenM: Double, soc: Double, force: Boolean = false): Decision? {
+    @Synchronized fun check(drivenM: Double, soc: Double, force: Boolean = false): Decision? {
         if (soc > lastSoc + CHARGED_PERCENT) {
             noteStretch(drivenM, lastSoc)
             takenEarlier += refSoc - lastSoc; modelEarlier += usedBefore + used(refM, drivenM); kmEarlier += kmBefore + (drivenM - refM) / 1000
@@ -226,7 +233,7 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
      * What to charge to at [c] standing there at [drivenM] with [soc] (the card at the charger): the plan from here over
      * the stops ahead, this one first, [HOLD] % above the least levels.
      */
-    fun leaveAt(c: Charger, drivenM: Double, soc: Double): Double {
+    @Synchronized fun leaveAt(c: Charger, drivenM: Double, soc: Double): Double {
         val from = indexAt(drivenM)
         // with [HOLD] % on top: a little more charged now, so that a little more use on the way changes no stop
         val held = rules.copy(buffer = { km -> rules.buffer(km) + HOLD })
@@ -240,9 +247,10 @@ internal class ChargeRolling(private var track: ChargePlanner.Track, private val
 
     /** Where [c] lies along the present track. */
     fun alongM(c: Charger): Double {
+        val t = track
         var best = 0; var bd = Double.MAX_VALUE
-        for (i in 0 until track.size) { val d = ChargerIndex.distanceM(track.points[i], c.at); if (d < bd) { bd = d; best = i } }
-        return track.metres[best]
+        for (i in 0 until t.size) { val d = ChargerIndex.distanceM(t.points[i], c.at); if (d < bd) { bd = d; best = i } }
+        return t.metres[best]
     }
 
     companion object {

@@ -32,7 +32,7 @@ internal object NaviKeep {
         // the route settings go into the session when it is made (a new route after leaving one keeps them): changed in
         // the meantime and no trip running, it is made anew
         made?.let { m -> if (!guiding.value && m.first.routeOptions != options) {
-            m.first.stop()
+            m.first.close()
             made = Triple(makeSession(scope, m.second), m.second, m.third).also { watch(context.applicationContext, it.first, it.third) }
         } }
         return made ?: run {
@@ -65,7 +65,7 @@ internal object NaviKeep {
     @Volatile var startSoc: Double? = null
     @Volatile private var drivenRoute: Any? = null
     @Volatile private var drivenLast = 0.0
-    fun startTrip(soc: Double?) { drivenTotalM.doubleValue = 0.0; drivenRoute = null; drivenLast = 0.0; startSoc = soc; eta = null }
+    fun startTrip(soc: Double?) { drivenTotalM.doubleValue = 0.0; drivenRoute = null; drivenLast = 0.0; startSoc = soc; eta = null; closuresHandled.clear() }
 
     /**
      * The arrival as said and as it came, for the log (19.11.2026: "auf einer 15-Minuten-Route, hat er sich um 5 Minuten
@@ -218,6 +218,7 @@ internal object NaviKeep {
         val saved = current - b.second
         android.util.Log.i("MateNavi", "faster route: now %.0f min with %.0f min delay, best other %.0f min - saves %.0f min".format(current / 60, delay / 60, b.second / 60, saved / 60))
         if (saved >= MIN_SAVING_S) {
+            aroundClosure.value = false
             faster.value = b.first to Math.round(saved / 60).toInt()
             speaker.warn(app.getString(net.prototux.aare.R.string.traffic_faster_say, Math.round(saved / 60).toInt()))
         }
@@ -225,20 +226,24 @@ internal object NaviKeep {
 
     /** The offer in [faster] is a way round a closed road (not a faster one). */
     val aroundClosure = mutableStateOf(false)
-    private val closuresHandled = HashSet<String>()
+    /** The closures looked at on this trip: when a way round each was last looked for ([Long.MAX_VALUE]: offered). */
+    private val closuresHandled = HashMap<String, Long>()
 
     /**
      * 17.11.2026 (drive): "Er hat eine Straßensperrung erkannt, 3 Kilometer vorher ... aber er leitet mich da trotzdem
      * durch ... Er sagt Straßensperrung, hau durch da." Closures were only kept away from when planning; one that shows up
      * on the way was only said. Now a closure on the route within [CLOSURE_AHEAD_M] is kept from as well: the routes from
      * here are planned without it and one free of it is offered at once ("Route um die Sperrung", "Wechseln"), said too.
-     * Each closure once.
+     * Each closure offered once; one without a free route is looked at again after [CLOSURE_RETRY_MS].
      */
     private suspend fun checkClosure(app: Context, session: NaviSession, speaker: NaviSpeaker, t: TripState.Navigating, r: uniffi.ferrostar.Route, driven: Double) {
         if (faster.value != null) return
         val c = trafficAhead.value.firstOrNull { it.incident.kind == 8 && it.along && it.alongM > driven && it.alongM - driven < CLOSURE_AHEAD_M } ?: return
         val key = "%.4f,%.4f".format(java.util.Locale.ROOT, c.incident.start.latitude, c.incident.start.longitude)
-        if (!closuresHandled.add(key)) return
+        val nowMs = android.os.SystemClock.uptimeMillis()
+        val tried = closuresHandled[key]
+        if (tried != null && (tried == Long.MAX_VALUE || nowMs - tried < CLOSURE_RETRY_MS)) return
+        closuresHandled[key] = nowMs
         // the closed stretch as the route runs over it
         val all = r.geometry.map { Position(longitude = it.lng, latitude = it.lat) }
         val closed = ArrayList<Position>(); var m = 0.0
@@ -247,19 +252,20 @@ internal object NaviKeep {
         val here = Position(longitude = t.userLocation.coordinates.lng, latitude = t.userLocation.coordinates.lat)
         val waypoints = t.remainingWaypoints.map { Position(longitude = it.coordinate.lng, latitude = it.coordinate.lat) }
         if (waypoints.isEmpty()) return
-        session.closures = session.closures + NaviTraffic.excludePoints(listOf(closed))
+        session.closures = (session.closures + NaviTraffic.excludePoints(listOf(closed))).distinct()
         val alts = runCatching { session.routesFrom(here, waypoints) }.onFailure { android.util.Log.w("MateNavi", "around the closure: $it") }.getOrNull().orEmpty()
         val free = alts.firstOrNull { a -> NaviTraffic.onClosures(a.geometry.map { Position(longitude = it.lng, latitude = it.lat) }, listOf(closed)) == 0.0 }
         android.util.Log.i("MateNavi", "closure %.0f m ahead: %d routes from here, %s".format(c.alongM - driven, alts.size, if (free != null) "one free of it" else "none free of it"))
         if (free == null) return
+        closuresHandled[key] = Long.MAX_VALUE
         val more = free.steps.sumOf { it.duration } - t.progress.durationRemaining
         aroundClosure.value = true
         faster.value = free to Math.round(more / 60).toInt()
         speaker.warn(app.getString(net.prototux.aare.R.string.traffic_closure_route_say))
     }
     private const val CLOSURE_AHEAD_M = 20_000.0
+    private const val CLOSURE_RETRY_MS = 2 * 60_000L
 
-    /** The next turn for the bar while another area is in front (as Android Auto's rail): maneuver type and distance. */
     /**
      * The next turn for the bar behind another area: the manoeuvre's type, a roundabout's exit angle (0: none; 19.11.2026:
      * "im Bedienfeld ... nur ein verkrüppeltes Kreisverkehrssymbol ..., dass ich in den Kreisverkehr reinfahren soll, aber
@@ -317,9 +323,13 @@ internal object NaviKeep {
             kotlinx.coroutines.delay(1000)
             val t = session.state.value.tripState as? TripState.Navigating
             val r = session.route.value
-            if (!guiding.value || t == null || r == null) { forRoute = null; trafficAhead.value = emptyList(); saidTraffic.clear(); faster.value = null; if (!guiding.value) session.knownJams = emptyList(); continue }
+            if (!guiding.value || t == null || r == null) {
+                forRoute = null; trafficAhead.value = emptyList(); flowAhead.value = emptyList(); saidTraffic.clear(); faster.value = null; aroundClosure.value = false
+                if (!guiding.value) { session.knownJams = emptyList(); closuresHandled.clear() }
+                continue
+            }
             if (r !== forRoute) {
-                forRoute = r; trafficAt = 0L; trafficFullAt = 0L; faster.value = null; fasterCheckedAt = 0L
+                forRoute = r; trafficAt = 0L; trafficFullAt = 0L; faster.value = null; aroundClosure.value = false; fasterCheckedAt = 0L; flowAhead.value = emptyList()
                 val st = net.prototux.aare.Settings(app)
                 alert = if (st.speedWarn) NaviSpeedAlert(st.speedWarnOver, st.speedWarnTimes) else null
                 tone = NaviSpeedAlert.tone(st.speedWarnTone); volume = st.speedWarnVolume / 100f
@@ -342,7 +352,13 @@ internal object NaviKeep {
             }
             // F2 step 2: the incidents ahead, asked again every few minutes (with the traffic on and a map server)
             val nowMs = android.os.SystemClock.uptimeMillis()
-            if (net.prototux.aare.Settings(app).trafficShown && !TomTomBudget.exhausted(app) && (trafficAt == 0L || nowMs - trafficAt > TRAFFIC_MS)) {
+            val trafficOn = net.prototux.aare.Settings(app).trafficShown && !TomTomBudget.exhausted(app)
+            if (!trafficOn) {
+                // traffic off or the day's budget spent: what was found before is not kept on (said, in the arrival, on the line)
+                trafficAt = 0L; trafficFullAt = 0L
+                if (trafficAhead.value.isNotEmpty()) trafficAhead.value = emptyList()
+                if (flowAhead.value.isNotEmpty()) flowAhead.value = emptyList()
+            } else if (trafficAt == 0L || nowMs - trafficAt > TRAFFIC_MS) {
                 trafficAt = nowMs
                 // the next [TRAFFIC_AHEAD_M] every few minutes, the whole rest of the trip every [TRAFFIC_FULL_MS] (17.11.2026:
                 // "Reichen 50 km aus um noch eine Alternativroute zu finden?" - a jam 80 km on can already call for another
@@ -529,6 +545,7 @@ internal object NaviKeep {
         made?.let { (session, _, speaker) -> session.stop(); speaker.stop() }
         guiding.value = false; routeJson.value = null; drawnLine.value = emptyList(); limits.value = null
         target.value = null; chargeStops.value = emptyList(); ownStops.value = emptyList(); testDrive.value = null; rolling = null
+        faster.value = null; aroundClosure.value = false; flowAhead.value = emptyList(); closuresHandled.clear()
         android.util.Log.i("MateNavi", "car gone: guidance stopped")
     }
 

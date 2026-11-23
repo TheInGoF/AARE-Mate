@@ -58,13 +58,18 @@ internal class NaviSpeedAlert(private val overKmh: Int, val times: Int) {
             }
             val gap = ShortArray(RATE / 4)
             val pcm = ShortArray(0).let { var a = it; repeat(times.coerceIn(1, 3)) { i -> a += one; if (i < times.coerceIn(1, 3) - 1) a += gap }; a }
-            val track = AudioTrack.Builder()
+            val track = runCatching { AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
                 .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT).setSampleRate(RATE)
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
                 .setTransferMode(AudioTrack.MODE_STATIC).setBufferSizeInBytes(pcm.size * 2).build()
-            track.write(pcm, 0, pcm.size)
+                .also { it.write(pcm, 0, pcm.size) } }
+                .onFailure { android.util.Log.w("MateNavi", "speed warning: tone could not be played", it) }.getOrNull() ?: run {
+                    // the music up again, it was turned down for the tone
+                    net.prototux.aare.audio.MediaFade.release()
+                    return
+                }
             // during a call half of it, as Mate's speech (18.11.2026)
             val quiet = runCatching { net.prototux.aare.car.Calls.promptFactor(net.prototux.aare.AareApp.instance) }.getOrDefault(1f)
             track.setVolume(volume.coerceIn(0f, 1f) * quiet)

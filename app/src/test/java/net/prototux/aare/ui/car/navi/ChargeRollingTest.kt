@@ -26,7 +26,7 @@ class ChargeRollingTest {
         val all = ArrayList<Charger>(); var at = 10.0 + r.nextInt(20)
         while (at < km - 5) { all += w.charger(at, listOf(150, 300, 400)[r.nextInt(3)], w.NETS[r.nextInt(w.NETS.size)], r.nextDouble() * 400); at += 15.0 + r.nextInt(31) }
         val near = w.near(all)
-        val rules = ChargePlanner.Rules(atCharger = 5.0 + r.nextInt(6), atDestination = 5.0 + r.nextInt(6), buffer = ChargeBuffer(emptyList())::percent)
+        val rules = ChargePlanner.Rules(atCharger = 5.0 + r.nextInt(6), atDestination = 5.0 + r.nextInt(6), buffer = { km -> minOf(6.0, 0.5 * maxOf(0.0, km) / 100.0) })
         val start = 50.0 + r.nextInt(41)
         val chain = ChargeChain.plan(track, car, start, near, rules).links.map { it.cand.charger }
         var stretches = 0

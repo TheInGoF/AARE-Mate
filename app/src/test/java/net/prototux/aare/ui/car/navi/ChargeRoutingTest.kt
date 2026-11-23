@@ -61,7 +61,7 @@ internal class MockValhalla(private val base: ChargePlanner.Track, private val f
 class ChargeRoutingTest {
     private val w = ChargeTestWorld
     private val car = EnergyModel.Car(capacityWh = 77_000, socPercent = 70.0)
-    private val rules = ChargePlanner.Rules(buffer = ChargeBuffer(emptyList())::percent)
+    private val rules = ChargePlanner.Rules(buffer = { km -> minOf(6.0, 0.5 * maxOf(0.0, km) / 100.0) })
     private fun every(km: Int, step: Int = 30, kw: Int = 300) = (step / 2 until km step step).map { w.charger(it.toDouble(), kw, w.NETS[it % w.NETS.size]) }
 
     private fun check(o: ChargeRouting.Outcome<ChargePlanner.Track>, r: ChargePlanner.Rules = rules) {
@@ -188,7 +188,7 @@ class ChargeRoutingTest {
             assertTrue(o.overStops && v.calls <= 3)
             check(o)
             // on the point: not much more than the least level plus its buffer at the end
-            assertTrue("end ${o.plan.arrivePercent}", o.plan.arrivePercent <= rules.atDestination + ChargeBuffer.MAX + 4)
+            assertTrue("end ${o.plan.arrivePercent}", o.plan.arrivePercent <= rules.atDestination + 6.0 + 4)
         }
     }
 

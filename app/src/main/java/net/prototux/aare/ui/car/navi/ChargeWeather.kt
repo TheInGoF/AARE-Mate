@@ -42,6 +42,8 @@ internal class ChargeWeather private constructor(private val points: List<Positi
         private const val MAX_POINTS = 20
         private const val FAR_M = 60_000.0
         private const val KEEP_MS = 30 * 60_000L
+        /** A failed request is not asked again for this long (each planning would wait for its timeouts), then again. */
+        private const val FAILED_KEEP_MS = 2 * 60_000L
 
         /** The points asked for along [line]: every [STEP_M], the start and the end, rounded to 0.1°, each once. */
         fun points(line: List<Position>): List<Position> {
@@ -80,25 +82,27 @@ internal class ChargeWeather private constructor(private val points: List<Positi
                 field("precipitation"), nowMs)
         }
 
+        /** The points' key, until when the answer counts, the answer. */
         private var kept: Triple<String, Long, ChargeWeather?>? = null
 
         /**
          * The weather along [line], asked once and kept [KEEP_MS] for the same points (the routes of a preview, the
-         * planning on the way). [said] tells the log what came. Blocking.
+         * planning on the way); a failed request only [FAILED_KEEP_MS]. [said] tells the log what came. Blocking.
          */
         fun along(line: List<Position>, said: (String) -> Unit = {}): ChargeWeather? {
             val pts = points(line)
             if (pts.size < 2) return null
             val key = pts.joinToString(";") { "${it.latitude},${it.longitude}" }
             val now = System.currentTimeMillis()
-            synchronized(this) { kept?.let { (k, at, w) -> if (k == key && now - at < KEEP_MS) return w } }
+            synchronized(this) { kept?.let { (k, until, w) -> if (k == key && now < until) return w } }
+            var failed = false
             val w = runCatching {
                 val c = java.net.URL(url(pts)).openConnection() as java.net.HttpURLConnection
                 c.connectTimeout = 6_000; c.readTimeout = 8_000
                 try { parse(pts, c.inputStream.bufferedReader().use { it.readText() }) } finally { c.disconnect() }
-            }.onFailure { said("weather: none (${it.message ?: it}) - planned without it") }.getOrNull()
-            if (w != null) said(w.describe()) else if (kept?.first != key) said("weather: no hours in the answer - planned without it")
-            synchronized(this) { kept = Triple(key, now, w) }
+            }.onFailure { failed = true; said("weather: none (${it.message ?: it}) - planned without it") }.getOrNull()
+            if (w != null) said(w.describe()) else if (!failed && kept?.first != key) said("weather: no hours in the answer - planned without it")
+            synchronized(this) { kept = Triple(key, now + if (failed) FAILED_KEEP_MS else KEEP_MS, w) }
             return w
         }
     }

@@ -6,8 +6,8 @@ import java.io.RandomAccessFile
 import java.util.zip.GZIPInputStream
 
 /**
- * Reads single tiles from a PMTiles v3 file on the device (the region package's karte.pmtiles), for the dashboard's map
- * without the net (Navi O175 / P-059): the dashboard's page asks tile by tile, MapLibre is not there to read the file.
+ * Reads single tiles from a PMTiles v3 file on the device (the region package's karte.pmtiles), for the map without the
+ * net: OfflineTiles serves them to MapLibre tile by tile, from all packages at once (RegionPacks.anyTile).
  * Header, root and leaf directories as in the PMTiles v3 spec; the directories are kept once read. Tiles come out as
  * they are meant to be drawn - a gzip'd tile is unpacked here, the web view would not do it.
  */
@@ -21,7 +21,8 @@ internal class PmTiles(private val file: File) {
      * The file kept open (21.11.2026: opened anew for each read, on the memory card each tile cost several openings and
      * the map's tiles came too late - blank squares in the dashboard's near view); positional reads, safe from any thread.
      */
-    private val channel: java.nio.channels.FileChannel by lazy { RandomAccessFile(file, "r").channel }
+    private val opening = lazy { RandomAccessFile(file, "r").channel }
+    private val channel: java.nio.channels.FileChannel by opening
 
     private val header: Header
     private val root: List<Entry>
@@ -32,11 +33,17 @@ internal class PmTiles(private val file: File) {
     val maxZoom get() = header.maxZoom
 
     init {
-        val h = read(0, 127)
-        require(String(h, 0, 7, Charsets.US_ASCII) == "PMTiles" && h[7].toInt() == 3) { "not PMTiles v3" }
-        header = Header(u64(h, 8), u64(h, 16).toInt(), u64(h, 40), u64(h, 56),
-            h[97].toInt() and 0xFF, h[98].toInt() and 0xFF, h[100].toInt() and 0xFF, h[101].toInt() and 0xFF)
-        root = directory(read(header.rootOffset, header.rootLength))
+        try {
+            val h = read(0, 127)
+            require(String(h, 0, 7, Charsets.US_ASCII) == "PMTiles" && h[7].toInt() == 3) { "not PMTiles v3" }
+            header = Header(u64(h, 8), u64(h, 16).toInt(), u64(h, 40), u64(h, 56),
+                h[97].toInt() and 0xFF, h[98].toInt() and 0xFF, h[100].toInt() and 0xFF, h[101].toInt() and 0xFF)
+            root = directory(read(header.rootOffset, header.rootLength))
+        } catch (e: Throwable) {
+            // a broken file: not left open until collected
+            if (opening.isInitialized()) runCatching { channel.close() }
+            throw e
+        }
     }
 
     /**

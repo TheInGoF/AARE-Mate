@@ -28,10 +28,6 @@ import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.draw.scale
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,8 +37,8 @@ import kotlin.math.roundToInt
 
 /**
  * The driver's speed and the speed limit, above Mate's controls at the bottom left (wish of 16.11.2026; N2: both, with
- * the country's signs; specification F-07: "unbekannt" rather than a guess, F-09: the own speed from GPS). The limit is
- * a placeholder for now - the sign stays grey with a dash until the route brings limits.
+ * the country's signs; specification F-07: "unbekannt" rather than a guess, F-09: the own speed from GPS). The limit
+ * comes from the route ([NaviLimits]); without one known here no sign is shown.
  */
 @Composable
 internal fun NaviSpeed(kmh: Double?, limitKmh: Int?, modifier: Modifier, from: NaviSpeedSource.From? = null, clock: () -> Long = { 0L }) {
@@ -66,10 +62,9 @@ internal fun NaviSpeed(kmh: Double?, limitKmh: Int?, modifier: Modifier, from: N
     }
 }
 
-/** Germany's sign: a white face in a red ring, the number black; unknown: the same sign grey with a dash. */
+/** Germany's sign: a white face in a red ring, the number black; no limit ([NaviLimits.UNLIMITED]): sign 282. */
 @Composable
-private fun LimitSign(limit: Int?, over: Boolean, clock: () -> Long) {
-    val known = limit != null
+private fun LimitSign(limit: Int, over: Boolean, clock: () -> Long) {
     // over the limit the sign breathes (wish of 16.11.2026 "soll das limit zeichen wabern"): grows a little and back.
     // In the map's own beat ([clock], the glide's time, read only in the layer): an endless animation of its own asked
     // for every display frame - 60 a second over the whole car screen while the map ran at 30 (16.11.2026)
@@ -81,8 +76,8 @@ private fun LimitSign(limit: Int?, over: Boolean, clock: () -> Long) {
         val t = (clock() % 1400L) / 1400.0
         return (1.0 + 0.06 * (1 - Math.cos(t * 2 * Math.PI))).toFloat()
     }
-    val face = if (known) Mate.signFace else Mate.surface
-    val ring = if (known) Mate.signRing else Mate.textFaint
+    val face = Mate.signFace
+    val ring = Mate.signRing
     if (limit == NaviLimits.UNLIMITED) { EndOfLimits(); return }
     Box(Modifier.size(76.dp).graphicsLayer { scaleX = scale(); scaleY = scale() }, contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(76.dp)) {
@@ -91,8 +86,8 @@ private fun LimitSign(limit: Int?, over: Boolean, clock: () -> Long) {
             if (over) drawCircle(ring.copy(alpha = (scale() - 1f) * 3f), radius = r * 1.08f, style = Stroke(r * 0.12f))
             drawCircle(ring, radius = r - r * 0.1f, style = Stroke(r * 0.2f))
         }
-        Text(limit?.toString() ?: "–", fontSize = if ((limit ?: 0) >= 100) 24.sp else 28.sp, fontWeight = FontWeight.Bold,
-            color = if (known) Mate.signText else Mate.textDim)
+        Text(limit.toString(), fontSize = if (limit >= 100) 24.sp else 28.sp, fontWeight = FontWeight.Bold,
+            color = Mate.signText)
     }
 }
 

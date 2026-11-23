@@ -22,19 +22,19 @@ class ChargePlannerLowTest {
 
     @Test fun belowTheReserveAtTheStart() {
         // 8 % at the start: no point is reached with 10 % - before, no stop at all
-        val plan = ChargePlanner.plan(track, car, 8.0, look(charger(5)), ChargePlanner.Rules())
+        val plan = ChargeChain.plan(track, car, 8.0, look(charger(5)), ChargePlanner.Rules()).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }
         assertEquals(1, plan.stops.size)
         assertTrue("arrives with ${plan.arrivePercent}", plan.arrivePercent >= 10.0 - 0.5)
     }
 
     @Test fun onlyAWeakerChargerFartherAway() {
         // 12 % at the start, the only charger 50 kW and 4 km off the road
-        val plan = ChargePlanner.plan(track, car, 12.0, look(charger(10, kw = 50, offM = 4_000.0)), ChargePlanner.Rules())
+        val plan = ChargeChain.plan(track, car, 12.0, look(charger(10, kw = 50, offM = 4_000.0)), ChargePlanner.Rules()).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }
         assertEquals(1, plan.stops.size)
     }
 
     @Test fun enoughNeedsNoStop() {
-        val plan = ChargePlanner.plan(track, car, 40.0, look(charger(5)), ChargePlanner.Rules())
+        val plan = ChargeChain.plan(track, car, 40.0, look(charger(5)), ChargePlanner.Rules()).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }
         assertTrue(plan.stops.isEmpty())
     }
 }

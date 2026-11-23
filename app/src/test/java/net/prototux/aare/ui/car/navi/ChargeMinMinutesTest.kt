@@ -24,7 +24,7 @@ class ChargeMinMinutesTest {
         val long = ChargePlanner.replay(track, car, 95.0, listOf(charger), ChargePlanner.Rules(chargeUpTo = 80.0, minMinutes = 10.0))
         assertTrue("with 10 min ${long.stops.single().chargeMinutes}", long.stops.single().chargeMinutes >= 10.0)
         assertTrue(long.arrivePercent > short.arrivePercent)
-        val chain = ChargePlanner.plan(track, car, 95.0, near, ChargePlanner.Rules(chargeUpTo = 80.0, minMinutes = 10.0))
+        val chain = ChargeChain.plan(track, car, 95.0, near, ChargePlanner.Rules(chargeUpTo = 80.0, minMinutes = 10.0)).let { ChargePlanner.Plan(it.stops(), it.arrivePercent) }
         assertTrue("planned ${chain.stops.single().chargeMinutes}", chain.stops.single().chargeMinutes >= 10.0)
     }
 

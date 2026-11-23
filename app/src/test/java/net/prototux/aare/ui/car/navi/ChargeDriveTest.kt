@@ -33,7 +33,7 @@ class ChargeDriveTest {
         val all = ArrayList<Charger>(); var at = 6.0
         while (at < km) { all += w.charger(at, listOf(150, 300, 300, 400)[r.nextInt(4)], w.NETS[r.nextInt(w.NETS.size)], r.nextDouble() * 300); at += 15.0 + r.nextInt(26) }
         val rules = ChargePlanner.Rules(atCharger = 10.0, atDestination = 10.0, chargeUpTo = 80.0, preferred = setOf("ionity", "tesla"),
-            buffer = ChargeBuffer(emptyList())::percent)
+            buffer = { km -> minOf(6.0, 0.5 * maxOf(0.0, km) / 100.0) })
         log += "charging: FAST " + ChargeBuffer(emptyList()).describe()
         log += "charging: FAST energy: ${base.parts}"
         val server = MockValhalla(base)

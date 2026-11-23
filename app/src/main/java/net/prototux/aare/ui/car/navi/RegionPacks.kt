@@ -39,8 +39,12 @@ internal object RegionPacks {
     }
     class Catalogue(val mapDate: String, val regions: List<Region>)
 
-    private fun base(context: Context) =
-        net.prototux.aare.Settings(context).mapServer.ifBlank { null }?.let { "$it/pakete" } ?: DEV_PACKS
+    // the build PC over adb only in debug builds (as NaviSearch): a release without a map server has no catalogue
+    private fun base(context: Context): String? =
+        net.prototux.aare.Settings(context).mapServer.ifBlank { null }?.let { "$it/pakete" } ?: DEV_PACKS.takeIf { net.prototux.aare.BuildConfig.DEBUG }
+
+    /** A map server to ask is set (or the build PC's in a debug build). */
+    fun hasServer(context: Context): Boolean = base(context) != null
 
     fun dir(context: Context, id: String) = File(root(context), id)
 
@@ -49,8 +53,9 @@ internal object RegionPacks {
 
     /** The catalogue, or null when it cannot be read or is of a format this app does not know. */
     suspend fun catalogue(context: Context): Catalogue? = withContext(Dispatchers.IO) {
+        val b = base(context) ?: return@withContext null
         runCatching {
-            NaviServer.client(context).newCall(Request.Builder().url(base(context) + "/katalog.json").build()).execute().use { r ->
+            NaviServer.client(context).newCall(Request.Builder().url("$b/katalog.json").build()).execute().use { r ->
                 android.util.Log.i("MateNavi", "catalogue: HTTP ${r.code}")
                 // reached, but no catalogue yet (the server has not built its packages): an empty one, not "no connection"
                 if (r.code == 404) return@runCatching Catalogue("", emptyList())
@@ -100,10 +105,6 @@ internal object RegionPacks {
 
     fun deleteDir(context: Context, id: String) { if (id.matches(Regex("[a-z0-9_-]+"))) dir(context, id).deleteRecursively() }
 
-    /** Folders of single region packages still on the device (from before the whole package). */
-    fun singlesHere(context: Context): List<String> = root(context).listFiles().orEmpty()
-        .filter { it.isDirectory && it.name != GESAMT }.map { it.name }.sorted()
-
     /** When the files of [r] on the device were loaded (the newest of them), null when none are there. */
     fun loadedAt(context: Context, r: Region): Long? =
         r.files.mapNotNull { File(dir(context, r.id), local(it)).takeIf { f -> f.isFile }?.lastModified() }.maxOrNull()
@@ -129,6 +130,7 @@ internal object RegionPacks {
      * connection (the .part stays and the next try goes on from there) and on a wrong checksum (the .part is dropped).
      */
     suspend fun download(context: Context, r: Region, progress: (Long, Long) -> Unit) = withContext(Dispatchers.IO) {
+        val b = base(context) ?: throw java.io.IOException("no map server")
         val d = dir(context, r.id).apply { mkdirs() }
         File(d, "bbox.json").writeText(org.json.JSONArray(r.bbox).toString())
         val total = r.bytes
@@ -141,25 +143,38 @@ internal object RegionPacks {
             val mark = File(d, local(f) + ".sha256")
             if (target.isFile && mark.readTextOrNull() == f.sha256) { before += f.bytes; progress(before, total); continue }
             val part = File(d, local(f) + ".part")
-            val have = if (part.isFile) part.length() else 0L
-            val req = Request.Builder().url(base(context) + "/" + f.path).apply { if (have > 0) header("Range", "bytes=$have-") }.build()
-            NaviServer.client(context).newCall(req).execute().use { resp ->
-                val resume = resp.code == 206
-                if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code}")
-                FileOutputStream(part, resume).use { out ->
-                    val buf = ByteArray(1 shl 16)
-                    var done = if (resume) have else 0L
-                    resp.body.byteStream().use { inp ->
-                        while (true) {
-                            coroutineContext.ensureActive()
-                            val n = inp.read(buf); if (n < 0) break
-                            out.write(buf, 0, n); done += n
-                            progress(before + done, total)
+            var have = if (part.isFile) part.length() else 0L
+            // a .part as long as the file (Mate ended between the last byte and the check): checked as it is - asked
+            // from its end the server answers 416 again and again
+            var checked = false
+            var fetch = !(f.bytes > 0 && have >= f.bytes)
+            while (fetch) {
+                fetch = false
+                val req = Request.Builder().url("$b/" + f.path).apply { if (have > 0) header("Range", "bytes=$have-") }.build()
+                NaviServer.client(context).newCall(req).execute().use { resp ->
+                    if (resp.code == 416 && have > 0) {
+                        // nothing after the .part's end: complete, or not this file any more - loaded anew without "Range"
+                        if (sha256(part) == f.sha256) { checked = true; return@use }
+                        android.util.Log.w("MateNavi", "region package ${r.id}: ${local(f)}.part refused (416) and not the file - loaded anew")
+                        part.delete(); have = 0L; fetch = true; return@use
+                    }
+                    val resume = resp.code == 206
+                    if (!resp.isSuccessful) throw java.io.IOException("HTTP ${resp.code}")
+                    FileOutputStream(part, resume).use { out ->
+                        val buf = ByteArray(1 shl 16)
+                        var done = if (resume) have else 0L
+                        resp.body.byteStream().use { inp ->
+                            while (true) {
+                                coroutineContext.ensureActive()
+                                val n = inp.read(buf); if (n < 0) break
+                                out.write(buf, 0, n); done += n
+                                progress(before + done, total)
+                            }
                         }
                     }
                 }
             }
-            if (sha256(part) != f.sha256) { part.delete(); throw java.io.IOException("SHA-256") }
+            if (!checked && sha256(part) != f.sha256) { part.delete(); throw java.io.IOException("SHA-256") }
             target.delete()
             if (!part.renameTo(target)) throw java.io.IOException("rename")
             mark.writeText(f.sha256)
@@ -224,20 +239,6 @@ internal object RegionPacks {
     fun mapFor(context: Context, lon: Double, lat: Double): LocalMap? = pick(maps(context), lon, lat)
 
     /**
-     * A tile of the dashboard's map without the net (O175, Navi P-059): from the package [pick] gives for the tile's
-     * middle - the whole package when it is there. The maps and their readers are kept while the files stay the same
-     * (a tile is asked many times a second; the border is read once). Null when no package has it.
-     */
-    fun offlineTile(context: Context, z: Int, x: Int, y: Int): Pair<LocalMap, ByteArray?>? {
-        val n = 1 shl z
-        val lon = (x + 0.5) / n * 360.0 - 180.0
-        val lat = Math.toDegrees(Math.atan(Math.sinh(Math.PI * (1 - 2 * (y + 0.5) / n))))
-        val m = pick(cachedMaps(context), lon, lat) ?: return null
-        val reader = reader(m) ?: return m to null
-        return m to runCatching { reader.tile(z, x, y) }.getOrNull()
-    }
-
-    /**
      * A tile from all packages at once (OfflineTiles, 21.11.2026 single regions again): the packages that hold the tile's
      * middle first (the smallest first), then the others whose box touches the tile, the old whole package last; the
      * first that has the tile gives it. A tile at a border is whole in each neighbour, so any of them is right.
@@ -261,11 +262,17 @@ internal object RegionPacks {
     private fun reader(m: LocalMap): PmTiles? {
         val key = m.file.absolutePath + "@" + m.file.lastModified()
         readers[key]?.let { return it }
-        val opened = runCatching { PmTiles(m.file) }.getOrNull() ?: return null
+        // a broken file is not opened again for every tile (each try left a file descriptor open until collected)
+        if (key in broken) return null
+        val opened = runCatching { PmTiles(m.file) }.onFailure {
+            if (broken.add(key)) android.util.Log.w("MateNavi", "region package ${m.id}: map file cannot be read - left out", it)
+        }.getOrNull() ?: return null
         return readers.putIfAbsent(key, opened)?.also { opened.close() } ?: opened
     }
 
     private val readers = java.util.concurrent.ConcurrentHashMap<String, PmTiles>()
+    /** Map files (path@time) that could not be opened; a new file has a new time and is tried again. */
+    private val broken: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     @Volatile private var mapsKey = ""
     @Volatile private var mapsKept: List<LocalMap> = emptyList()
     private val looking = java.util.concurrent.locks.ReentrantLock()

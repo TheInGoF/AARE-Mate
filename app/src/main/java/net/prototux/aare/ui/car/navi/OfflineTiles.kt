@@ -36,8 +36,16 @@ internal object OfflineTiles {
         val s = ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"))
         server = s
         Thread({
+            var failedAt = 0L
             while (!s.isClosed) {
-                val c = runCatching { s.accept() }.getOrNull() ?: continue
+                val c = runCatching { s.accept() }.getOrElse { e ->
+                    if (s.isClosed) break
+                    // a lasting failure (too many open files): not round and round at full load, said once a minute
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (now - failedAt > 60_000L) { failedAt = now; Log.w(TAG, "offline tiles: accept failed", e) }
+                    Thread.sleep(200)
+                    null
+                } ?: continue
                 // more connections than threads: this one is closed at once, the client asks anew (no queue to wait in)
                 runCatching { pool.execute { runCatching { serve(app, c) } } }.onFailure { runCatching { c.close() } }
             }

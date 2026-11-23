@@ -18,48 +18,16 @@ import net.prototux.aare.ui.car.Mate
 import kotlin.math.roundToInt
 
 /**
- * The charging plan checked against the battery while driving (F3, O189 "Neuplanung unterwegs mit dem echten Ladestand",
- * as ABRP does it): from where the car is with the level it really has, does it still reach the next planned stop (or
- * the destination) with the reserve - or does it reach the one after, so the next stop is not needed any more? Pure
- * arithmetic over the route's track; the screen asks every half minute and offers to plan again.
+ * The charging plan's state while driving (F3, O189), for the hint at the top right: the rolling planning
+ * (ChargeRolling, Navi L-029 step F) finds the battery too low for the plan ([Verdict.TOO_LOW]) or has moved the stops
+ * ([Verdict.MOVED]).
  */
 internal object NaviChargeWatch {
     /** [MOVED]: the rolling planning (Navi L-029 step F) moved the stops; said once, no "Neu planen". */
-    enum class Verdict { OK, TOO_LOW, STOP_NOT_NEEDED, MOVED }
+    enum class Verdict { TOO_LOW, MOVED }
 
     /** What the check found and with how much the car would reach the next stop (or the destination). */
     class Result(val verdict: Verdict, val arrivePercent: Double, val text: String? = null)
-
-    /**
-     * [track] the guided route with energy, [drivenM] how far along it the car is, [socPercent] its level now,
-     * [capacityWh] the battery, [stopsAheadM] the planned stops still ahead (metres from the start, in order).
-     */
-    fun check(track: ChargePlanner.Track, drivenM: Double, socPercent: Double, capacityWh: Int, stopsAheadM: List<Double>,
-              rules: ChargePlanner.Rules): Result {
-        fun whAt(m: Double): Double {
-            val i = track.metres.indexOfFirst { it >= m }.let { if (it < 0) track.size - 1 else it }
-            if (i <= 0) return track.wh[0]
-            val a = track.metres[i - 1]; val b = track.metres[i]
-            val k = if (b > a) ((m - a) / (b - a)).coerceIn(0.0, 1.0) else 1.0
-            return track.wh[i - 1] + (track.wh[i] - track.wh[i - 1]) * k
-        }
-        fun pct(wh: Double) = wh / capacityWh * 100.0
-        val now = whAt(drivenM)
-        val next = stopsAheadM.firstOrNull()
-        val toNext = socPercent - pct(whAt(next ?: track.metres.last()) - now)
-        val need = if (next != null) rules.atCharger else rules.atDestination
-        if (toNext < need - MARGIN) return Result(Verdict.TOO_LOW, toNext)
-        if (next != null) {
-            val after = stopsAheadM.getOrNull(1)
-            val toAfter = socPercent - pct(whAt(after ?: track.metres.last()) - now)
-            val needAfter = if (after != null) rules.atCharger else rules.atDestination
-            if (toAfter >= needAfter + MARGIN) return Result(Verdict.STOP_NOT_NEEDED, toNext)
-        }
-        return Result(Verdict.OK, toNext)
-    }
-
-    /** Below the reserve by this much before it says so, above it by this much before a stop counts as not needed. */
-    private const val MARGIN = 2.0
 }
 
 /**
@@ -76,8 +44,7 @@ internal fun NaviChargeHint(result: NaviChargeWatch.Result, modifier: androidx.c
             tint = if (low) Mate.warn else Mate.accent, modifier = androidx.compose.ui.Modifier.size(28.dp))
         androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(12.dp))
         androidx.compose.material3.Text(result.text ?: androidx.compose.ui.res.stringResource(
-            if (low) net.prototux.aare.R.string.mate_navi_charge_low else net.prototux.aare.R.string.mate_navi_charge_skip,
-            result.arrivePercent.roundToInt().coerceAtLeast(0)),
+            net.prototux.aare.R.string.mate_navi_charge_low, result.arrivePercent.roundToInt().coerceAtLeast(0)),
             style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = Mate.text,
             modifier = androidx.compose.ui.Modifier.weight(1f, fill = false))
         androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(12.dp))

@@ -79,6 +79,8 @@ internal class NaviSpeaker(context: Context) {
         if (tts.speak(words, queue, params, id) == TextToSpeech.ERROR) {
             Log.w(TAG, "voice: speech engine refused, binding again"); ready = false; boundAt = 0; heal()
             audio.abandonAudioFocusRequest(focus)
+            // no onDone/onError comes for a refused one: the music and a paused book back now
+            net.prototux.aare.audio.MediaFade.release()
         }
     }
 
@@ -186,6 +188,7 @@ internal class NaviSpeaker(context: Context) {
         val wait = (if (flush) 0L else (playingUntil - now).coerceAtLeast(0)) + if (fresh) net.prototux.aare.audio.MediaFade.DOWN_MS else 0L
         if (flush) stopTrack()
         val gen = playGen
+        val end = now + wait + samples.size * 1000L / rate + 300
         main.postDelayed({
             if (gen != playGen) return@postDelayed      // stopped meanwhile (I-008: a waiting one played after "Zurück")
             stopTrack()
@@ -194,13 +197,17 @@ internal class NaviSpeaker(context: Context) {
                     .setSampleRate(rate).setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO).build())
                 .setTransferMode(android.media.AudioTrack.MODE_STATIC).setBufferSizeInBytes(samples.size * 4).build()
                 .also { it.write(samples, 0, samples.size, android.media.AudioTrack.WRITE_BLOCKING) } }
-                .onFailure { Log.w(TAG, "voice: sound could not be played", it) }.getOrNull() ?: return@postDelayed
+                .onFailure { Log.w(TAG, "voice: sound could not be played", it) }.getOrNull() ?: run {
+                    // nothing plays now and nothing waits behind it: the music and a paused book back
+                    if (playingUntil <= end) net.prototux.aare.audio.MediaFade.release()
+                    return@postDelayed
+                }
             audio.requestAudioFocus(focus)
             runCatching { t.play() }.onFailure { Log.w(TAG, "voice: sound could not be played", it) }; track = t
             val ms = samples.size * 1000L / rate + 300
             main.postDelayed({ if (track === t) { stopTrack(); audio.abandonAudioFocusRequest(focus); net.prototux.aare.audio.MediaFade.release() } }, ms)
         }, wait)
-        playingUntil = now + wait + samples.size * 1000L / rate + 300
+        playingUntil = end
     }
 
     private fun stopTrack() { track?.let { runCatching { it.stop() }; it.release() }; track = null }
@@ -211,7 +218,6 @@ internal class NaviSpeaker(context: Context) {
     fun prepareWarnings(texts: List<String>) = NaviKokoro.prepare(app, texts, first = true)
 
     fun stop() { runCatching { tts.stop() }; playGen++; playingUntil = 0; stopTrack(); audio.abandonAudioFocusRequest(focus); net.prototux.aare.audio.MediaFade.release() }
-    fun release() { stop(); tts.shutdown() }
 
     companion object {
         private const val TAG = "MateNavi"

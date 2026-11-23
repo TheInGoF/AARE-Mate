@@ -151,15 +151,15 @@ internal class ChargeRouting<R>(
 
         /**
          * The log line of a plan (L-029 Diagnose): route, km and start, candidates, the chain with arrival and departure at
-         * each stop, the end against the least level and its buffer, the weather, the requests, the time on the device.
+         * each stop, the end against the least level, the weather, the requests, the time on the device.
          */
         fun logLine(kind: String, km: Double, start: Double, plan: ChargePlanner.Plan, out: Outcome<*>, rules: ChargePlanner.Rules,
                     weather: String): String =
-            "charging plan %s: %.0f km from %.0f %%, %d candidates, %s; %.0f %% at the end (least %.0f %% + buffer %.1f %%; at a charger %.0f %%, chargers from %d kW); %s; %d request(s)%s; %.1f ms on the device".format(
+            "charging plan %s: %.0f km from %.0f %%, %d candidates, %s; %.0f %% at the end (least %.0f %%; at a charger %.0f %%, chargers from %d kW); %s; %d request(s)%s; %.1f ms on the device".format(
                 java.util.Locale.ROOT, kind, km, start, out.candidates,
                 if (plan.stops.isEmpty()) "no stop" else plan.stops.joinToString { "%s %d kW at %.0f km %.0f->%.0f %% %.0f min%s".format(java.util.Locale.ROOT,
                     it.charger.network ?: "other", it.charger.kw, it.atM / 1000, it.arrivePercent, it.leavePercent, it.chargeMinutes, if (it.overLimit) " over the limit" else "") },
-                plan.arrivePercent, rules.atDestination, rules.buffer(km), rules.atCharger, rules.minKw,
+                plan.arrivePercent, rules.atDestination, rules.atCharger, rules.minKw,
                 weather, out.calls, if (out.overStops) " (route over the stops)" else "", out.micros / 1000.0)
         private const val TINY_MIN = 5.0
     }

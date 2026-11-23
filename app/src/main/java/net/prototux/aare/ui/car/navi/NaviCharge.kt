@@ -34,11 +34,14 @@ import kotlin.math.roundToInt
 /**
  * The battery at the destination (wish O170 of 16.11.2026): above the speed, the state of charge expected on
  * arrival - from the car's level now and the energy model (IDmate's curve when its server serves one, else the
- * physics), step by step over what is left of the route at each step's own speed. Below [RESERVE_PERCENT] the trip
- * needs a charge on the way: a small "+" in a circle at the tile, like a battery's plus pole.
+ * physics), step by step over what is left of the route at each step's own speed. Below the driver's least level at
+ * the destination ([reservePercent]) the trip needs a charge on the way: a small "+" in a circle at the tile, like a battery's plus pole.
  */
 internal object NaviCharge {
-    const val RESERVE_PERCENT = 10.0
+    /** The driver's least level at the destination (O205, as the planning's [ChargePlanner.Rules.atDestination]). */
+    fun reservePercent(context: Context): Double = net.prototux.aare.Settings(context).chargeMinAtDestination.toDouble()
+    /** The driver's least level at a charger (O205, [ChargePlanner.Rules.atCharger]): below it the tile turns to the warning colour. */
+    fun chargerWarnPercent(context: Context): Double = net.prototux.aare.Settings(context).chargeMinAtCharger.toDouble()
 
     /** [atCharger]: the level on arrival at the next planned charging stop (not at the destination). */
     /** [spread]: ± percent where the drive's own model counts it (ChargeRolling.spreadAt), null where it is not known. */
@@ -83,10 +86,8 @@ internal object NaviCharge {
     fun arrivalAtCharger(context: Context, steps: List<RouteStep>, firstLeftM: Double?, aheadM: Double): Arrival? {
         val car = CarDataService.car(context) ?: return null
         val p = car.socPercent - energyWhUntil(steps, firstLeftM, aheadM, car) / car.capacityWh * 100.0
-        return Arrival(p, p < CHARGER_WARN_PERCENT, atCharger = true)
+        return Arrival(p, p < chargerWarnPercent(context), atCharger = true)
     }
-    /** Below this at the charger the tile turns to the warning colour. */
-    const val CHARGER_WARN_PERCENT = 5.0
 
     /** Energy in Wh for [steps] (the first one only from [firstLeftM] on). */
     fun energyWh(steps: List<RouteStep>, firstLeftM: Double?, car: EnergyModel.Car): Double = steps.withIndex().sumOf { (i, s) ->
@@ -103,7 +104,7 @@ internal object NaviCharge {
         val wh = energyWh(steps, firstLeftM, car)
         // what the planned stops ahead put in (their leaving less their arriving level)
         val p = car.socPercent - wh / car.capacityWh * 100.0 + chargedPercent
-        return Arrival(p, p < RESERVE_PERCENT)
+        return Arrival(p, p < reservePercent(context))
     }
 }
 

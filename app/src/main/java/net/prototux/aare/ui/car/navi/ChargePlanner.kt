@@ -14,7 +14,7 @@ import org.maplibre.spatialk.geojson.Position
  *    above it the car charges slowly and the next stop is quicker;
  *  - charging time from the car's charging curve, limited by the charger.
  * Pure arithmetic: the route comes in as a [Track], the chargers from a lookup; replanning the route over the stops is
- * the caller's (Valhalla), which then asks [plan] again for the times on the new route.
+ * the caller's (Valhalla), which then asks [replay] for the times on the new route.
  */
 internal object ChargePlanner {
     data class Rules(val atCharger: Double = 10.0, val atDestination: Double = 10.0, val chargeUpTo: Double = 80.0,
@@ -67,16 +67,8 @@ internal object ChargePlanner {
     @Volatile var stopExtraMinutes = 3.0
 
     /**
-     * The stops the route needs from [startPercent], with [chargers] looking up what lies near a point: the chain of least
-     * time by [ChargeChain] (Navi L-029 step C; until 18.11.2026 greedily the strongest charger late in the reach).
-     * Stops already on the route (it was planned over them) are found again as chargers on it and given their times.
-     */
-    fun plan(track: Track, car: EnergyModel.Car, startPercent: Double, chargers: (Position, Double, Int) -> List<Charger>,
-             rules: Rules = Rules()): Plan = ChargeChain.plan(track, car, startPercent, chargers, rules).let { Plan(it.stops(), it.arrivePercent) }
-
-    /**
      * The times at [stops] once the route goes over them (Valhalla replanned it): each charger at its nearest point of
-     * the new track, charged to what the rest needs as in [plan].
+     * the new track, charged to what the rest needs as in [ChargeChain.plan].
      */
     fun replay(track: Track, car: EnergyModel.Car, startPercent: Double, stops: List<Charger>, rules: Rules = Rules(),
                above: Set<Charger> = emptySet()): Plan {
@@ -102,55 +94,6 @@ internal object ChargePlanner {
                 .also { level = leave; fromI = i }
         }
         return Plan(out, level - pct(track.wh.last() - track.wh[fromI]))
-    }
-
-    /**
-     * The chargers of a plan without the stops it does not need (16.11.2026: a stop 3 km before the destination charged
-     * 0 min, 13 -> 14 %, because the stop before it charged more on the route planned over both). A stop charging less
-     * than [TINY_MIN] is left out when the plan still works without it: every stop and the destination reached with
-     * their reserve, no stop charging above [PRUNE_UP_TO] % - a little more at the stop before rather than one more stop,
-     * as ABRP and Tesla plan.
-     */
-    /** For the log: what leaving out a stop gave the last time (tests in the desk window). */
-    @Volatile var lastPruneTry = ""
-
-    /**
-     * Other chargers to try when the routing service refuses the route over [stops] (18.11.2026, log: "plan failed for
-     * FAST, without charging stops: Route request failed with status code 400" - a 409 km trip from 70 % went without any
-     * stop): one stop at a time replaced by one of the [perStop] nearest chargers within [radiusM] of at least [minKw],
-     * not already among the stops; [max] lists at most, the nearest first.
-     */
-    fun substitutes(stops: List<Charger>, near: (Position, Double, Int) -> List<Charger>, minKw: Int,
-                    radiusM: Double = 15_000.0, perStop: Int = 2, max: Int = 6): List<List<Charger>> {
-        val out = ArrayList<List<Charger>>()
-        for (i in stops.indices) {
-            val others = near(stops[i].at, radiusM, minKw).filter { o -> stops.none { it.at == o.at } }
-                .sortedBy { ChargerIndex.distanceM(it.at, stops[i].at) }.take(perStop)
-            for (o in others) { if (out.size >= max) return out; out += stops.toMutableList().also { it[i] = o } }
-        }
-        return out
-    }
-
-    fun prune(track: Track, car: EnergyModel.Car, startPercent: Double, stops: List<Charger>, rules: Rules = Rules(),
-              above: Set<Charger> = emptySet()): List<Charger> {
-        // the stops a plan needs, before any of them is made to charge longer (Rules.minMinutes)
-        val rules = rules.copy(minMinutes = 0.0)
-        var left = stops
-        while (true) {
-            val plan = replay(track, car, startPercent, left, rules, above)
-            val drop = plan.stops.withIndex().filter { it.value.chargeMinutes < TINY_MIN }.firstOrNull { (k, _) ->
-                val without = left.filterIndexed { i, _ -> i != k }
-                val p = replay(track, car, startPercent, without, rules, above + without)
-                lastPruneTry = "without stop ${k + 1}: %.1f %% at the end, stops ".format(p.arrivePercent) +
-                    p.stops.joinToString { "%.0f->%.0f".format(it.arrivePercent, it.leavePercent) }
-                // no stop arrives lower than the reserve - or than it did before, when the plan already had to (a stop
-                // reached with 9 % where nothing nearer is)
-                val before = plan.stops.associate { it.charger to it.arrivePercent }
-                p.arrivePercent >= rules.atDestination - 0.5 && p.stops.all {
-                    it.arrivePercent >= minOf(rules.atCharger, before[it.charger] ?: rules.atCharger) - 0.5 && it.leavePercent <= PRUNE_UP_TO }
-            } ?: return left
-            left = left.filterIndexed { i, _ -> i != drop.index }
-        }
     }
 
     /** Another charger for a stop: which, and how far before (negative) or after it lies along the route. */
@@ -238,8 +181,6 @@ internal object ChargePlanner {
     }
 
     private const val FULL = 100.0
-    private const val TINY_MIN = 5.0
-    private const val PRUNE_UP_TO = 90.0
     private const val MARGIN = 3.0          // % on top of the destination's reserve: the model is an estimate
     private const val SAMPLE_M = 1_000.0
 }
