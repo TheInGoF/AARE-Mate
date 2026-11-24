@@ -1,0 +1,129 @@
+{
+ "data": {
+  "edit": true,
+  "items": [
+   {
+    "destination": "Firma A",
+    "distance": 30.0,
+    "end": "2026-11-03T07:40:00Z",
+    "from": "Zuhause",
+    "id": 1,
+    "odo_end": 1030.0,
+    "odo_start": 1000.0,
+    "private": false,
+    "purpose": "Kunde",
+    "start": "2026-11-03T07:00:00Z",
+    "to": "Firma A",
+    "visit_reason": "Besprechung"
+   },
+   {
+    "distance": 10.0,
+    "end": "2026-11-03T16:20:00Z",
+    "from": "Firma A",
+    "id": 2,
+    "odo_end": 1040.0,
+    "odo_start": 1030.0,
+    "private": true,
+    "purpose": "Privat",
+    "start": "2026-11-03T16:00:00Z",
+    "to": "Markt"
+   },
+   {
+    "distance": 15.0,
+    "end": "2026-11-04T08:30:00Z",
+    "from": "Markt",
+    "id": 3,
+    "odo_end": 1055.0,
+    "odo_start": 1040.0,
+    "private": true,
+    "purpose": "Privat",
+    "start": "2026-11-04T08:00:00Z",
+    "to": "Zuhause"
+   },
+   {
+    "distance": 20.0,
+    "end": "2026-11-05T09:30:00Z",
+    "from": "Zuhause",
+    "id": 4,
+    "odo_end": 1080.0,
+    "odo_start": 1060.0,
+    "start": "2026-11-05T09:00:00Z",
+    "to": "Kunde B"
+   }
+  ],
+  "month": 11,
+  "months": [
+   "2026-11",
+   "2026-10"
+  ],
+  "rows": [
+   {
+    "destination": "Firma A",
+    "distance": 30.0,
+    "end": "2026-11-03T07:40:00Z",
+    "from": "Zuhause",
+    "kind": "trip",
+    "odo_end": 1030.0,
+    "odo_start": 1000.0,
+    "purpose": "Kunde",
+    "start": "2026-11-03T07:00:00Z",
+    "to": "Firma A",
+    "trips": [
+     1
+    ],
+    "visit_reason": "Besprechung"
+   },
+   {
+    "count": 2,
+    "distance": 25.0,
+    "end": "2026-11-04T08:30:00Z",
+    "kind": "private",
+    "odo_end": 1055.0,
+    "odo_start": 1030.0,
+    "start": "2026-11-03T16:00:00Z",
+    "trips": [
+     2,
+     3
+    ]
+   },
+   {
+    "distance": 5.0,
+    "kind": "gap",
+    "odo_end": 1060.0,
+    "odo_start": 1055.0
+   },
+   {
+    "distance": 20.0,
+    "end": "2026-11-05T09:30:00Z",
+    "from": "Zuhause",
+    "kind": "open",
+    "odo_end": 1080.0,
+    "odo_start": 1060.0,
+    "start": "2026-11-05T09:00:00Z",
+    "to": "Kunde B",
+    "trips": [
+     4
+    ]
+   }
+  ],
+  "totals": {
+   "business": 30.0,
+   "gaps": 5.0,
+   "odo_end": 1080.0,
+   "odo_start": 1000.0,
+   "open": 20.0,
+   "private": 25.0,
+   "purposes": {
+    "Kunde": 30.0
+   },
+   "total": 75.0,
+   "trips": 4
+  },
+  "year": 2026
+ },
+ "seq": 1,
+ "src": "backend",
+ "ts": "2026-11-24T06:37:00Z",
+ "type": "logbook",
+ "v": 1
+}

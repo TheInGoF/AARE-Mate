@@ -1,0 +1,24 @@
+{
+ "data": {
+  "destinations": [
+   "Firma A"
+  ],
+  "edit": true,
+  "purposes": [
+   {
+    "name": "Kunde",
+    "private": false
+   },
+   {
+    "name": "Privat",
+    "private": true
+   }
+  ],
+  "visit_reasons": []
+ },
+ "seq": 2,
+ "src": "backend",
+ "ts": "2026-11-24T06:37:00Z",
+ "type": "logbook_options",
+ "v": 1
+}

@@ -64,7 +64,15 @@ internal fun LogbookPage() {
             confirmButton = { TextButton(onClick = { yes(); ask = null; reload++ }) { Text(stringResource(R.string.logbook_delete)) } },
             dismissButton = { TextButton(onClick = { ask = null }) { Text(stringResource(android.R.string.cancel)) } })
     }
+    // System L-102: with an IDmate server the logbook comes from there (first); the tablet's own log stays beside it
+    val server = remember { net.prototux.aare.dash.ServerLogbook.available(ctx) }
+    var fromServer by remember { mutableStateOf(server) }
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (server) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(fromServer, { fromServer = true }, label = { Text(stringResource(R.string.logbook_source_server)) })
+            FilterChip(!fromServer, { fromServer = false }, label = { Text(stringResource(R.string.logbook_source_tablet)) })
+        }
+        if (fromServer) { ServerLogbookView(); return@Column }
         Card {
             Text(stringResource(R.string.logbook_how), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.padding(4.dp))
@@ -96,22 +104,22 @@ private fun Card(content: @Composable () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
 }
 
-private fun day(ms: Long) = DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.getDefault()).format(Date(ms))
-private fun time(ms: Long) = DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault()).format(Date(ms))
-private fun num(v: Double?, digits: Int) = v?.let { String.format(Locale.getDefault(), "%.${digits}f", it) } ?: "–"
+internal fun logDay(ms: Long): String = DateFormat.getDateInstance(DateFormat.MEDIUM, Locale.getDefault()).format(Date(ms))
+internal fun logTime(ms: Long): String = DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault()).format(Date(ms))
+internal fun logNum(v: Double?, digits: Int): String = v?.let { String.format(Locale.getDefault(), "%,.${digits}f", it) } ?: "–"
 
 @Composable
 private fun TripCard(t: TripStore.TripRow, onDelete: () -> Unit) {
     val unknown = stringResource(R.string.logbook_place_unknown)
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("${day(t.startMs)}, ${time(t.startMs)}–${time(t.endMs)}", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text("${logDay(t.startMs)}, ${logTime(t.startMs)}–${logTime(t.endMs)}", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             Text(stringResource(R.string.logbook_delete), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onDelete).padding(6.dp))
         }
         Text("${t.startName ?: unknown} → ${t.endName ?: unknown}", style = MaterialTheme.typography.bodyLarge)
-        Text(stringResource(R.string.logbook_trip_line, num(t.distanceKm, 1), ((t.endMs - t.startMs) / 60_000).toInt(),
-            num(t.consumption, 1), num(t.socStart, 0), num(t.socEnd, 0)),
+        Text(stringResource(R.string.logbook_trip_line, logNum(t.distanceKm, 1), ((t.endMs - t.startMs) / 60_000).toInt(),
+            logNum(t.consumption, 1), logNum(t.socStart, 0), logNum(t.socEnd, 0)),
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -120,7 +128,7 @@ private fun TripCard(t: TripStore.TripRow, onDelete: () -> Unit) {
 private fun ChargeCard(c: TripStore.ChargeRow, onDelete: () -> Unit) {
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("${day(c.startMs)}, ${time(c.startMs)}–${time(c.endMs)}", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            Text("${logDay(c.startMs)}, ${logTime(c.startMs)}–${logTime(c.endMs)}", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             Text(stringResource(R.string.logbook_delete), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onDelete).padding(6.dp))
         }
@@ -128,7 +136,7 @@ private fun ChargeCard(c: TripStore.ChargeRow, onDelete: () -> Unit) {
         Row {
             Text(when (c.dc) { true -> "DC"; false -> "AC"; null -> "" }, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             if (c.dc != null) Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.logbook_charge_line, num(c.socStart, 0), num(c.socEnd, 0), num(c.energyKwh, 1), num(c.maxKw, 0)),
+            Text(stringResource(R.string.logbook_charge_line, logNum(c.socStart, 0), logNum(c.socEnd, 0), logNum(c.energyKwh, 1), logNum(c.maxKw, 0)),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         when {

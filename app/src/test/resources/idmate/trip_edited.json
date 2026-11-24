@@ -1,0 +1,20 @@
+{
+ "data": {
+  "distance": 20.0,
+  "end": "2026-11-05T09:30:00Z",
+  "from": "Zuhause",
+  "id": 4,
+  "note": "Termin",
+  "odo_end": 1080.0,
+  "odo_start": 1060.0,
+  "private": false,
+  "purpose": "Kunde",
+  "start": "2026-11-05T09:00:00Z",
+  "to": "Kunde B"
+ },
+ "seq": 3,
+ "src": "backend",
+ "ts": "2026-11-24T06:37:00Z",
+ "type": "trip",
+ "v": 1
+}
