@@ -1548,5 +1548,5 @@
         <item quantity="other">%d trips without a purpose</item>
     </plurals>
     <string name="sound_bass_level_title">Even out the bass</string>
-    <string name="sound_bass_level_subtitle">Music with little bass gets up to 6 dB more below 120 Hz, slowly, so the system is driven about evenly from song to song. Only music, not audio books.</string>
+    <string name="sound_bass_level_subtitle">Music with little bass of its own (e.g. old recordings mastered thin) gets up to 10 dB more below 120 Hz, so bass and drums come through; music with bass stays as it is. Only music, not audio books.</string>
 </resources>

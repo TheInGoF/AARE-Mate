@@ -2035,6 +2035,12 @@ private const val STOP_PX = 64
 private const val ARRIVAL_DELAY_MS = 3000L
 private const val BEARING_DAMPING_MS = 700.0
 private const val CAMERA_BEHIND_M = 40.0
+/** How old a position is when it reaches the map (the car's GPS and the way to the tablet), seconds. */
+private const val FIX_AGE_S = 0.3
+/** At most this far ahead of the newest position, metres. */
+private const val MAX_LEAD_M = 60.0
+/** A car behind its glide by less than this waits for it; more and it goes back. */
+private const val BACK_M = 12.0
 /** N6: how far ahead the camera looks when the car is too fast for the coming curve (it goes on straight, likely). */
 private const val CAMERA_NEAR_M = 30.0
 
@@ -2182,18 +2188,28 @@ private class Glide(private val track: NaviTrack) {
     private var since = 0L
     private var prev: Pose? = null
 
+    /** The newest position as it came, along the track (the speed is measured between these, not between targets). */
+    private var rawS = -1.0
+
     fun next(lat: Double, lon: Double, now: Long) {
         fixes++
         val s = track.project(lat, lon)
         // the speed along the line between two positions, for a position source that does not tell it (the simulation)
-        if (last > 0 && toS >= 0 && now > last) {
-            speedMs = ((s - toS) / ((now - last) / 1000.0)).coerceAtLeast(0.0)
+        if (last > 0 && rawS >= 0 && now > last) {
+            speedMs = ((s - rawS) / ((now - last) / 1000.0)).coerceAtLeast(0.0)
             smoothSpeedMs = smoothSpeedMs?.let { it + (speedMs!! - it) * 0.25 } ?: speedMs
         }
         if (last > 0) span = (now - last).coerceIn(100L, 2000L)
         last = now
+        rawS = s
+        // 24.11.2026 ("unser Live-Standort hängt halt 20 Meter hinterher auf der Map"): gliding to the newest position over the
+        // time until the next one, the car was always one position behind (about a second: 15 m at 50 km/h, 30 m at 100) -
+        // and the position itself is a moment old. Now it glides to where the car will be when the next position comes.
+        val lead = ((smoothSpeedMs ?: 0.0) * (span / 1000.0 + FIX_AGE_S)).coerceIn(0.0, MAX_LEAD_M)
+        val target = minOf(s + lead, track.length)
         fromS = if (shownS >= 0) shownS else s
-        toS = s
+        // a car slower than foreseen: the car waits on its line instead of running back a few metres (only a clear gap goes back)
+        toS = if (target < fromS && fromS - target < BACK_M) fromS else target
         start = now
     }
 

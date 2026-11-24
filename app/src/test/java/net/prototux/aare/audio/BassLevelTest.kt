@@ -8,7 +8,7 @@ import org.robolectric.RobolectricTestRunner
 import kotlin.math.PI
 import kotlin.math.sin
 
-/** System L-104: music with little bass gets lifted, slowly and at most 6 dB; music with bass stays as it is. */
+/** System L-104: music with little bass gets lifted, gently and at most 10 dB; music with bass stays as it is. */
 @RunWith(RobolectricTestRunner::class)
 @org.robolectric.annotation.Config(sdk = [36])
 class BassLevelTest {
@@ -38,13 +38,13 @@ class BassLevelTest {
         return low to all
     }
 
-    @Test fun musicWithoutBassIsLiftedSlowlyToAtMostSixDb() {
+    @Test fun musicWithoutBassIsLiftedGentlyToAtMostTenDb() {
         val b = BassLevel(rate, 2)
         run(b, 2, bassAmp = 200.0, highAmp = 8000.0)
         val early = b.liftDb
-        assertTrue("slow: after 2 s at most 2 dB, was $early", early <= 2.01)
+        assertTrue("gentle: after 2 s at most 4 dB, was $early", early <= 4.01)
         val (low, all) = run(b, 20, bassAmp = 200.0, highAmp = 8000.0)
-        assertEquals(6.0, b.liftDb, 0.01)
+        assertEquals(10.0, b.liftDb, 0.01)
         // the bass carries more of the power than it did (200 of 8000 = -32 dB)
         assertTrue(10 * kotlin.math.log10(low / all) > -32 + 4)
     }
