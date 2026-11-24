@@ -147,7 +147,7 @@ class CarEqProcessor(private val rate: Int, private val channels: Int) {
 /**
  * System L-104 (24.11.2026: "Musik mit sehr, sehr wenig Bass … So ein Musik-Bass-Analyzer, dass man ungefähr gleichmäßige
  * Auslastung der Anlage hat"): measures how much of the music's power lies below [SPLIT_HZ] over the last seconds and, when
- * that share is below [TARGET_DB], lifts the bass with a low shelf at [SHELF_HZ] - at most [MAX_DB], gently ([STEP_DB] per
+ * that share is below [ZERO_AT_DB], lifts the bass along a straight line ([liftFor]) with a low shelf at [SHELF_HZ] - at most [MAX_DB], gently ([STEP_DB] per
  * block) so nothing pumps. Bass-rich music stays as it is (never cut). The whole signal goes down by half the lift as
  * headroom (a song with little bass gains little in its peaks), so it neither clips nor drops much in loudness. Measured on what comes in, before the lift.
  */
@@ -194,7 +194,7 @@ class BassLevel(private val rate: Int, private val channels: Int) {
         }
         if (allPower > 0 && lowPower > 0) {
             shareDb = 10 * log10(lowPower / allPower)
-            val want = ((TARGET_DB - shareDb) * STRENGTH).coerceIn(0.0, MAX_DB)
+            val want = liftFor(shareDb)
             val step = STEP_DB * frames / (rate * 0.02)
             liftDb += (want - liftDb).coerceIn(-step, step)
         }
@@ -233,16 +233,21 @@ class BassLevel(private val rate: Int, private val channels: Int) {
     companion object {
         const val SPLIT_HZ = 150
         const val SHELF_HZ = 120
-        /** A song whose bass carries less than this share of its power (in dB) gets lifted. */
-        const val TARGET_DB = -6.0
+        /**
+         * The line from the song's bass share to its lift (24.11.2026: "Lieder mit wenig Bass, die bleiben bei 0 oder bei 10.
+         * Also wäre cool, wenn wir wirklich so eine Kennlinie hinkriegen würden. Also plus 10, plus 0, plus 6"): no lift from
+         * [ZERO_AT_DB] up (bass of its own), the whole [MAX_DB] from [FULL_AT_DB] down (thin), straight in between - before,
+         * most real songs fell on one of the two ends.
+         */
+        const val ZERO_AT_DB = -3.0
+        const val FULL_AT_DB = -20.0
+        fun liftFor(shareDb: Double): Double = ((ZERO_AT_DB - shareDb) / (ZERO_AT_DB - FULL_AT_DB) * MAX_DB).coerceIn(0.0, MAX_DB)
         /**
          * 24.11.2026, after a drive ("Es klingt ein bisschen voller, gerade ältere Songs, aber es ist noch nicht so, als wenn man
          * das Schlagzeug vernünftig raushören würde. Plus 6 dB, vielleicht reicht das nicht"): old songs mastered thin for
-         * vinyl get up to 10 dB and the whole shortfall below [TARGET_DB] made up (was 6 dB and 70 % of it); songs with
-         * bass of their own still get none.
+         * vinyl get up to 10 dB (was 6); songs with bass of their own still get none.
          */
         const val MAX_DB = 10.0
-        const val STRENGTH = 1.0
         /** At most this much change of the lift per 20 ms block: 2 dB a second. */
         const val STEP_DB = 0.04
         const val AVERAGE_S = 6.0

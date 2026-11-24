@@ -56,6 +56,23 @@ class BassLevelTest {
         assertTrue(b.shareDb > -6)
     }
 
+    @Test fun aLineFromNoneToTheWhole() {
+        // bass of its own: none; thin: all of it; in between on a straight line (+6 dB at 60 % of the way)
+        assertEquals(0.0, BassLevel.liftFor(-1.0), 0.001)
+        assertEquals(0.0, BassLevel.liftFor(BassLevel.ZERO_AT_DB), 0.001)
+        assertEquals(6.0, BassLevel.liftFor(BassLevel.ZERO_AT_DB + 0.6 * (BassLevel.FULL_AT_DB - BassLevel.ZERO_AT_DB)), 0.001)
+        assertEquals(10.0, BassLevel.liftFor(BassLevel.FULL_AT_DB), 0.001)
+        assertEquals(10.0, BassLevel.liftFor(-35.0), 0.001)
+    }
+
+    @Test fun aSongInBetweenGetsPartOfIt() {
+        // 60 Hz at a fifth of the 1 kHz tone: the bass about 14 dB below the whole - neither nothing nor all
+        val b = BassLevel(rate, 2)
+        run(b, 20, bassAmp = 1600.0, highAmp = 8000.0)
+        assertTrue("between: ${b.liftDb} dB at a share of ${b.shareDb} dB", b.liftDb > 2.0 && b.liftDb < 9.0)
+        assertEquals(BassLevel.liftFor(b.shareDb), b.liftDb, 0.5)
+    }
+
     @Test fun quietPassagesChangeNothing() {
         val b = BassLevel(rate, 2)
         run(b, 10, bassAmp = 10.0, highAmp = 100.0)
