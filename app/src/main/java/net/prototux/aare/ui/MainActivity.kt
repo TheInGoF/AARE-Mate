@@ -2459,7 +2459,7 @@ private fun AppsCard(settings: Settings, refresh: Int) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
             }
         }
-        if (l != null) AppOrder(settings, l, hidden, phoneScreen, browser)
+        if (l != null) AppOrder(settings, l, hidden, phoneScreen, browser, carData)
         StandaloneAppsSection(settings, ctx)
         val unsupported by produceState(emptyList<UnsupportedCarApp>(), l) {
             if (l != null) value = withContext(Dispatchers.IO) { AndroidAutoApps.unsupported(ctx, l.carApps.map { it.packageName }) }
@@ -2476,7 +2476,7 @@ private fun AppsCard(settings: Settings, refresh: Int) {
 
 /** The order of the car's app list: the visible apps, with up and down buttons. */
 @Composable
-private fun AppOrder(settings: Settings, l: LauncherLists, hidden: Set<String>, phoneScreen: Boolean, browser: Boolean) {
+private fun AppOrder(settings: Settings, l: LauncherLists, hidden: Set<String>, phoneScreen: Boolean, browser: Boolean, carData: Boolean) {
     // Keys as CarRuntime.orderKey: packages, or the built-in apps' ids.
     val all = buildList {
         l.carApps.forEach { add(Triple(it.packageName, it.label, it.icon)) }
@@ -2488,6 +2488,10 @@ private fun AppOrder(settings: Settings, l: LauncherLists, hidden: Set<String>, 
         Triple(CarRuntime.NOTIFICATIONS_ID, stringResource(R.string.setup_app_entry_notifications), null),
         if (phoneScreen) Triple(CarRuntime.PHONE_SCREEN_ID, stringResource(R.string.phone_section_title), null) else null,
         if (browser) Triple(CarRuntime.BROWSER_ID, stringResource(R.string.browser_app_label), null) else null,
+        // System I-119: Mate's own apps in the car's list are in the order too (Mate Navi always; the others when shown)
+        Triple(CarRuntime.MATE_NAVI_ID, stringResource(R.string.mate_navi_label), null),
+        if (carData) Triple(CarRuntime.CAR_DATA_ID, stringResource(R.string.car_data_app_label), null) else null,
+        if (settings.debugApp) Triple(CarRuntime.DEBUG_ID, stringResource(R.string.debug_app_label), null) else null,
     )
     var order by remember { mutableStateOf(settings.appOrder) }
     val index = order.withIndex().associate { (i, k) -> k to i }
