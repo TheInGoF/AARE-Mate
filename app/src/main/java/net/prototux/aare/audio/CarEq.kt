@@ -168,7 +168,7 @@ class BassLevel(private val rate: Int, private val channels: Int) {
     private var saidDb = 0.0
     private var saidAt = 0L
 
-    fun idle() { liftDb = 0.0; shelfDb = 0.0; shelf = null }
+    fun idle() { liftDb = 0.0; shelfDb = 0.0; shelf = null; measuredMs = 0L }
 
     fun process(buf: ByteArray, off: Int, len: Int) {
         val n = len / 2
@@ -221,11 +221,19 @@ class BassLevel(private val rate: Int, private val channels: Int) {
         }
     }
 
-    /** A change of a whole dB into the log, at most every [SAY_MS]. */
+    /**
+     * Into the log: once the first seconds were measured (also when nothing is lifted - log 24.11.2026 showed no line at all,
+     * so whether a song was thought bass-rich could not be seen), then each change of a whole dB of the lift or of 2 dB of
+     * the bass share (a new song), at most every [SAY_MS].
+     */
+    private var saidShare = 99.0
+    private var measuredMs = 0L
     private fun say() {
         val now = android.os.SystemClock.elapsedRealtime()
-        if (abs(liftDb - saidDb) < 1.0 || now - saidAt < SAY_MS) return
-        saidDb = liftDb; saidAt = now
+        if (measuredMs == 0L) measuredMs = now
+        if (now - measuredMs < FIRST_SAY_MS || now - saidAt < SAY_MS) return
+        if (abs(liftDb - saidDb) < 1.0 && abs(shareDb - saidShare) < 2.0) return
+        saidDb = liftDb; saidShare = shareDb; saidAt = now
         net.prototux.aare.DiagLog.add("sound: bass of the music %.0f dB below its whole, lifted by %.0f dB (%s)"
             .format(java.util.Locale.ROOT, -shareDb, liftDb, CarSound.playing ?: "?"), area = "AUDIO")
     }
@@ -253,6 +261,7 @@ class BassLevel(private val rate: Int, private val channels: Int) {
         const val AVERAGE_S = 6.0
         const val QUIET = 300.0
         const val SAY_MS = 20_000L
+        const val FIRST_SAY_MS = 10_000L
 
         /** RBJ low pass (Q 0.707) as (b0, b1, b2, a1, a2). */
         fun lowPass(f: Double, rate: Int): DoubleArray {

@@ -123,6 +123,9 @@ class InternetWatch(private val context: Context) {
             if (!running) break
             val n = lastNetwork
             if ((seen != State.ONLINE && seen != State.WIFI_STUCK && seen != State.MOBILE_STUCK) || n == null) { failed = 0; continue }
+            // only a Wi-Fi is probed (the car's said "online" while nothing came through); over mobile data Android's own
+            // check counts - Mate's probe failed there every two minutes while everything worked (System I-121, log 24.11.2026)
+            if (lastKind != "wifi") { failed = 0; if (seen == State.MOBILE_STUCK) main.post { change(State.ONLINE, lastKind) }; continue }
             // two answer points of different companies: one that cannot be reached alone is no network fault (I-121)
             val ok = PROBES.any { url -> runCatching {
                 val c = n.openConnection(java.net.URL(url)) as java.net.HttpURLConnection

@@ -173,7 +173,11 @@ object CarSound {
     }
 
     /** Sets [CarEq] for [car]: the filter switch (Settings.eqOn) and correction + preset of what plays. */
-    fun apply(c: Context, car: String) {
+    fun apply(c: Context, car0: String) {
+        // System I-123 (log 24.11.2026, 19:40:39): at a new connection the car's name comes a moment later - meanwhile the
+        // measurement "any car" (an old, different curve) was taken, and stayed when the connection broke right then. Mate
+        // knows one car: without a name the last one it was connected to.
+        val car = car0.ifBlank { net.prototux.aare.Settings(c).knownCars.maxByOrNull { it.value }?.key.orEmpty() }
         lastCar = car
         val on = net.prototux.aare.Settings(c).eqOn(car)
         val kind = playing?.let { kind(c, it) } ?: Kind.MUSIC
