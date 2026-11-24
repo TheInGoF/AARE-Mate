@@ -188,6 +188,10 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     // the plans in the works belong to the newest preview only; a trip started before its charging plan was done waits for it
     var planGen by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var startedPending by remember { mutableStateOf<NaviSession.Kind?>(null) }
+    // the closures of the routes shown are still being looked at (L-095: shown before); a trip started meanwhile is
+    // checked against them once they are known (24.11.2026, fault mark 19:26: led into a road it showed as closed)
+    var closuresPending by remember { mutableStateOf(false) }
+    var startedBeforeClosures by remember { mutableStateOf(false) }
     LaunchedEffect(session) { session.simulated.warpFactor = SIM_WARP.toUInt() }
     LaunchedEffect(testDrive) {
         // a test drive: the map waits at the simulation's start, no real position shown (the picture tool checks this line)
@@ -319,6 +323,34 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
      * with the own stops still ahead), timed from the level now; guidance and the plan on the way go on with that route.
      * Without stops in the plan the route stays as it is.
      */
+    /**
+     * The trip began on a route shown before its closures were known (L-095); now they are ([choices] planned round them):
+     * when the guided route runs over a closed road and a way round exists, the trip goes that way from where the car is.
+     */
+    fun roundClosuresNow(choices: List<NaviSession.Choice>) {
+        val closed = session.closureLines
+        val guided = session.route.value ?: return
+        val onIt = NaviTraffic.onClosures(raw(guided), closed)
+        if (closed.isEmpty() || onIt == 0.0) {
+            net.prototux.aare.DiagLog.add("route: closures looked at after the start - the guided route runs over none", area = "NAVI"); return
+        }
+        val here = carAt ?: return
+        val t = session.state.value.tripState as? TripState.Navigating ?: return
+        val waypoints = t.remainingWaypoints.map { Position(longitude = it.coordinate.lng, latitude = it.coordinate.lat) }
+        if (waypoints.isEmpty()) return
+        scope.launch {
+            val alts = runCatching { session.routesFrom(here, waypoints) }.getOrNull().orEmpty()
+            val free = alts.firstOrNull { NaviTraffic.onClosures(raw(it), closed) == 0.0 }
+            net.prototux.aare.DiagLog.add("route: the guided route runs %.0f m over a closed road (found after the start); %d route(s) from here, %s"
+                .format(java.util.Locale.ROOT, onIt, alts.size, if (free != null) "taking one round it" else "none round it - stays"), area = "NAVI")
+            if (free == null || !guiding) return@launch
+            session.go(free, simulate = testDrive)
+            startRolling(free)
+            show(free); drawnLine = NaviRoute.smooth(raw(free)); limits = null
+            scope.launch { limits = NaviLimits.load(context, raw(free)) }
+        }
+    }
+
     fun switchToPlan(c: NaviSession.Choice, car: net.prototux.aare.host.EnergyModel.Car, to: Position) {
         val stops = c.charging?.stops.orEmpty()
         if (stops.isEmpty()) { chargeStops = emptyList(); chargeLog("charging: plan done while driving - no stops needed, the route stays"); return }
@@ -409,6 +441,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                         val name0 = if (stop) "${place.name} → ${to.name}" else place.name
                         routeOptions = first.map { c -> optionOf(c, car0, name0, newOwn, to.name, pendingCharge = car0 != null) }
                         pick(0)
+                        closuresPending = true
                         net.prototux.aare.DiagLog.add("route: shown after %.1f s, closures and charging stops still to come".format(java.util.Locale.ROOT,
                             (android.os.SystemClock.elapsedRealtime() - askedAt) / 1000.0), area = "NAVI")
                         val all0 = routeOptions.flatMap { raw(it.route) }
@@ -416,6 +449,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                             all0.maxOf { it.longitude }, all0.maxOf { it.latitude }), 0.0, 0.0, PaddingValues(start = 640.dp, top = 80.dp, end = 80.dp, bottom = 160.dp)) } }
                     } })
             }.onFailure { e ->
+                    closuresPending = false
                     Log.w(TAG, "route: $e")
                     // said in words instead of planning for ever: token refused, server out of reach, or no way there;
                     // routes already shown stay without it (the preview shows the error above them now, Navi I-052f)
@@ -426,11 +460,17 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     })
                 }.getOrNull() ?: return@launch
             closedLines = session.closureLines
+            closuresPending = false
             val car = net.prototux.aare.host.CarDataService.car(context)
             val name = if (stop) "${place.name} → ${to.name}" else place.name
             val toPos = Position(longitude = to.lon, latitude = to.lat)
-            // closed while planning: nothing to show any more (a running trip keeps its line)
-            if (panel !is NaviStep.Preview) return@launch
+            // closed while planning: nothing to show any more - but a trip started before the closures were known goes round
+            // them when its route runs over one (it was kept as it was and led into the closed road)
+            if (panel !is NaviStep.Preview) {
+                if (startedBeforeClosures && guiding) roundClosuresNow(choices)
+                startedBeforeClosures = false
+                return@launch
+            }
             // the routes at once (19.11.2026: "damit die Oberfläche schneller erscheint, damit man schneller losfahren kann"):
             // shown and startable as they come; the charging stops are planned behind them and fill in each route as its
             // plan is done (O182)
@@ -592,6 +632,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         chargeStops = preview?.stops.orEmpty()
         // started before the charging plan was done: the trip goes on over its stops once it is (switchToPlan)
         startedPending = if (preview?.pending == true) routeOptions.getOrNull(chosen)?.kind else null
+        startedBeforeClosures = closuresPending
+        if (closuresPending) net.prototux.aare.DiagLog.add("route: started before the closures were looked at - checked once they are", area = "NAVI")
         if (startedPending != null) chargeLog("charging: started before the charging plan was done - it follows")
         ownStops = pendingOwn
         panel = NaviStep.None

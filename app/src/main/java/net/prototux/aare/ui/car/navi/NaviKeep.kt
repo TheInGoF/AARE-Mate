@@ -255,7 +255,9 @@ internal object NaviKeep {
         session.closures = (session.closures + NaviTraffic.excludePoints(listOf(closed))).distinct()
         val alts = runCatching { session.routesFrom(here, waypoints) }.onFailure { android.util.Log.w("MateNavi", "around the closure: $it") }.getOrNull().orEmpty()
         val free = alts.firstOrNull { a -> NaviTraffic.onClosures(a.geometry.map { Position(longitude = it.lng, latitude = it.lat) }, listOf(closed)) == 0.0 }
-        android.util.Log.i("MateNavi", "closure %.0f m ahead: %d routes from here, %s".format(c.alongM - driven, alts.size, if (free != null) "one free of it" else "none free of it"))
+        // into the kept log (24.11.2026: whether a way round a closure was offered could not be seen)
+        net.prototux.aare.DiagLog.add("closure %.0f m ahead: %d routes from here, %s".format(java.util.Locale.ROOT, c.alongM - driven, alts.size,
+            if (free != null) "one free of it - offered" else "none free of it - looked at again in 2 min"), area = "NAVI")
         if (free == null) return
         closuresHandled[key] = Long.MAX_VALUE
         val more = free.steps.sumOf { it.duration } - t.progress.durationRemaining
