@@ -430,7 +430,7 @@ class CarSession(
             if (settings.resumeMedia) runtime.resumeMedia()
             startPlaybackStatus()
             phoneBridge = PhoneStatusBridge(context, aap, phoneStatus).also { it.start() }
-            internetWatch = InternetWatch(context) { title, text -> runtime.notice(title, text, durationMs = 9_000) }.also { it.start() }
+            internetWatch = InternetWatch(context).also { it.start() }
         }
     }
 

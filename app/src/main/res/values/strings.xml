@@ -584,15 +584,11 @@
     <string name="fault_mark_title">Fault marked</string>
     <string name="fault_mark_done">Log and state are kept - for looking at later on the tablet under marks/.</string>
     <string name="fault_mark_failed">Keeping it failed.</string>
-    <string name="internet_notice_title">Internet</string>
     <string name="internet_notice_portal">The Wi\u2011Fi is waiting for a confirmation. On the tablet, tap \u201cSign in to network\u201d \u2013 until then music, search and routes won\u2019t load.</string>
-    <string name="internet_notice_wifi">The Wi\u2011Fi has no internet. Music, search and routes load once another network is there.</string>
     <string name="internet_notice_wifi_stuck">The tablet hangs in a Wi-Fi without internet (e.g. the car’s). Mate itself now loads over mobile data; other apps only once the Wi-Fi is left on the tablet or its login page is opened.</string>
     <string name="internet_notice_mobile_stuck">Mobile data gets nothing through (no coverage or data used up?). Music, search and routes load again with a network; offline music and maps go on.</string>
     <string name="portal_title">Car Wi-Fi: confirmation needed</string>
     <string name="portal_text">Tap to confirm the car Wi-Fi’s login page – Mate could not confirm it alone.</string>
-    <string name="internet_notice_offline">No internet connection. Music, search and routes load once there is a network again.</string>
-    <string name="internet_notice_back">Internet is back.</string>
     <string name="music_error_offline">No internet connection: music from the server needs a network.</string>
     <string name="music_error_portal">The Wi\u2011Fi is waiting for a confirmation: on the tablet, tap \u201cSign in to network\u201d, then music works.</string>
     <string name="music_error_wifi_no_internet">The Wi\u2011Fi has no internet. Choose another network or confirm the Wi\u2011Fi\u2019s sign-in on the tablet.</string>

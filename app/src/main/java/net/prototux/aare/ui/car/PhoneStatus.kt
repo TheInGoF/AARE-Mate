@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.material.icons.rounded.SignalCellularConnectedNoInternet4Bar
+import androidx.compose.material.icons.rounded.SignalWifiStatusbarConnectedNoInternet4
 import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.material.icons.rounded.WifiPassword
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -101,7 +104,10 @@ private fun rememberOnline(): Boolean {
 @Composable
 fun PhoneStatusIcons(offline: Color? = null) {
     val context = LocalContext.current
-    val online = rememberOnline()
+    // in the car: what Mate's own check settled on (System L-103); elsewhere (preview on the phone) Android's word
+    val watched = net.prototux.aare.car.InternetWatch.shown.value
+    val android = rememberOnline()
+    val online = if (watched != null) watched != net.prototux.aare.car.InternetWatch.State.OFFLINE else android
     var status by remember { mutableStateOf<PhoneStatusInfo?>(null) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -122,7 +128,19 @@ fun PhoneStatusIcons(offline: Color? = null) {
             )
             Icon(androidx.compose.material.icons.Icons.Rounded.WifiOff, stringResource(R.string.phone_status_offline),
                 tint = (offline ?: MaterialTheme.colorScheme.error).copy(alpha = pulse), modifier = Modifier.size(18.dp))
-        } else if (s.wifi) Icon(Icons.Rounded.Wifi, stringResource(R.string.phone_status_wifi), tint = fg, modifier = Modifier.size(16.dp))
+        } else when (watched) {
+            // a Wi-Fi that wants its login page confirmed, or one without internet (Mate goes over mobile meanwhile),
+            // mobile data that gets nothing through: one quiet sign each, in the warning colour, no banner (L-103)
+            net.prototux.aare.car.InternetWatch.State.PORTAL ->
+                Icon(Icons.Rounded.WifiPassword, stringResource(R.string.internet_notice_portal), tint = offline ?: MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+            net.prototux.aare.car.InternetWatch.State.WIFI_NO_INTERNET, net.prototux.aare.car.InternetWatch.State.WIFI_STUCK ->
+                Icon(Icons.Rounded.SignalWifiStatusbarConnectedNoInternet4, stringResource(R.string.internet_notice_wifi_stuck),
+                    tint = offline ?: MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+            net.prototux.aare.car.InternetWatch.State.MOBILE_STUCK ->
+                Icon(Icons.Rounded.SignalCellularConnectedNoInternet4Bar, stringResource(R.string.internet_notice_mobile_stuck),
+                    tint = offline ?: MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+            else -> if (s.wifi) Icon(Icons.Rounded.Wifi, stringResource(R.string.phone_status_wifi), tint = fg, modifier = Modifier.size(16.dp))
+        }
         SignalBars(s.signal, fg, dim)
         BatteryGauge(s.battery, s.charging, fg, dim)
         if (s.charging) Icon(Icons.Rounded.Bolt, stringResource(R.string.phone_status_charging), tint = fg, modifier = Modifier.size(14.dp))

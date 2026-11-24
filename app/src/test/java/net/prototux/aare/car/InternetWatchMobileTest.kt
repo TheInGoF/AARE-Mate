@@ -21,7 +21,7 @@ class InternetWatchMobileTest {
     }
 
     @Test fun stuckWifiAsksForMobileAndLetsGo() {
-        val w = InternetWatch(ctx) { _, _ -> }
+        val w = InternetWatch(ctx)
         val before = shadowOf(cm).networkCallbacks.size
         change(w, "WIFI_STUCK", "wifi")
         assertEquals(before + 1, shadowOf(cm).networkCallbacks.size)

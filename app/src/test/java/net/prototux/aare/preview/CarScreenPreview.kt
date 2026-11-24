@@ -97,6 +97,10 @@ class CarScreenPreview {
     /** Mate's whole car screen: the bar at the bottom with music, microphone and areas, drawn as in the car. */
     @Test fun bar() {
         if (System.getProperty("preview") == null) return
+        bar("leiste")
+    }
+
+    private fun bar(name: String) {
         val state = net.prototux.aare.ui.car.CarUiState().apply {
             nowPlaying = net.prototux.aare.ui.car.NowPlaying("music", "Titel des Stücks", "Interpret", null, true, 60_000, 200_000, 0)
             headUnitName = "Volkswagen"
@@ -114,7 +118,7 @@ class CarScreenPreview {
             override fun endCall() {}
             override fun navigateTo(place: String) {}
         }
-        shoot("leiste") {
+        shoot(name) {
             // the bar in Mate's measure (1.3 times the car's)
             CompositionLocalProvider(LocalDensity provides car(1.3f)) {
                 Box(Modifier.fillMaxSize().padding(top = 122.dp / (183f / 160f * 1.3f), bottom = 121.dp / (183f / 160f * 1.3f))) {
@@ -125,6 +129,13 @@ class CarScreenPreview {
                 }
             }
         }
+    }
+
+    /** System L-103: mobile data without getting through as a quiet sign beside reception and battery, no banner. */
+    @Test fun barInternetSign() {
+        if (System.getProperty("preview") == null) return
+        net.prototux.aare.car.InternetWatch.shown.value = net.prototux.aare.car.InternetWatch.State.MOBILE_STUCK
+        try { bar("leiste-internet") } finally { net.prototux.aare.car.InternetWatch.shown.value = null }
     }
 
     private val navi = net.prototux.aare.ui.car.CarAppEntry("navi", "com.google.android.apps.maps", "Maps", null, net.prototux.aare.ui.car.CarAppKind.NAVIGATION)

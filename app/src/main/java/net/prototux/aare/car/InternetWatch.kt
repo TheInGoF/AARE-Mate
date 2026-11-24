@@ -7,22 +7,22 @@ import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
 import net.prototux.aare.DiagLog
-import net.prototux.aare.R
 
 /**
- * Tells the driver why nothing loads (test drive B12, B3, B4: the car's Wi-Fi was connected but
- * waited for its sign-in page, and music, search and routes failed without a word): a notice on the
- * car screen when the phone's network has no internet, and one when it is back. Every change goes
- * to the kept log, to read after a drive which network carried what.
+ * Shows the driver why nothing loads (test drive B12, B3, B4: the car's Wi-Fi was connected but waited for its sign-in
+ * page, and music, search and routes failed without a word). Since System L-103 (24.11.2026: "dezenter als Symbol in dem
+ * Bedienfeld") no notice any more: the settled state goes to [shown], and the car's bar draws it as a small sign beside
+ * reception and battery. Every change goes to the kept log, to read after a drive which network carried what.
  */
-class InternetWatch(private val context: Context, private val notice: (title: String, text: String) -> Unit) {
-    private enum class State { ONLINE, PORTAL, WIFI_NO_INTERNET, WIFI_STUCK, MOBILE_STUCK, OFFLINE }
+class InternetWatch(private val context: Context) {
+    enum class State { ONLINE, PORTAL, WIFI_NO_INTERNET, WIFI_STUCK, MOBILE_STUCK, OFFLINE }
 
     private val cm = context.getSystemService(ConnectivityManager::class.java)
     private val main = Handler(Looper.getMainLooper())
-    /** The state last seen, and the one the driver was last told about. */
+    /** The state last seen; the one shown is [shown], set once a state lasted. */
     private var seen: State? = null
-    private var told = State.ONLINE
+    /** The probe's failures in a row; reset when Android finds the network working again (I-121). */
+    @Volatile private var failed = 0
     private val tell = Runnable { tellNow() }
 
     private val callback = object : ConnectivityManager.NetworkCallback() {
@@ -118,17 +118,17 @@ class InternetWatch(private val context: Context, private val notice: (title: St
      * driver is told to take the tablet off that Wi-Fi (Shizuku, once started, stays).
      */
     private val probe = Thread {
-        var failed = 0
         while (running) {
             runCatching { Thread.sleep(PROBE_MS) }
             if (!running) break
             val n = lastNetwork
             if ((seen != State.ONLINE && seen != State.WIFI_STUCK && seen != State.MOBILE_STUCK) || n == null) { failed = 0; continue }
-            val ok = runCatching {
-                val c = n.openConnection(java.net.URL("https://connectivitycheck.gstatic.com/generate_204")) as java.net.HttpURLConnection
+            // two answer points of different companies: one that cannot be reached alone is no network fault (I-121)
+            val ok = PROBES.any { url -> runCatching {
+                val c = n.openConnection(java.net.URL(url)) as java.net.HttpURLConnection
                 c.connectTimeout = 6_000; c.readTimeout = 6_000; c.instanceFollowRedirects = false
                 try { c.responseCode == 204 } finally { c.disconnect() }
-            }.getOrDefault(false)
+            }.getOrDefault(false) }
             failed = if (ok) 0 else failed + 1
             // the Wi-Fi in use gives nothing: perhaps its login page wants confirming
             if (!ok && lastKind == "wifi") PortalLogin.confirm(context, n)
@@ -153,37 +153,31 @@ class InternetWatch(private val context: Context, private val notice: (title: St
         runCatching { cm.unregisterNetworkCallback(callback) }
         mobileAsked = true; overMobile(false)
         main.removeCallbacksAndMessages(null)
+        shown.value = null
     }
 
     private fun change(state: State, kind: String) {
         if (state == seen) return
         seen = state
+        // working again by Android's word: the probe starts counting anew, one failure later is not "stuck" (I-121)
+        if (state == State.ONLINE) failed = 0
         DiagLog.add("internet: ${state.name.lowercase().replace('_', ' ')} ($kind)")
         // a Wi-Fi in the way without internet: Mate goes over mobile data itself; a Wi-Fi with internet again: back
         overMobile(kind == "wifi" && state != State.ONLINE)
         main.removeCallbacks(tell)
         // A new network needs a moment to be checked, and a change of cells is over in one: only
-        // what lasts is worth a notice. Good news at once.
+        // what lasts is shown. Good news at once.
         main.postDelayed(tell, if (state == State.ONLINE) 0 else SETTLE_MS)
     }
 
     private fun tellNow() {
-        val state = seen ?: return
-        if (state == told) return
-        val was = told
-        told = state
-        val text = when (state) {
-            State.ONLINE -> if (was == State.ONLINE) return else R.string.internet_notice_back
-            State.PORTAL -> R.string.internet_notice_portal
-            State.WIFI_NO_INTERNET -> R.string.internet_notice_wifi
-            State.WIFI_STUCK -> R.string.internet_notice_wifi_stuck
-            State.MOBILE_STUCK -> R.string.internet_notice_mobile_stuck
-            State.OFFLINE -> R.string.internet_notice_offline
-        }
-        notice(context.getString(R.string.internet_notice_title), context.getString(text))
+        shown.value = seen ?: return
     }
 
     companion object {
+        /** The settled state for the car's bar (System L-103), null while no car is connected. */
+        val shown = androidx.compose.runtime.mutableStateOf<State?>(null)
+        private val PROBES = listOf("https://connectivitycheck.gstatic.com/generate_204", "https://cp.cloudflare.com/generate_204")
         /** The network Mate's own traffic is bound to (mobile data while the Wi-Fi gives none), null: Android's choice. */
         @Volatile var mateBound: Network? = null
         private const val SETTLE_MS = 20_000L
