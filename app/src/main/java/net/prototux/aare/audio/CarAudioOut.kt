@@ -124,8 +124,8 @@ class CarAudioOut(
             dump = null
             if (eq == null && streamChunks > 0) {
                 val under = channel.underflows - underflowsAtStart
-                net.prototux.aare.DiagLog.add("car audio, guidance stream: %.1f s, longest wait for sound from the phone %d ms, %d wait(s) over 30 ms, %d underflow(s) of the car, %d gap(s) in the sound, screen %s, music back %s"
-                    .format(java.util.Locale.ROOT, streamChunks * 0.02, longestWait, slowChunks, under, dropouts, if (screenOff) "off" else "on", AudioTrials.musicBack.name),
+                net.prototux.aare.DiagLog.add("car audio, guidance stream: %.1f s, longest wait for sound from the phone %d ms, %d wait(s) over 30 ms, %d underflow(s) of the car, %d gap(s) in the sound, screen %s, music back %s, %s"
+                    .format(java.util.Locale.ROOT, streamChunks * 0.02, longestWait, slowChunks, under, dropouts, if (screenOff) "off" else "on", AudioTrials.musicBack.name, load()),
                     if (longestWait > 60 || under > 0 || dropouts > 0) net.prototux.aare.DiagLog.Level.WARN else null, "AUDIO")
             }
             longestWait = 0; slowChunks = 0; streamChunks = 0; dropouts = 0; zeroRun = 0; loudBefore = false; screenOff = false
@@ -279,4 +279,23 @@ class CarAudioOut(
             return true
         }
     }
+}
+
+/**
+ * System I-055/I-064: how the tablet treated Mate while a prompt played - Android's CPU group of Mate's process (top-app
+ * gets the fast cores, foreground or background less) and the tablet's heat (Android 10+) - so that a crackle heard can be
+ * put beside a slowed-down tablet in the log.
+ */
+private fun load(): String {
+    val group = runCatching { java.io.File("/proc/self/cpuset").readText().trim().trimStart('/').ifEmpty { "root" } }.getOrDefault("?")
+    val heat = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) runCatching {
+        when (net.prototux.aare.AareApp.instance.getSystemService(android.os.PowerManager::class.java).currentThermalStatus) {
+            android.os.PowerManager.THERMAL_STATUS_NONE -> "none"
+            android.os.PowerManager.THERMAL_STATUS_LIGHT -> "light"
+            android.os.PowerManager.THERMAL_STATUS_MODERATE -> "moderate"
+            android.os.PowerManager.THERMAL_STATUS_SEVERE -> "severe"
+            else -> "critical"
+        }
+    }.getOrDefault("?") else "?"
+    return "cpu group $group, heat $heat"
 }

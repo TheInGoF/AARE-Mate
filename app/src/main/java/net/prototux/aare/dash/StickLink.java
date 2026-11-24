@@ -269,6 +269,7 @@ final class StickLink {
         mMain.post(() -> {
             if (mRunning) return;
             mRunning = true;
+            mMisses = 0;
             connect();
         });
     }
@@ -364,16 +365,28 @@ final class StickLink {
         }
     };
 
+    /** Tries in a row that did not connect (System I-122); reset by a connection. */
+    private int mMisses;
+    /** After this many misses the stick is far (car parked, stick asleep): Android waits for it quietly. */
+    private static final int MISSES_TO_WAIT = 3;
+
     private void open(BluetoothDevice d) {
         close();
         mSubscribed = false;
-        state(R.string.stick_connecting, d.getAddress());
-        mGatt = d.connectGatt(mCtx, false, mCallback, BluetoothDevice.TRANSPORT_LE);
+        /* System I-122 (log 24.11.2026: every 35 s "Connecting" and "Connection lost (status 147)" while the car stood):
+           after a few direct tries Android's own waiting connection - no time-out, no new try every 35 s, it connects
+           as soon as the stick is there again */
+        boolean wait = mMisses >= MISSES_TO_WAIT;
+        if (wait && mMisses == MISSES_TO_WAIT) log("stick not reached " + mMisses + " times - waiting for it in the background");
+        if (!wait) state(R.string.stick_connecting, d.getAddress());
+        mGatt = d.connectGatt(mCtx, wait, mCallback, BluetoothDevice.TRANSPORT_LE);
     }
 
     private void again(int why, Object... args) {
-        fail(why, args);
+        /* while waiting in the background a lost try is no news: neither the log nor the screen hear of it again */
+        if (mMisses < MISSES_TO_WAIT) fail(why, args);
         close();
+        mMisses++;
         if (mRunning) mMain.postDelayed(mRetry, RETRY_MS);
     }
 
@@ -382,6 +395,8 @@ final class StickLink {
             mMain.post(() -> {
                 if (g != mGatt) return;
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
+                    if (mMisses >= MISSES_TO_WAIT) log("stick back after " + mMisses + " misses");
+                    mMisses = 0;
                     state(R.string.stick_mtu);
                     mServicesAsked = false;
                     if (!g.requestMtu(MTU)) askServices(g);

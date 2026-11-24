@@ -45,6 +45,8 @@ object SelfAdb {
     const val EXTRA_CODE = "code"
     private const val ADB_WIFI = "adb_wifi_enabled"
 
+    /** What the log last said of a Shizuku that needed no start (System I-120). */
+    @Volatile private var lastSaid: String? = null
     private val work = Executors.newSingleThreadExecutor { r -> Thread(r, "self-adb").apply { isDaemon = true } }
     @Volatile private var pairingPort = 0
     @Volatile private var mdns: AdbMdns? = null
@@ -119,7 +121,19 @@ object SelfAdb {
      */
     fun ensureShizuku(context: Context, why: String, done: () -> Unit = {}) {
         val app = context.applicationContext
-        if (CaptureMethods.shizukuAvailable() || !paired(app) || !CaptureMethods.shizukuInstalled(app)) { done(); return }
+        val nothing = when {
+            CaptureMethods.shizukuAvailable() -> "runs"
+            !CaptureMethods.shizukuInstalled(app) -> "not installed"
+            !paired(app) -> "Mate not paired with wireless debugging - no start by Mate"
+            else -> null
+        }
+        // System I-120: why nothing was started, in the log - once per change (or per car connection), not at every look
+        if (nothing != null) {
+            if (nothing != lastSaid || why == "car connected") DiagLog.add("shizuku by Mate ($why): $nothing")
+            lastSaid = nothing
+            done(); return
+        }
+        lastSaid = null
         // tries queue on the one worker: one that comes after a successful start has nothing left to do
         work.execute { try { if (!CaptureMethods.shizukuAvailable()) startNow(app, why) } finally { done() } }
     }
