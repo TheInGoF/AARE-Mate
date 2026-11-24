@@ -1534,4 +1534,6 @@
         <item quantity="one">%d Fahrt ohne Zweck</item>
         <item quantity="other">%d Fahrten ohne Zweck</item>
     </plurals>
+    <string name="sound_bass_level_title">Bass angleichen</string>
+    <string name="sound_bass_level_subtitle">Musik mit wenig Bass bekommt bis zu 6 dB mehr unter 120 Hz, langsam angepasst – so läuft die Anlage von Lied zu Lied ungefähr gleich ausgelastet. Nur Musik, keine Hörbücher.</string>
 </resources>

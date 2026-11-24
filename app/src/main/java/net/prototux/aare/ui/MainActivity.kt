@@ -1408,6 +1408,10 @@ private fun SoundCard(settings: Settings) {
         Section(stringResource(R.string.sound_section_filter)) {
             Toggle(stringResource(R.string.sound_toggle_title), stringResource(R.string.sound_toggle_subtitle), on) {
                 on = it; settings.setEq(car, on, settings.eqGains(car)); changed() }
+            // System L-104: music with little bass gets some more, so the system is driven evenly from song to song
+            var bass by remember { mutableStateOf(settings.bassLevel) }
+            Toggle(stringResource(R.string.sound_bass_level_title), stringResource(R.string.sound_bass_level_subtitle), bass) {
+                bass = it; settings.bassLevel = it; changed() }
             Text(if (car.isBlank()) stringResource(R.string.sound_car_hint_any) else stringResource(R.string.sound_car_hint, car),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))

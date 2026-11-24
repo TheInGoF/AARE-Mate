@@ -162,6 +162,8 @@ object CarSound {
     @Volatile var playing: String? = null
         private set
     @Volatile private var lastCar = ""
+    /** The last state put into the log. */
+    @Volatile private var said: String? = null
 
     /** The media hub's "now playing" moved to [pkg]: its kind's preset, if that is another. */
     fun follow(c: Context, pkg: String?) {
@@ -177,7 +179,12 @@ object CarSound {
         val kind = playing?.let { kind(c, it) } ?: Kind.MUSIC
         val sum = combined(correction(c, car), preset(c, presetKey(c, kind)).gains)
         CarEq.set(on, sum)
-        android.util.Log.i(TAG, "sound for ${car.ifBlank { "any car" }}: ${if (on) "on" else "off"}, ${kind.key} preset ${presetKey(c, kind)}, measurement ${activeMeasure(c, car)}")
+        // System L-104: the bass lift for music only (an audio book's voice needs none)
+        CarEq.bassLevel = net.prototux.aare.Settings(c).bassLevel && kind == Kind.MUSIC
+        // into the kept log once it changes (24.11.2026: whether a preset sticks after a prompt could not be seen)
+        val line = "sound for ${car.ifBlank { "any car" }}: filter ${if (on) "on" else "off"}, ${kind.key} preset ${presetKey(c, kind)} " +
+            "(${text(sum)} dB), measurement ${activeMeasure(c, car)}, bass lift ${if (CarEq.bassLevel) "on" else "off"}, playing ${playing ?: "-"}"
+        if (line != said) { said = line; net.prototux.aare.DiagLog.add(line, area = "AUDIO") }
     }
 
     /** The two layers added, band by band, within the filter's range. */

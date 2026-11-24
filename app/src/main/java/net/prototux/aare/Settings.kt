@@ -473,6 +473,14 @@ class Settings(context: Context) {
         putInt("app_trim", steps); putInt("size", size)
     }
 
+    /**
+     * System L-104 (24.11.2026: "So ein Musik-Bass-Analyzer, dass man ungefähr gleichmäßige Auslastung der Anlage hat"):
+     * music with little bass gets some more, so the system is driven about evenly from song to song. Off until chosen.
+     */
+    var bassLevel: Boolean
+        get() = prefs.getBoolean("bass_level", false)
+        set(v) = prefs.edit { putBoolean("bass_level", v) }
+
     /** Mate's sound filter (O50) for this car: on or off, and the gain of each band in dB; per car like [size]. */
     fun eqOn(car: String): Boolean = prefs.getBoolean("eq_on:$car", prefs.getBoolean("eq_on", false))
 

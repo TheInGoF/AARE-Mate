@@ -1547,4 +1547,6 @@
         <item quantity="one">%d trip without a purpose</item>
         <item quantity="other">%d trips without a purpose</item>
     </plurals>
+    <string name="sound_bass_level_title">Even out the bass</string>
+    <string name="sound_bass_level_subtitle">Music with little bass gets up to 6 dB more below 120 Hz, slowly, so the system is driven about evenly from song to song. Only music, not audio books.</string>
 </resources>
