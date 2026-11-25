@@ -1647,7 +1647,7 @@ internal fun dropLayout(splitOn: Boolean, naviShare: Float, naviRight: Boolean, 
  */
 @Composable
 private fun FaultNoteCard(modifier: Modifier, send: (String) -> Unit, close: () -> Unit) =
-    DictateCard(modifier, stringResource(R.string.fault_note_title), send, close)
+    DictateCard(modifier, stringResource(R.string.fault_note_title), send, close, keepOnLeave = true)
 
 /**
  * Words said to Mate, shown as they are worked out (the fault note's card, 18.11.2026): Mate listens at once until the
@@ -1655,7 +1655,9 @@ private fun FaultNoteCard(modifier: Modifier, send: (String) -> Unit, close: () 
  * hands it to [send]; the X leaves without words. Also the answer to a message (System L-057).
  */
 @Composable
-private fun DictateCard(modifier: Modifier, title: String, send: (String) -> Unit, close: () -> Unit) {
+private fun DictateCard(modifier: Modifier, title: String, send: (String) -> Unit, close: () -> Unit,
+                        /** The fault note: words already worked out are kept when the card goes without "Senden" (I-124). */
+                        keepOnLeave: Boolean = false) {
     val ctx = LocalContext.current
     var text by remember { mutableStateOf("") }
     // Mate listens until the driver ends it (18.11.2026: "ich möchte die Aufnahme manuell beenden und nicht, wenn er
@@ -1666,22 +1668,40 @@ private fun DictateCard(modifier: Modifier, title: String, send: (String) -> Uni
     var sending by remember { mutableStateOf(false) }
     val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     val running = remember { arrayOfNulls<net.prototux.aare.speech.LongDictation>(1) }
-    fun finish() { send(text); close() }
+    // all words worked out, also beside a card already gone (I-124)
+    val words = remember { java.util.concurrent.atomic.AtomicReference("") }
+    val left = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    var sent by remember { mutableStateOf(false) }
+    fun finish() { sent = true; send(text); close() }
     fun listen() {
         running[0]?.cancel()
         failed = false; waiting = 0; listening = true
         val d = net.prototux.aare.speech.LongDictation(ctx.applicationContext)
         running[0] = d
         d.run(
-            onPiece = { piece -> main.post { if (running[0] === d) text = (text + " " + piece.trim()).trim() } },
+            onPiece = { piece ->
+                words.updateAndGet { (it + " " + piece.trim()).trim() }
+                main.post { if (running[0] === d) text = (text + " " + piece.trim()).trim() } },
             onWaiting = { n -> main.post { if (running[0] === d) waiting = n } },
             onEnd = { ok -> main.post {
+                // the card went meanwhile (a fault note): what was said is saved all the same (I-124)
+                if (left.get() && !sent) { sent = true; words.get().takeIf { it.isNotBlank() }?.let { net.prototux.aare.debug.FaultNote.save(it) }; return@post }
                 if (running[0] !== d) return@post
                 running[0] = null; listening = false; waiting = 0; failed = !ok
                 if (sending) { if (text.isNotBlank()) finish() else sending = false }
             } })
     }
-    androidx.compose.runtime.DisposableEffect(Unit) { listen(); onDispose { running[0]?.cancel(); running[0] = null } }
+    // System I-124 (24.11.2026, 19:30: "ich habe die Fehlerbeschreibung aufgenommen und gesendet" - it never arrived): the
+    // last words were still being worked out after "Senden" when the connection to the car broke at parking, and the card
+    // went with them. A fault note keeps what was worked out by then.
+    // went with them. A fault note keeps all of it: the pieces still in work are finished beside the gone card and saved.
+    androidx.compose.runtime.DisposableEffect(Unit) { listen(); onDispose {
+        val d = running[0]; running[0] = null
+        if (!keepOnLeave || sent) { d?.cancel(); return@onDispose }
+        left.set(true)
+        if (d != null) d.stop()                   // its onEnd saves what came by then
+        else if (words.get().isNotBlank()) { sent = true; net.prototux.aare.debug.FaultNote.save(words.get()) }
+    } }
     // "Senden" while the last words are still worked out waits for them - not for ever
     LaunchedEffect(sending) { if (sending) { kotlinx.coroutines.delay(45_000); if (text.isNotBlank()) finish() else sending = false } }
     Column(modifier.widthIn(max = 760.dp).clip(RoundedCornerShape(18.dp)).background(Mate.cardSolid)
@@ -1710,7 +1730,7 @@ private fun DictateCard(modifier: Modifier, title: String, send: (String) -> Uni
             }
             val clearable = (text.isNotBlank() || waiting > 0) && !sending
             Box(Modifier.height(72.dp).clip(RoundedCornerShape(16.dp)).background(Mate.plate)
-                .clickable(enabled = clearable) { text = ""; listen() }.padding(horizontal = 26.dp), contentAlignment = Alignment.Center) {
+                .clickable(enabled = clearable) { text = ""; words.set(""); listen() }.padding(horizontal = 26.dp), contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.fault_note_clear), color = if (clearable) Color.White else TextDim, fontSize = Mate.heading, fontWeight = FontWeight.SemiBold)
             }
             // "Senden" ends the listening too and takes along what is still being worked out

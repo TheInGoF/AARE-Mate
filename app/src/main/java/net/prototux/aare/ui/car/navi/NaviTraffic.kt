@@ -78,13 +78,16 @@ internal object NaviTraffic {
             if (base.isBlank() || line.size < 2) return@withContext emptyList()
             val client = NaviServer.client(context)
             val out = ArrayList<List<org.maplibre.spatialk.geojson.Position>>()
+            val works = ArrayList<String>()
             for (chunk in chunks(line)) {
                 val minLon = chunk.minOf { it.longitude } - 0.01; val maxLon = chunk.maxOf { it.longitude } + 0.01
                 val minLat = chunk.minOf { it.latitude } - 0.01; val maxLat = chunk.maxOf { it.latitude } + 0.01
-                val fields = java.net.URLEncoder.encode("{incidents{geometry{type,coordinates},properties{iconCategory}}}", "UTF-8")
+                val fields = java.net.URLEncoder.encode("{incidents{geometry{type,coordinates},properties{iconCategory,magnitudeOfDelay}}}", "UTF-8")
                 // the box formatted on its own: the encoded fields hold "%7B..." that format() would take for its own
                 val box = "%.5f,%.5f,%.5f,%.5f".format(java.util.Locale.ROOT, minLon, minLat, maxLon, maxLat)
-                val url = "$base/verkehr/traffic/services/5/incidentDetails?bbox=$box&fields=$fields&categoryFilter=8&timeValidityFilter=present&language=${net.prototux.aare.Language.tag()}"
+                // closures (8), and road works (9) for the log only (24.11.2026, 19:30: led through road works no closure
+                // had been reported for - whether TomTom knew them could not be seen)
+                val url = "$base/verkehr/traffic/services/5/incidentDetails?bbox=$box&fields=$fields&categoryFilter=8,9&timeValidityFilter=present&language=${net.prototux.aare.Language.tag()}"
                 val body = client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { if (it.isSuccessful) it.body.string() else null } ?: continue
                 val incidents = org.json.JSONObject(body).optJSONArray("incidents") ?: continue
                 for (i in 0 until incidents.length()) {
@@ -92,10 +95,18 @@ internal object NaviTraffic {
                     val coords = g.optJSONArray("coordinates") ?: continue
                     val pts = if (g.optString("type") == "LineString") (0 until coords.length()).map { k -> coords.getJSONArray(k).let {
                         org.maplibre.spatialk.geojson.Position(longitude = it.getDouble(0), latitude = it.getDouble(1)) } } else continue
+                    val props = incidents.getJSONObject(i).optJSONObject("properties")
+                    if (props?.optInt("iconCategory") == 9) {
+                        val on = onRoute(pts, chunk)
+                        if (on.isNotEmpty()) works += "%d m (magnitude %d)".format(java.util.Locale.ROOT,
+                            on.sumOf { l -> l.zipWithNext { p, q -> ChargerIndex.distanceM(p, q) }.sum() }.toInt(), props.optInt("magnitudeOfDelay"))
+                        continue
+                    }
                     // the part of the closed stretch the route runs on (19.11.2026: see onRoute)
                     out += onRoute(pts, chunk)
                 }
             }
+            if (works.isNotEmpty()) net.prototux.aare.DiagLog.add("road works on the route (not avoided): ${works.size} - ${works.take(6).joinToString()}", area = "NAVI")
             // and the closed roads of the flow tiles - they mark whole closed roads where the incidents name a piece
             val fetch: (String) -> ByteArray? = { u -> runCatching { client.newCall(okhttp3.Request.Builder().url(u).build()).execute()
                 .use { if (it.isSuccessful) it.body.bytes() else null } }.getOrNull() }
