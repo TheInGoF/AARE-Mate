@@ -1874,15 +1874,18 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             hintMod) { NaviKeep.atCharger.value = null }
         // F2: a faster route round a jam, top right, before all other hints (O218)
         val fasterNow = NaviKeep.faster.value?.takeIf { atStop == null && panel == NaviStep.None && trip != null }
-        if (fasterNow != null) NaviFasterHint(fasterNow.second, hintMod,
-            onSwitch = {
-                val r = fasterNow.first
-                NaviKeep.faster.value = null; NaviKeep.aroundClosure.value = false
-                session.go(r, simulate = testDrive)
-                show(r); drawnLine = NaviRoute.smooth(raw(r)); limits = null
-                scope.launch { limits = NaviLimits.load(context, raw(r)) }
-                Log.i(TAG, "faster route taken: %.1f km".format(r.distance / 1000))
-            },
+        fun takeFaster(r: uniffi.ferrostar.Route, why: String) {
+            NaviKeep.faster.value = null; NaviKeep.aroundClosure.value = false
+            session.go(r, simulate = testDrive)
+            show(r); drawnLine = NaviRoute.smooth(raw(r)); limits = null
+            scope.launch { limits = NaviLimits.load(context, raw(r)) }
+            net.prototux.aare.DiagLog.add("route: %s taken: %.1f km".format(java.util.Locale.ROOT, why, r.distance / 1000), area = "NAVI")
+        }
+        // a closed road ahead is no choice (Navi I-064, 24.11.2026: "dass er diese Straßensperrung zwar anzeigt auf der Map,
+        // aber trotzdem keine Umfahrung anbietet"): the way round it is taken at once, not offered to tap
+        if (fasterNow != null && NaviKeep.aroundClosure.value) LaunchedEffect(fasterNow) { takeFaster(fasterNow.first, "the way round a closed road") }
+        else if (fasterNow != null) NaviFasterHint(fasterNow.second, hintMod,
+            onSwitch = { takeFaster(fasterNow.first, "faster route") },
             onDismiss = { NaviKeep.faster.value = null; NaviKeep.aroundClosure.value = false }, closure = NaviKeep.aroundClosure.value)
         // off the route, no new one yet: first of all hints, top right (as Google)
         val offRoute by session.offRoute.collectAsState()

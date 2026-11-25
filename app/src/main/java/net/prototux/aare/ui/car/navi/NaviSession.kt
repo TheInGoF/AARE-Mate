@@ -319,7 +319,10 @@ internal class NaviSession(parent: CoroutineScope, private val valhalla: String,
         // at the start of a 300 km trip - a start on a closed stretch cannot be helped)
         val fastest = choices.minOf { it.route.steps.sumOf { s -> s.duration } }
         val shortest = choices.minOf { it.route.distance }
-        val fair = free.filter { it.route.steps.sumOf { s -> s.duration } <= fastest * 1.1 + 300 && it.route.distance <= shortest * 1.15 }
+        // Navi I-064 (24.11.2026, a closed road in town on a 2.6 km trip): 15 % more way is a few hundred metres there - a way
+        // round a closed street was thrown away; now the share or a fixed allowance (5 km, 10 min), whichever is more
+        val fair = free.filter { it.route.steps.sumOf { s -> s.duration } <= maxOf(fastest * 1.1 + 300, fastest + 600) &&
+            it.route.distance <= maxOf(shortest * 1.15, shortest + 5_000) }
         return if (fair.isNotEmpty() && fair.size < choices.size) fair else choices
     }
 

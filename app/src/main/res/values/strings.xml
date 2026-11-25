@@ -1165,7 +1165,7 @@
     <string name="voice_engine_delete">Delete</string>
     <string name="transfer_voices">Take the own Kokoro voices along (%1$s)</string>
     <string name="traffic_closure_route">Road closed ahead · route around it</string>
-    <string name="traffic_closure_route_say">Road closed ahead. There is a route around it, tap Switch.</string>
+    <string name="traffic_closure_route_say">Road closed ahead. Taking you round it.</string>
     <string name="setup_ev_curve_title">Give IDmate\'s consumption curve to Maps</string>
     <string name="setup_ev_curve_sub">Off: only the average consumption of your trips, as in the test environment where Maps did plan charging stops. For testing, should Maps plan no stops with the curve. Takes effect at the next route in Maps.</string>
     <string name="places_map_search">Search a place or address</string>

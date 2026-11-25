@@ -1152,7 +1152,7 @@
     <string name="voice_engine_delete">Löschen</string>
     <string name="transfer_voices">Eigene Kokoro-Stimmen mitnehmen (%1$s)</string>
     <string name="traffic_closure_route">Straßensperrung voraus · Route darum herum</string>
-    <string name="traffic_closure_route_say">Straßensperrung voraus. Es gibt eine Route darum herum, tippe auf Wechseln.</string>
+    <string name="traffic_closure_route_say">Straßensperrung voraus. Ich fahre dich darum herum.</string>
     <string name="setup_ev_curve_title">IDmates Verbrauchskurve an Maps geben</string>
     <string name="setup_ev_curve_sub">Aus: nur der Durchschnittsverbrauch deiner Fahrten, wie in der Testumgebung, in der Maps Ladestopps geplant hat. Zum Testen, falls Maps mit der Kurve keine Ladestopps plant. Wirkt beim nächsten Routenstart in Maps.</string>
     <string name="places_map_search">Ort oder Adresse suchen</string>

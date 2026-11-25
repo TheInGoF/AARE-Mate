@@ -345,10 +345,13 @@ internal object NaviKeep {
             val end = r.geometry.lastOrNull()
             val here = t.userLocation.coordinates
             val crow = end?.let { ChargerIndex.distanceM(Position(longitude = here.lng, latitude = here.lat), Position(longitude = it.lng, latitude = it.lat)) }
-            if (arrivedByStanding(kmh, t.progress.distanceRemaining, crow)) standing++ else standing = 0
-            if (standing >= ARRIVE_STAND_S) {
+            // the car in P, said within the last half minute
+            val parked = net.prototux.aare.car.CarData.state.value.gear?.let { it.value == 101 && System.currentTimeMillis() - it.atMillis < 30_000 } == true
+            val need = standNeededS(kmh, t.progress.distanceRemaining, crow, parked)
+            if (need != null) standing++ else standing = 0
+            if (need != null && standing >= need) {
                 standing = 0
-                net.prototux.aare.DiagLog.add("arrived: the car stands %.0f m from the route's end (%.0f m of the way left) - the trip ends".format(crow ?: 0.0, t.progress.distanceRemaining))
+                net.prototux.aare.DiagLog.add("arrived: the car stands %.0f m from the route's end (%.0f m of the way left)%s - the trip ends".format(crow ?: 0.0, t.progress.distanceRemaining, if (parked) ", in P" else ""))
                 session.arriveNow()
                 continue
             }
@@ -449,12 +452,23 @@ internal object NaviKeep {
         val early = (speedMs ?: 0.0).coerceIn(0.0, 70.0) * LEAD_MS / 1000.0
         return triggers.indices.filter { leftM - early <= triggers[it] }.minByOrNull { triggers[it] }
     }
-    /** Standing (under 3 km/h) so close to the route's end, as the crow flies and along the way, counts towards the arrival. */
+    /**
+     * How long standing (under 3 km/h) near the route's end has to last to be the arrival; null: it does not count.
+     * Navi I-064 (24.11.2026: "die Navigation schon abgebrochen hat, bevor ich überhaupt in der Nähe des Ziels war … er sollte
+     * schon ein bisschen darauf achten, dass er nicht im Umkreis von 300 Meter die Navigation dann beendet"): 5 s standing
+     * 106 m before the end - a red light or the closed road ahead - had ended the trip. Now: in P ([parked]) on a car park
+     * near it ([ARRIVE_CROW_M]) at once; without P only right at the end ([ARRIVE_NEAR_M]), there after [ARRIVE_STAND_S].
+     */
     internal const val ARRIVE_CROW_M = 120.0
     internal const val ARRIVE_WAY_M = 300.0
+    internal const val ARRIVE_NEAR_M = 40.0
     internal const val ARRIVE_STAND_S = 5
-    internal fun arrivedByStanding(kmh: Double?, wayLeftM: Double, crowM: Double?): Boolean =
-        kmh != null && kmh < 3.0 && crowM != null && crowM <= ARRIVE_CROW_M && wayLeftM <= ARRIVE_WAY_M
+    internal fun standNeededS(kmh: Double?, wayLeftM: Double, crowM: Double?, parked: Boolean): Int? = when {
+        kmh == null || kmh >= 3.0 || crowM == null -> null
+        parked && crowM <= ARRIVE_CROW_M && wayLeftM <= ARRIVE_WAY_M -> 2
+        crowM <= ARRIVE_NEAR_M && wayLeftM <= ARRIVE_NEAR_M * 2 -> ARRIVE_STAND_S
+        else -> null
+    }
     // every 10 min (17.11.2026: "reicht auch, wenn wir alle 10 TomTom fragen") - about 40-50 TomTom calls an hour of driving
     private const val TRAFFIC_MS = 600_000L
     private const val FASTER_MS = 300_000L
