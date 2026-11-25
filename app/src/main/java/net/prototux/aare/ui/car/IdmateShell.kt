@@ -1671,6 +1671,7 @@ private fun DictateCard(modifier: Modifier, title: String, send: (String) -> Uni
     // all words worked out, also beside a card already gone (I-124)
     val words = remember { java.util.concurrent.atomic.AtomicReference("") }
     val left = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val dismissed = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     var sent by remember { mutableStateOf(false) }
     fun finish() { sent = true; send(text); close() }
     fun listen() {
@@ -1697,7 +1698,8 @@ private fun DictateCard(modifier: Modifier, title: String, send: (String) -> Uni
     // went with them. A fault note keeps all of it: the pieces still in work are finished beside the gone card and saved.
     androidx.compose.runtime.DisposableEffect(Unit) { listen(); onDispose {
         val d = running[0]; running[0] = null
-        if (!keepOnLeave || sent) { d?.cancel(); return@onDispose }
+        // the X without "Senden" leaves without words; after "Senden", or when the card just goes (the car gone), they are kept
+        if (!keepOnLeave || sent || dismissed.get()) { d?.cancel(); return@onDispose }
         left.set(true)
         if (d != null) d.stop()                   // its onEnd saves what came by then
         else if (words.get().isNotBlank()) { sent = true; net.prototux.aare.debug.FaultNote.save(words.get()) }
@@ -1719,7 +1721,7 @@ private fun DictateCard(modifier: Modifier, title: String, send: (String) -> Uni
         Text(now, color = if (listening || waiting > 0 || sending) Teal else TextDim, fontSize = if (text.isBlank()) Mate.title else Mate.body, modifier = Modifier.padding(top = 6.dp))
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(72.dp).clip(CircleShape).background(Mate.plate).clickable { close() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(72.dp).clip(CircleShape).background(Mate.plate).clickable { if (!sending) dismissed.set(true); close() }, contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.Close, stringResource(R.string.idmate_dictate_cancel), tint = Color.White, modifier = Modifier.size(34.dp))
             }
             // the microphone: on while Mate listens - tapped, the listening ends (what was said is still worked out);
