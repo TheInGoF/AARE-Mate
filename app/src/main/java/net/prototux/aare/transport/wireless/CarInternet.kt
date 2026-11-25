@@ -59,6 +59,18 @@ object CarInternet {
         context.getSystemService(WifiManager::class.java)?.let { approval(it) }
     }
 
+    /**
+     * Whether the Wi-Fi the tablet is joined to is the car's (the name the car handed over); null when unknown - no car
+     * Wi-Fi known yet, none joined, or Android hides the name (it needs the location permission).
+     */
+    @Suppress("DEPRECATION")
+    fun joinedCar(context: Context): Boolean? {
+        val car = prefs(context).getString("ssid", null) ?: return null
+        val ssid = context.getSystemService(WifiManager::class.java)?.connectionInfo?.ssid?.trim('"') ?: return null
+        if (ssid.isEmpty() || ssid == "<unknown ssid>") return null
+        return ssid == car
+    }
+
     /** Takes the suggestion back (the switch turned off). */
     fun withdraw(context: Context) {
         if (Build.VERSION.SDK_INT < 29) return

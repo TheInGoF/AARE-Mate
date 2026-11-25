@@ -54,11 +54,18 @@ class InternetWatch(private val context: Context) {
     @Suppress("DEPRECATION")
     private fun networks() {
         val all = runCatching { cm.allNetworks.toList() }.getOrDefault(emptyList())
+        // 25.11.2026 (Q-065: "dann verbindet er sich direkt automatisch mit dem VW-WLAN, ohne Nachfrage"): which one Android
+        // uses (default) and whether the Wi-Fi joined is the car's - still without its name
+        val active = runCatching { cm.activeNetwork }.getOrNull()
+        val carWifi = runCatching { net.prototux.aare.transport.wireless.CarInternet.joinedCar(context) }.getOrNull()
         val text = all.mapNotNull { n -> cm.getNetworkCapabilities(n)?.let { c ->
-            (when { c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"; c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"; else -> "other" }) +
+            val wifi = c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+            (when { wifi -> "wifi"; c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"; else -> "other" }) +
                 (if (!c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) " (no internet asked - e.g. Mate's own link to the car)"
                  else if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_CAPTIVE_PORTAL)) " (login page)"
-                 else if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) " (internet checked)" else " (internet not checked/none)")
+                 else if (c.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) " (internet checked)" else " (internet not checked/none)") +
+                (if (wifi && c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && carWifi != null) (if (carWifi) " [the car's]" else " [not the car's]") else "") +
+                (if (n == active) " [used]" else "")
         } }.sorted().joinToString(", ").ifEmpty { "none" }
         // a Wi-Fi asking for internet that has none (yet): its login page confirmed by Mate (PortalLogin)
         all.forEach { n -> cm.getNetworkCapabilities(n)?.let { c ->
