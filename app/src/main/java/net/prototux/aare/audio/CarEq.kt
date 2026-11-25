@@ -106,7 +106,7 @@ class CarEqProcessor(private val rate: Int, private val channels: Int) {
     /** The chunk as numbers, kept between calls so no array is made per chunk. */
     private var work = DoubleArray(0)
 
-    /** System L-104: the bass of music that has little of it lifted, after the filter's bands. */
+    /** System L-104: the bass of music that has little of it lifted, measured before the filter's bands (the preset does not count). */
     private val bass = BassLevel(rate, channels)
 
     fun process(buf: ByteArray, off: Int, len: Int) {
@@ -247,8 +247,10 @@ class BassLevel(private val rate: Int, private val channels: Int) {
          * [ZERO_AT_DB] up (bass of its own), the whole [MAX_DB] from [FULL_AT_DB] down (thin), straight in between - before,
          * most real songs fell on one of the two ends.
          */
-        const val ZERO_AT_DB = -3.0
-        const val FULL_AT_DB = -20.0
+        // 25.11.2026 (log of the morning: the songs measured 3 to 8 dB below the whole, rarely 10-14 - so they got 0 to 3 dB,
+        // which nobody hears: "ich erkenne vom Hören subjektiv keinen Unterschied"): the line now spans what real songs measure
+        const val ZERO_AT_DB = -2.0
+        const val FULL_AT_DB = -10.0
         fun liftFor(shareDb: Double): Double = ((ZERO_AT_DB - shareDb) / (ZERO_AT_DB - FULL_AT_DB) * MAX_DB).coerceIn(0.0, MAX_DB)
         /**
          * 24.11.2026, after a drive ("Es klingt ein bisschen voller, gerade ältere Songs, aber es ist noch nicht so, als wenn man
@@ -258,7 +260,8 @@ class BassLevel(private val rate: Int, private val channels: Int) {
         const val MAX_DB = 10.0
         /** At most this much change of the lift per 20 ms block: 2 dB a second. */
         const val STEP_DB = 0.04
-        const val AVERAGE_S = 6.0
+        /** Over this long the share is measured (was 6 s: the lift went up and down with the parts of one song). */
+        const val AVERAGE_S = 12.0
         const val QUIET = 300.0
         const val SAY_MS = 20_000L
         const val FIRST_SAY_MS = 10_000L

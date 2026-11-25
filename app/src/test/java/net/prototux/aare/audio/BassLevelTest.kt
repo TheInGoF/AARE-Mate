@@ -65,10 +65,17 @@ class BassLevelTest {
         assertEquals(10.0, BassLevel.liftFor(-35.0), 0.001)
     }
 
+    @Test fun whatSongsMeasureIsHeard() {
+        // 25.11.2026: the morning's songs measured 3 to 8 dB below the whole - they must get a lift one hears
+        assertTrue(BassLevel.liftFor(-5.0) >= 3.5)
+        assertTrue(BassLevel.liftFor(-7.0) >= 6.0)
+        assertTrue(BassLevel.liftFor(-3.0) <= 1.5)
+    }
+
     @Test fun aSongInBetweenGetsPartOfIt() {
-        // 60 Hz at a fifth of the 1 kHz tone: the bass about 14 dB below the whole - neither nothing nor all
+        // 60 Hz at half the 1 kHz tone: the bass about 7 dB below the whole, as most songs measure - neither nothing nor all
         val b = BassLevel(rate, 2)
-        run(b, 20, bassAmp = 1600.0, highAmp = 8000.0)
+        run(b, 30, bassAmp = 4000.0, highAmp = 8000.0)
         assertTrue("between: ${b.liftDb} dB at a share of ${b.shareDb} dB", b.liftDb > 2.0 && b.liftDb < 9.0)
         assertEquals(BassLevel.liftFor(b.shareDb), b.liftDb, 0.5)
     }

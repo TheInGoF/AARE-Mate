@@ -257,15 +257,19 @@ class WirelessConnector(context: Context, private val log: AapLog, private val o
             for (attempt in 1..options.tcpAttempts) {
                 checkNotAborted()
                 // Bound to the head unit's network: it is not the default network (no internet).
-                val socket = network.socketFactory.createSocket()
-                tcp = socket
+                // 25.11.2026: binding failed once with EPERM right after the network came (Android grants Mate the
+                // network a moment later) and that ended the wireless start - now it is one more attempt
+                var socket: Socket? = null
                 try {
+                    socket = network.socketFactory.createSocket()
+                    tcp = socket
                     socket.connect(InetSocketAddress(address, port), options.tcpConnectTimeoutMs)
                     return socket
                 } catch (e: IOException) {
                     last = e
-                    runCatching { socket.close() }
-                    log.w("wireless: TCP attempt $attempt/${options.tcpAttempts} to $ip:$port failed: ${e.message}")
+                    runCatching { socket?.close() }
+                    log.w("wireless: TCP attempt $attempt/${options.tcpAttempts} to $ip:$port failed" +
+                        (if (socket == null) " binding to the network" else "") + ": ${e.message}")
                     if (attempt < options.tcpAttempts) Thread.sleep(1_000)
                 }
             }
