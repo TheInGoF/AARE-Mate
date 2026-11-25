@@ -369,6 +369,11 @@ class Settings(context: Context) {
         get() = prefs.getString("asr_model", "") ?: ""
         set(v) = prefs.edit { putString("asr_model", v) }
 
+    /** Which recognition the dictation uses: GoogleAsr.WHISPER (on the device) or GoogleAsr.SYSTEM (Android's, Whisper as fallback). */
+    var asrEngine: String
+        get() = prefs.getString("asr_engine", net.prototux.aare.speech.GoogleAsr.WHISPER) ?: net.prototux.aare.speech.GoogleAsr.WHISPER
+        set(v) = prefs.edit { putString("asr_engine", v) }
+
     /** The voice messages are read with: a voice name of the system's speech engine; null = the engine's own default. */
     /** The voice Mate reads with (O110): "system" (the phone's text-to-speech) or "piper" (Thorsten, on the device). */
     var ttsEngine: String

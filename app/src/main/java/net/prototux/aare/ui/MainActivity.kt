@@ -1733,6 +1733,7 @@ private fun SpeechCard() {
     var rows by remember { mutableStateOf<List<net.prototux.aare.speech.SpeechBench.Row>>(emptyList()) }
     var failed by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SpeechEngine()
         Section(stringResource(R.string.speech_section_models)) {
             Text(if (sizes.isEmpty()) stringResource(R.string.speech_no_models) else stringResource(R.string.speech_models, sizes.joinToString(", ") { "Whisper $it" }),
                 style = MaterialTheme.typography.bodyMedium)
@@ -1802,6 +1803,75 @@ private fun SpeechCard() {
     }
 }
 
+/** Whisper or Android's own recognition (Q-064), and five seconds of your own voice through Android's. */
+@Composable
+private fun SpeechEngine() {
+    val ctx = LocalContext.current
+    val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val settings = remember { Settings(ctx) }
+    val usable = remember { net.prototux.aare.speech.GoogleAsr.usable(ctx) }
+    val label = remember { net.prototux.aare.speech.GoogleAsr.label(ctx) }
+    var engine by remember { mutableStateOf(settings.asrEngine) }
+    var state by remember { mutableStateOf<String?>(null) }
+    var heard by remember { mutableStateOf<String?>(null) }
+    fun go() {
+        state = ctx.getString(R.string.speech_try_listening); heard = null
+        Thread {
+            val r = runCatching {
+                val pcm = recordFive()
+                main.post { state = ctx.getString(R.string.speech_try_thinking) }
+                val t = android.os.SystemClock.elapsedRealtime()
+                val said = net.prototux.aare.speech.GoogleAsr.recognize(ctx.applicationContext, FloatArray(pcm.size) { pcm[it] / 32768f }, 16000)
+                    ?: error("system recognition failed")
+                "„${said.firstOrNull().orEmpty()}“  (${"%.1f".format((android.os.SystemClock.elapsedRealtime() - t) / 1000.0)} s)"
+            }
+            main.post { state = null; heard = r.getOrElse { ctx.getString(R.string.speech_bench_failed) } }
+        }.start()
+    }
+    val mic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) go() }
+    Section(stringResource(R.string.speech_engine_title)) {
+        listOf(net.prototux.aare.speech.GoogleAsr.WHISPER to R.string.speech_engine_whisper, net.prototux.aare.speech.GoogleAsr.SYSTEM to R.string.speech_engine_system).forEach { (key, text) ->
+            val enabled = key == net.prototux.aare.speech.GoogleAsr.WHISPER || usable
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.RadioButton(engine == key, { settings.asrEngine = key; engine = key }, enabled = enabled)
+                Text(stringResource(text), style = MaterialTheme.typography.bodyLarge,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Text(if (usable && label != null) stringResource(R.string.speech_engine_found, label) else stringResource(R.string.speech_engine_missing),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.speech_engine_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (usable) {
+            Spacer(Modifier.height(8.dp))
+            val s = state
+            if (s != null) {
+                Text(s, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                androidx.compose.material3.LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 8.dp))
+            } else androidx.compose.material3.OutlinedButton(onClick = {
+                if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) go()
+                else mic.launch(android.Manifest.permission.RECORD_AUDIO)
+            }) { Text(stringResource(R.string.speech_try_start)) }
+            heard?.let { Text(it, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp)) }
+        }
+    }
+}
+
+/** Five seconds from the tablet's microphone, 16 kHz mono. */
+@android.annotation.SuppressLint("MissingPermission")
+private fun recordFive(): ShortArray {
+    val rate = 16000
+    val min = android.media.AudioRecord.getMinBufferSize(rate, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT)
+    val rec = android.media.AudioRecord(android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION, rate,
+        android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, maxOf(min, rate))
+    val pcm = ShortArray(rate * 5)
+    try {
+        rec.startRecording()
+        var got = 0
+        while (got < pcm.size) { val n = rec.read(pcm, got, pcm.size - got); if (n <= 0) error("mic $n"); got += n }
+    } finally { rec.release() }
+    return pcm
+}
+
 /** Five seconds of your own voice, recognized with the chosen size. */
 @Composable
 private fun SpeechTry(sizes: List<String>) {
@@ -1815,16 +1885,7 @@ private fun SpeechTry(sizes: List<String>) {
         Thread {
             val r = runCatching {
                 val rate = 16000
-                val min = android.media.AudioRecord.getMinBufferSize(rate, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT)
-                @android.annotation.SuppressLint("MissingPermission")
-                val rec = android.media.AudioRecord(android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION, rate,
-                    android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT, maxOf(min, rate))
-                val pcm = ShortArray(rate * 5)
-                try {
-                    rec.startRecording()
-                    var got = 0
-                    while (got < pcm.size) { val n = rec.read(pcm, got, pcm.size - got); if (n <= 0) error("mic $n"); got += n }
-                } finally { rec.release() }
+                val pcm = recordFive()
                 main.post { state = ctx.getString(R.string.speech_try_thinking) }
                 val asr = net.prototux.aare.speech.LocalAsr.load(ctx, size, 4)
                 try {

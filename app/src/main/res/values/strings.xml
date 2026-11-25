@@ -797,6 +797,12 @@
     <string name="speech_try_start">Speak for 5 seconds</string>
     <string name="speech_try_listening">Listening … speak now</string>
     <string name="speech_try_thinking">Recognizing …</string>
+    <string name="speech_engine_title">Recognition</string>
+    <string name="speech_engine_whisper">Whisper (Mate, on the tablet)</string>
+    <string name="speech_engine_system">Android speech recognition (e.g. Google)</string>
+    <string name="speech_engine_found">Found: %1$s</string>
+    <string name="speech_engine_missing">No Android speech recognition found (Android 13 or later, e.g. \"Speech Services by Google\" with the offline language pack). Whisper stays in use.</string>
+    <string name="speech_engine_hint">Mate records as before (the car\'s microphone too) and only hands over the sound. Your music and contacts are matched afterwards as with Whisper. If Android\'s recognition fails, Whisper recognizes.</string>
     <string name="idmate_dictate_answer">Answer</string>
     <string name="idmate_dictate_cancel">Cancel</string>
     <string name="idmate_dictate_sent">Sent.</string>

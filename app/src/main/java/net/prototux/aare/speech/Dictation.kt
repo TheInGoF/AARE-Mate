@@ -34,11 +34,12 @@ class Dictation(private val context: Context) {
         val am = context.getSystemService(AudioManager::class.java)
         val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT).build()).build()
-        // the model loads while the speaker talks
+        // the model loads while the speaker talks - with the system's recognition chosen only if it fails (Q-064)
+        val system = GoogleAsr.chosen(context)
         var model: OfflineRecognizer? = null
         val loader = Thread {
             model = runCatching { Model.get(context) }.onFailure { Log.w(TAG, "model load failed", it) }.getOrNull()
-        }.apply { start() }
+        }.apply { if (!system) start() }
         val result = runCatching {
             am.requestAudioFocus(focus)
             val test = debugWave.also { debugWave = null }
@@ -48,15 +49,21 @@ class Dictation(private val context: Context) {
             if (cancelled) return@runCatching null
             lastAudio = pcm to rate
             onThinking()
-            loader.join()
+            if (system && pcm.isEmpty()) return@runCatching ""
+            if (system) {
+                GoogleAsr.recognize(context, pcm, rate)?.let { return@runCatching it.firstOrNull().orEmpty() }
+                if (cancelled) return@runCatching null
+                Log.i(TAG, "system recognition failed: Whisper")
+                loader.start()
+            }
+            if (loader.state != Thread.State.NEW) loader.join()
             val m = model ?: return@runCatching null
             // one recognition at a time (a new listening while the last one still thinks: two at once took the
             // tablet's processor and memory), and none for a listening given up meanwhile
             if (pcm.isEmpty()) "" else synchronized(Model.oneAtATime) { if (cancelled) null else LocalAsr.recognize(m, pcm, rate) }
         }.onFailure { Log.w(TAG, "dictation failed", it) }.getOrNull()
         // the model is free to go once its loading and this recognition are over
-        runCatching { loader.join() }
-        Model.done()
+        if (loader.state != Thread.State.NEW) { runCatching { loader.join() }; Model.done() }
         if (!cancelled) onHeard(result?.let { clean(it) })
     }, "mate-dictation").apply { start() }
 
