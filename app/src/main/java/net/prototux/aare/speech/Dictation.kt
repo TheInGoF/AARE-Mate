@@ -23,9 +23,12 @@ class Dictation(private val context: Context) {
     @Volatile private var stopped = false
     @Volatile private var cancelled = false
 
+    /** The system's recognition listening now (Q-064), when chosen. */
+    @Volatile private var live: GoogleAsr.Live? = null
+
     /** Ends listening now and recognizes what was said so far. */
-    fun stop() { stopped = true }
-    fun cancel() { cancelled = true; stopped = true }
+    fun stop() { stopped = true; live?.stop() }
+    fun cancel() { cancelled = true; stopped = true; live?.cancel() }
 
     /** [onHeard] gets the text (blank: nothing understood), or null if it could not listen or no model is there. */
     @SuppressLint("MissingPermission") // the phone app asks for the microphone; without it the recorder fails and null comes back
@@ -34,12 +37,23 @@ class Dictation(private val context: Context) {
         val am = context.getSystemService(AudioManager::class.java)
         val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT).build()).build()
-        // the model loads while the speaker talks - with the system's recognition chosen only if it fails (Q-064)
-        val system = GoogleAsr.chosen(context)
+        // the system's recognition when chosen (Q-064): it listens itself; failed, Whisper listens anew
+        if (debugWave == null && GoogleAsr.chosen(context)) {
+            val l = GoogleAsr.Live(context).also { live = it }
+            val heard = try {
+                runCatching { am.requestAudioFocus(focus) }
+                listening = true
+                l.run(onThinking)
+            } finally { listening = false; live = null; runCatching { am.abandonAudioFocusRequest(focus) } }
+            if (cancelled) return@Thread
+            if (heard != null) { onHeard(clean(heard.firstOrNull().orEmpty())); return@Thread }
+            Log.i(TAG, "system recognition failed: Whisper")
+        }
+        // the model loads while the speaker talks
         var model: OfflineRecognizer? = null
         val loader = Thread {
             model = runCatching { Model.get(context) }.onFailure { Log.w(TAG, "model load failed", it) }.getOrNull()
-        }.apply { if (!system) start() }
+        }.apply { start() }
         val result = runCatching {
             am.requestAudioFocus(focus)
             val test = debugWave.also { debugWave = null }
@@ -49,21 +63,15 @@ class Dictation(private val context: Context) {
             if (cancelled) return@runCatching null
             lastAudio = pcm to rate
             onThinking()
-            if (system && pcm.isEmpty()) return@runCatching ""
-            if (system) {
-                GoogleAsr.recognize(context, pcm, rate)?.let { return@runCatching it.firstOrNull().orEmpty() }
-                if (cancelled) return@runCatching null
-                Log.i(TAG, "system recognition failed: Whisper")
-                loader.start()
-            }
-            if (loader.state != Thread.State.NEW) loader.join()
+            loader.join()
             val m = model ?: return@runCatching null
             // one recognition at a time (a new listening while the last one still thinks: two at once took the
             // tablet's processor and memory), and none for a listening given up meanwhile
             if (pcm.isEmpty()) "" else synchronized(Model.oneAtATime) { if (cancelled) null else LocalAsr.recognize(m, pcm, rate) }
         }.onFailure { Log.w(TAG, "dictation failed", it) }.getOrNull()
         // the model is free to go once its loading and this recognition are over
-        if (loader.state != Thread.State.NEW) { runCatching { loader.join() }; Model.done() }
+        runCatching { loader.join() }
+        Model.done()
         if (!cancelled) onHeard(result?.let { clean(it) })
     }, "mate-dictation").apply { start() }
 

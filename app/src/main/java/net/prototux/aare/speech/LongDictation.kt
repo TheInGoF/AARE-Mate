@@ -31,37 +31,36 @@ class LongDictation(private val context: Context) {
     @Volatile private var cancelled = false
 
     /** The speaker has finished: what was said so far is still worked out and handed on, then [run]'s onEnd comes. */
-    fun stop() { stopped = true }
+    fun stop() { stopped = true; live?.stop() }
     /** Given up: nothing more is handed on, no onEnd. */
-    fun cancel() { cancelled = true; stopped = true }
+    fun cancel() { cancelled = true; stopped = true; live?.cancel() }
+
+    /** The system's recognition listening now (Q-064), when chosen. */
+    @Volatile private var live: GoogleAsr.Live? = null
 
     /**
      * [onPiece]: the words of each stretch of speech, in order. [onWaiting]: how many stretches are still being worked
      * out. [onEnd]: all is handed on (false: the microphone or the recognition could not be had). Any thread calls them.
      */
     fun run(onPiece: (String) -> Unit, onWaiting: (Int) -> Unit, onEnd: (Boolean) -> Unit) = Thread({
+        // the system's recognition when chosen (25.11.2026: "gerade da hat es ja gehakt" - Whisper slow and poor on the
+        // long fault notes): one listening after another, each ends at a pause, until the speaker has finished; failed,
+        // Whisper takes over for the rest
+        if (GoogleAsr.chosen(context) && systemPieces(onPiece, onWaiting)) { if (!cancelled) onEnd(true); return@Thread }
+        if (stopped) { if (!cancelled) onEnd(true); return@Thread }
         val pieces = LinkedBlockingQueue<FloatArray>()
         val waiting = AtomicInteger(0)
         val end = FloatArray(0)
         val modelThere = java.util.concurrent.atomic.AtomicBoolean(true)
         val worker = Thread({
-            // Android's recognition when chosen (25.11.2026: "gerade da hat es ja gehakt" - Whisper slow and poor on the
-            // long fault notes); Whisper is loaded only for a piece Android's could not do
-            val system = GoogleAsr.chosen(context)
-            var model: com.k2fsa.sherpa.onnx.OfflineRecognizer? = null
-            var loaded = false
-            fun whisper(): com.k2fsa.sherpa.onnx.OfflineRecognizer? {
-                if (!loaded) { loaded = true; model = runCatching { Dictation.Model.get(context) }.getOrNull() }
-                return model
-            }
+            val model = runCatching { Dictation.Model.get(context) }.getOrNull()
             try {
-                if (!system && whisper() == null) { modelThere.set(false); return@Thread }
+                if (model == null) { modelThere.set(false); return@Thread }
                 while (true) {
                     val p = pieces.take()
                     if (p === end) break
                     val text = if (cancelled) null else runCatching {
-                        (if (system) GoogleAsr.recognize(context, p, Dictation.RATE)?.let { it.firstOrNull().orEmpty() } else null)
-                            ?: whisper()?.let { m -> synchronized(Dictation.Model.oneAtATime) { if (cancelled) null else LocalAsr.recognize(m, p, Dictation.RATE) } }
+                        synchronized(Dictation.Model.oneAtATime) { if (cancelled) null else LocalAsr.recognize(model, p, Dictation.RATE) }
                     }.onFailure { Log.w(TAG, "a piece was not understood", it) }.getOrNull()
                     val left = waiting.decrementAndGet()
                     if (cancelled) continue
@@ -69,7 +68,7 @@ class LongDictation(private val context: Context) {
                     onWaiting(left)
                 }
             } finally {
-                if (loaded) Dictation.Model.done()
+                Dictation.Model.done()
             }
         }, "mate-long-asr").apply { start() }
 
@@ -97,6 +96,30 @@ class LongDictation(private val context: Context) {
         runCatching { worker.join(WORK_MAX_MS) }
         if (!cancelled) onEnd(ok && modelThere.get())
     }, "mate-long-dictation").apply { start() }
+
+    /** True when the system's recognition heard it all; false when it failed and Whisper has to go on. */
+    private fun systemPieces(onPiece: (String) -> Unit, onWaiting: (Int) -> Unit): Boolean {
+        val am = context.getSystemService(AudioManager::class.java)
+        val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT).build()).build()
+        runCatching { am.requestAudioFocus(focus) }
+        try {
+            while (!stopped) {
+                val l = GoogleAsr.Live(context, pauseMs = 2000).also { live = it }
+                Dictation.listening = true
+                val heard = l.run({ onWaiting(1) }, maxMs = 60_000L)
+                live = null
+                onWaiting(0)
+                if (cancelled) return true
+                if (heard == null) return false
+                heard.firstOrNull()?.let { Dictation.clean(it) }?.takeIf { it.isNotBlank() }?.let(onPiece)
+            }
+            return true
+        } finally {
+            Dictation.listening = false
+            runCatching { am.abandonAudioFocusRequest(focus) }
+        }
+    }
 
     /**
      * Cuts what the microphone brings into stretches of speech: one ends with [PAUSE_MS] of quiet after speech, or

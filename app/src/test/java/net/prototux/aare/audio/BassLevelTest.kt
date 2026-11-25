@@ -86,6 +86,22 @@ class BassLevelTest {
         assertEquals(0.0, b.liftDb, 0.01)
     }
 
+    @Test fun theLiftReachesTheBassNotesNotOnlyTheSub() {
+        // 25.11.2026: songs without deep bass were not lifted - the shelf must reach the bass notes around 100-160 Hz
+        val k = BassLevel.lowShelf(BassLevel.SHELF_HZ.toDouble(), 10.0, rate)
+        fun gainDb(f: Double): Double {
+            val w = 2 * PI * f / rate
+            val c1 = kotlin.math.cos(w); val c2 = kotlin.math.cos(2 * w); val s1 = sin(w); val s2 = sin(2 * w)
+            val nr = k[0] + k[1] * c1 + k[2] * c2; val ni = -(k[1] * s1 + k[2] * s2)
+            val dr = 1 + k[3] * c1 + k[4] * c2; val di = -(k[3] * s1 + k[4] * s2)
+            return 10 * kotlin.math.log10((nr * nr + ni * ni) / (dr * dr + di * di))
+        }
+        assertTrue("80 Hz: ${gainDb(80.0)}", gainDb(80.0) > 9.0)
+        assertTrue("125 Hz: ${gainDb(125.0)}", gainDb(125.0) > 8.0)
+        assertTrue("160 Hz: ${gainDb(160.0)}", gainDb(160.0) > 6.0)
+        assertTrue("500 Hz stays: ${gainDb(500.0)}", gainDb(500.0) < 1.0)
+    }
+
     @Test fun shelfLiftsTheBassByItsGain() {
         // the low shelf's gain at 30 Hz is the lift, at 5 kHz about none
         val k = BassLevel.lowShelf(120.0, 6.0, rate)

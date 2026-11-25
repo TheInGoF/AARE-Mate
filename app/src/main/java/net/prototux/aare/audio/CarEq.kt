@@ -148,7 +148,7 @@ class CarEqProcessor(private val rate: Int, private val channels: Int) {
  * System L-104 (24.11.2026: "Musik mit sehr, sehr wenig Bass … So ein Musik-Bass-Analyzer, dass man ungefähr gleichmäßige
  * Auslastung der Anlage hat"): measures how much of the music's power lies below [SPLIT_HZ] over the last seconds and, when
  * that share is below [ZERO_AT_DB], lifts the bass along a straight line ([liftFor]) with a low shelf at [SHELF_HZ] - at most [MAX_DB], gently ([STEP_DB] per
- * block) so nothing pumps. Bass-rich music stays as it is (never cut). The whole signal goes down by half the lift as
+ * block) so nothing pumps. Bass-rich music stays as it is (never cut). The whole signal goes down by part of the lift ([HEADROOM]) as
  * headroom (a song with little bass gains little in its peaks), so it neither clips nor drops much in loudness. Measured on what comes in, before the lift.
  */
 class BassLevel(private val rate: Int, private val channels: Int) {
@@ -201,9 +201,9 @@ class BassLevel(private val rate: Int, private val channels: Int) {
         if (abs(liftDb - shelfDb) > 0.1) { shelfDb = liftDb; shelf = if (liftDb < 0.05) null else lowShelf(SHELF_HZ.toDouble(), liftDb, rate) }
         say()
         val k = shelf ?: return
-        // little bass to begin with: lifting it raises the peaks only a little - half the lift as headroom is enough,
-        // and the song does not drop in loudness by the whole lift
-        val pre = 10.0.pow(-liftDb / 2 / 20.0)
+        // little bass to begin with: lifting it raises the peaks only a little - part of the lift ([HEADROOM]) as headroom is
+        // enough, and the song does not drop in loudness by the whole lift
+        val pre = 10.0.pow(-liftDb * HEADROOM / 20.0)
         for (ch in 0 until channels) {
             val st = shelfState[ch]
             var x1 = st[0]; var x2 = st[1]; var y1 = st[2]; var y2 = st[3]
@@ -240,7 +240,16 @@ class BassLevel(private val rate: Int, private val channels: Int) {
 
     companion object {
         const val SPLIT_HZ = 150
-        const val SHELF_HZ = 120
+        /**
+         * Where the lift's shelf turns (was 120 Hz: the whole lift only below 60 Hz, at 160 Hz a quarter - 25.11.2026: "eventuell
+         * wirklich nur bei der Kickdrum … manche Songs haben anscheinend nicht mal diesen 80 Hertz Bereich. Da passiert wieder
+         * fast gar nichts"). At 200 Hz: all of it up to 80 Hz (subwoofer, kick), nine tenths at 100 Hz, two thirds at 160 Hz
+         * (bass guitar, the kick's body), half at 200 Hz, a third at 250 Hz - so songs without deep bass get their bass notes
+         * lifted, the ones the speakers carry, not only the sub range they hardly have.
+         */
+        const val SHELF_HZ = 200
+        /** Of the lift, this much is taken off the whole first as headroom (the wider shelf lifts more of the music's power). */
+        const val HEADROOM = 0.6
         /**
          * The line from the song's bass share to its lift (24.11.2026: "Lieder mit wenig Bass, die bleiben bei 0 oder bei 10.
          * Also wäre cool, wenn wir wirklich so eine Kennlinie hinkriegen würden. Also plus 10, plus 0, plus 6"): no lift from

@@ -1803,7 +1803,7 @@ private fun SpeechCard() {
     }
 }
 
-/** Whisper or Android's own recognition (Q-064), and five seconds of your own voice through Android's. */
+/** Whisper or Android's own recognition (Q-064), and a try of Android's with your own voice. */
 @Composable
 private fun SpeechEngine() {
     val ctx = LocalContext.current
@@ -1818,12 +1818,13 @@ private fun SpeechEngine() {
         state = ctx.getString(R.string.speech_try_listening); heard = null
         Thread {
             val r = runCatching {
-                val pcm = recordFive()
-                main.post { state = ctx.getString(R.string.speech_try_thinking) }
-                val t = android.os.SystemClock.elapsedRealtime()
-                val said = net.prototux.aare.speech.GoogleAsr.recognize(ctx.applicationContext, FloatArray(pcm.size) { pcm[it] / 32768f }, 16000)
-                    ?: error("system recognition failed")
-                "„${said.firstOrNull().orEmpty()}“  (${"%.1f".format((android.os.SystemClock.elapsedRealtime() - t) / 1000.0)} s)"
+                // Android's recognizer listens itself and ends at the pause; the time is from the end of speaking
+                var end = 0L
+                val said = net.prototux.aare.speech.GoogleAsr.Live(ctx.applicationContext).run({
+                    end = android.os.SystemClock.elapsedRealtime(); main.post { state = ctx.getString(R.string.speech_try_thinking) }
+                }) ?: error("system recognition failed")
+                val s = if (end > 0) (android.os.SystemClock.elapsedRealtime() - end) / 1000.0 else 0.0
+                if (said.isEmpty()) ctx.getString(R.string.speech_engine_nothing) else "„${said.first()}“  (${"%.1f".format(s)} s)"
             }
             main.post { state = null; heard = r.getOrElse { ctx.getString(R.string.speech_bench_failed) } }
         }.start()
@@ -1850,7 +1851,7 @@ private fun SpeechEngine() {
             } else androidx.compose.material3.OutlinedButton(onClick = {
                 if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) go()
                 else mic.launch(android.Manifest.permission.RECORD_AUDIO)
-            }) { Text(stringResource(R.string.speech_try_start)) }
+            }) { Text(stringResource(R.string.speech_engine_try)) }
             heard?.let { Text(it, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp)) }
         }
     }
