@@ -326,7 +326,7 @@ internal object NaviKeep {
             val t = session.state.value.tripState as? TripState.Navigating
             val r = session.route.value
             if (!guiding.value || t == null || r == null) {
-                forRoute = null; trafficAhead.value = emptyList(); flowAhead.value = emptyList(); saidTraffic.clear(); faster.value = null; aroundClosure.value = false
+                forRoute = null; stillNearEnd = null; trafficAhead.value = emptyList(); flowAhead.value = emptyList(); saidTraffic.clear(); faster.value = null; aroundClosure.value = false
                 if (!guiding.value) { session.knownJams = emptyList(); closuresHandled.clear() }
                 continue
             }
@@ -347,7 +347,14 @@ internal object NaviKeep {
             val crow = end?.let { ChargerIndex.distanceM(Position(longitude = here.lng, latitude = here.lat), Position(longitude = it.lng, latitude = it.lat)) }
             // the car in P, said within the last half minute
             val parked = net.prototux.aare.car.CarData.state.value.gear?.let { it.value == 101 && System.currentTimeMillis() - it.atMillis < 30_000 } == true
-            val need = standNeededS(kmh, t.progress.distanceRemaining, crow, parked)
+            // a planned charging stop or an own stop close by: P there is a break, not the arrival
+            val hereP = Position(longitude = here.lng, latitude = here.lat)
+            val atStop = atCharger.value != null || chargeStops.value.any { ChargerIndex.distanceM(it.charger.at, hereP) < STOP_NEAR_M } ||
+                ownStops.value.any { ChargerIndex.distanceM(it.first, hereP) < STOP_NEAR_M }
+            // for a car gone right now (carGone): standing or in P near the end counts as arrived
+            stillNearEnd = if (!atStop && kmh != null && (kmh < 3.0 || parked) && t.progress.distanceRemaining <= ARRIVE_P_WAY_M)
+                System.currentTimeMillis() to "%.0f m of the way left%s".format(t.progress.distanceRemaining, if (parked) ", in P" else "") else null
+            val need = standNeededS(kmh, t.progress.distanceRemaining, crow, parked && !atStop)
             if (need != null) standing++ else standing = 0
             if (need != null && standing >= need) {
                 standing = 0
@@ -463,9 +470,18 @@ internal object NaviKeep {
     internal const val ARRIVE_WAY_M = 300.0
     internal const val ARRIVE_NEAR_M = 40.0
     internal const val ARRIVE_STAND_S = 5
+    internal const val ARRIVE_P_WAY_M = 2000.0
+    internal const val ARRIVE_P_S = 3
+    private const val STOP_NEAR_M = 300.0
+    /**
+     * 25.11.2026 ("wenn das Fahrzeug sich allgemein länger als 3 Sekunden im Parkmodus befindet. Auch wenn das Ziel dann
+     * vielleicht 300 Meter entfernt ist, weil es in der Fußgängerzone ist"): P held [ARRIVE_P_S] seconds within the last
+     * [ARRIVE_P_WAY_M] of the way is the arrival too - not at a charging or own stop (the caller passes [parked] false there).
+     */
     internal fun standNeededS(kmh: Double?, wayLeftM: Double, crowM: Double?, parked: Boolean): Int? = when {
         kmh == null || kmh >= 3.0 || crowM == null -> null
         parked && crowM <= ARRIVE_CROW_M && wayLeftM <= ARRIVE_WAY_M -> 2
+        parked && wayLeftM <= ARRIVE_P_WAY_M -> ARRIVE_P_S
         crowM <= ARRIVE_NEAR_M && wayLeftM <= ARRIVE_NEAR_M * 2 -> ARRIVE_STAND_S
         else -> null
     }
@@ -523,6 +539,8 @@ internal object NaviKeep {
     @Volatile var away = false
         private set
     private var awayJob: kotlinx.coroutines.Job? = null
+    /** When the guide loop last saw the car standing (or in P) near the end, and how; null while driving or far away. */
+    @Volatile private var stillNearEnd: Pair<Long, String>? = null
 
     /**
      * The car disconnected. A trip being guided waits up to [AWAY_MS], silent, with its route and progress - the car back
@@ -530,6 +548,17 @@ internal object NaviKeep {
      * trip stays saved for "Fortsetzen") and the screen starts empty.
      */
     fun carGone() {
+        // 25.11.2026 ("wenn die Verbindung von Android Auto abbricht, dann habe ich das Ziel ja scheinbar auch erreicht"):
+        // the car stood or was in P near the end a moment ago - the trip is arrived; a drop while driving still waits
+        val still = stillNearEnd?.takeIf { System.currentTimeMillis() - it.first < 5_000 }
+        val m = made
+        if (still != null && guiding.value && testDrive.value != true && m != null) {
+            net.prototux.aare.DiagLog.add("arrived: the car went away standing (${still.second}) - the trip ends")
+            m.first.arriveNow()
+            awayJob?.cancel()
+            awayJob = scope.launch { kotlinx.coroutines.delay(2000); stopNow() }
+            return
+        }
         if (guiding.value && testDrive.value != true && made != null) {
             away = true
             made?.third?.let { it.stop(); it.muted = true }
@@ -556,7 +585,7 @@ internal object NaviKeep {
     }
 
     private fun stopNow() {
-        awayJob?.cancel(); awayJob = null; away = false
+        awayJob?.cancel(); awayJob = null; away = false; stillNearEnd = null
         made?.third?.muted = false
         made?.let { (session, _, speaker) -> session.stop(); speaker.stop() }
         guiding.value = false; routeJson.value = null; drawnLine.value = emptyList(); limits.value = null
