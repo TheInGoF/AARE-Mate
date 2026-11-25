@@ -45,14 +45,23 @@ class LongDictation(private val context: Context) {
         val end = FloatArray(0)
         val modelThere = java.util.concurrent.atomic.AtomicBoolean(true)
         val worker = Thread({
-            val model = runCatching { Dictation.Model.get(context) }.getOrNull()
+            // Android's recognition when chosen (25.11.2026: "gerade da hat es ja gehakt" - Whisper slow and poor on the
+            // long fault notes); Whisper is loaded only for a piece Android's could not do
+            val system = GoogleAsr.chosen(context)
+            var model: com.k2fsa.sherpa.onnx.OfflineRecognizer? = null
+            var loaded = false
+            fun whisper(): com.k2fsa.sherpa.onnx.OfflineRecognizer? {
+                if (!loaded) { loaded = true; model = runCatching { Dictation.Model.get(context) }.getOrNull() }
+                return model
+            }
             try {
-                if (model == null) { modelThere.set(false); return@Thread }
+                if (!system && whisper() == null) { modelThere.set(false); return@Thread }
                 while (true) {
                     val p = pieces.take()
                     if (p === end) break
                     val text = if (cancelled) null else runCatching {
-                        synchronized(Dictation.Model.oneAtATime) { if (cancelled) null else LocalAsr.recognize(model, p, Dictation.RATE) }
+                        (if (system) GoogleAsr.recognize(context, p, Dictation.RATE)?.let { it.firstOrNull().orEmpty() } else null)
+                            ?: whisper()?.let { m -> synchronized(Dictation.Model.oneAtATime) { if (cancelled) null else LocalAsr.recognize(m, p, Dictation.RATE) } }
                     }.onFailure { Log.w(TAG, "a piece was not understood", it) }.getOrNull()
                     val left = waiting.decrementAndGet()
                     if (cancelled) continue
@@ -60,7 +69,7 @@ class LongDictation(private val context: Context) {
                     onWaiting(left)
                 }
             } finally {
-                Dictation.Model.done()
+                if (loaded) Dictation.Model.done()
             }
         }, "mate-long-asr").apply { start() }
 
