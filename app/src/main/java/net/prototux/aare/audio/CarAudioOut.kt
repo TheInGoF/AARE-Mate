@@ -193,7 +193,7 @@ class CarAudioOut(
                 // has its focus back): the warning tone is 0.6 s of sound, its stream was over after 3.6 s - spoken
                 // prompts, after which the music nearly always comes back, last longer. A trial: the car may need the
                 // time to finish lowering the music before it can raise it again.
-                } else if (playing && now - lastSound > SILENCE_MS && (eq != null || now - startedAt > MIN_PROMPT_MS)) {
+                } else if (playing && now - lastSound > (if (eq != null) SILENCE_MS else PROMPT_SILENCE_MS) && (eq != null || now - startedAt > MIN_PROMPT_MS)) {
                     if (eq == null) net.prototux.aare.DiagLog.add("navigation sound: ended, music asked back")
                     channel.stopPlayback()
                     focus.request(false)
@@ -250,10 +250,17 @@ class CarAudioOut(
 
     companion object {
         private const val TAG = "AareAudioOut"
+        /**
+         * Silence after which a stream ends; for prompts (26.11.2026: "Die Pause nach Sprachansagen und Hinweistönen wäre
+         * auch cool, wenn wir die wieder minimieren" - log 25.11.: a prompt of 17:57:50, the music back at 17:57:57) 1.2 s
+         * and at least [MIN_PROMPT_MS] in all; the music's own stream keeps 3 s.
+         */
         private const val SILENCE_MS = 3_000L
+        private const val PROMPT_SILENCE_MS = 1_200L
         /** A sample this loud on both sides of a run of silence makes the run a gap, not a pause between words. */
         private const val LOUD = 2_000
-        private const val MIN_PROMPT_MS = 6_000L
+        /** Was 6 s (18.11.2026, a trial when the music did not come back after a beep); the music is now asked back the way chosen then (RELEASE_FIRST). */
+        private const val MIN_PROMPT_MS = 2_500L
         /** About 1 s of 20 ms chunks kept while waiting for the car's focus grant. */
         private const val MAX_QUEUED = 50
         /** Backlog kept once media plays (~240 ms). */
