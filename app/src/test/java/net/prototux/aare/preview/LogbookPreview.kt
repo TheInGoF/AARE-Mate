@@ -46,16 +46,16 @@ class LogbookPreview {
         File(dir, "10-fahrtenbuch-server.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    /** System I-141: assigning as in IDmate - ticks, and the purposes on a trip without one. */
+    /** System I-141, L-112: assigning as in IDmate - ticks, the purposes in their colours. */
     @Test fun serverMonthAssign() {
         if (System.getProperty("preview") == null) return
         val m = net.prototux.aare.dash.ServerLogbook.parseMonth(JSONObject(javaClass.classLoader!!.getResource("idmate/logbook.json")!!.readText()))
-        val o = net.prototux.aare.dash.ServerLogbook.parseOptions(JSONObject(javaClass.classLoader!!.getResource("idmate/logbook_options.json")!!.readText()))
+        val o = net.prototux.aare.dash.ServerLogbook.parseOptions(JSONObject(javaClass.classLoader!!.getResource("idmate/logbook_options_usage.json")!!.readText()))
         val first = m.rows.first { it.kind == net.prototux.aare.dash.ServerLogbook.TRIP }.trips.first()
         rule.setContent {
             net.prototux.aare.ui.theme.PhoneTheme(dark = false) {
                 Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).verticalScroll(rememberScrollState()).padding(20.dp)) {
-                    net.prototux.aare.ui.ServerLogbookMonth(m, net.prototux.aare.ui.Pick(setOf(first), {}, o.purposes) { _, _ -> }) {}
+                    net.prototux.aare.ui.ServerLogbookMonth(m, o, net.prototux.aare.ui.Pick(setOf(first)) {}) {}
                 }
             }
         }

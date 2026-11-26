@@ -1,0 +1,48 @@
+{
+ "data": {
+  "destinations": [
+   "Firma A",
+   "Firma B",
+   "Kunde C"
+  ],
+  "edit": false,
+  "purposes": [
+   {
+    "color": "#d29922",
+    "main": true,
+    "name": "Kunde",
+    "private": false
+   },
+   {
+    "color": "#8b949e",
+    "main": false,
+    "name": "Privat",
+    "private": true
+   }
+  ],
+  "usage_30d": {
+   "destination": {
+    "Firma A": 1,
+    "Firma B": 2,
+    "Kunde C": 1
+   },
+   "purpose": {
+    "Kunde": 6,
+    "Privat": 2
+   },
+   "visit_reason": {
+    "Besprechung": 1,
+    "Lieferung": 2
+   }
+  },
+  "visit_reasons": [
+   "Besprechung",
+   "Lieferung"
+  ]
+ },
+ "seq": 1,
+ "src": "backend",
+ "ts": "2026-11-26T21:50:41Z",
+ "type": "logbook_options",
+ "v": 1
+}

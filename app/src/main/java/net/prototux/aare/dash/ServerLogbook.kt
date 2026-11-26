@@ -73,8 +73,41 @@ object ServerLogbook {
         val open: Int get() = rows.count { it.kind == OPEN }
     }
 
-    data class Purpose(val name: String, val private: Boolean)
-    data class Options(val edit: Boolean, val purposes: List<Purpose>, val destinations: List<String>, val visitReasons: List<String>)
+    /** A purpose as the server keeps it: private ones count as private trips, [main] is the pinned one of the quick button. */
+    data class Purpose(val name: String, val private: Boolean, val main: Boolean = false, val color: Int? = null)
+
+    /**
+     * What to pick from (System L-112, IDMate L-014): the lists, and [usage] - for [PURPOSE], [DESTINATION] and [REASON]
+     * how often each value was used on the vehicle in the last 30 days, as IDmate's trip list counts it.
+     */
+    data class Options(val edit: Boolean, val purposes: List<Purpose>, val destinations: List<String>, val visitReasons: List<String>,
+                       val usage: Map<String, Map<String, Int>> = emptyMap()) {
+        val main: Purpose? get() = purposes.firstOrNull { it.main }
+        fun color(purpose: String?): Int? = purposes.firstOrNull { it.name == purpose }?.color
+        /** The values of [field] to pick from, as IDmate's picker lists them ([ordered]). */
+        fun choices(field: String): Choices = ordered(when (field) {
+            PURPOSE -> purposes.map { it.name }; DESTINATION -> destinations; else -> visitReasons
+        }, usage[field].orEmpty())
+    }
+
+    /** A picker's list: [used] (value and its 30-day count, most used first), then the [rest] alphabetically. */
+    data class Choices(val used: List<Pair<String, Int>>, val rest: List<String>)
+
+    /**
+     * IDmate's picker (trips.html makePicker): the values used lately first, most used on top (equal counts by name), a line,
+     * then the others alphabetically - values only in the counts are offered too.
+     */
+    fun ordered(values: List<String>, counts: Map<String, Int>): Choices {
+        val byName = java.text.Collator.getInstance(java.util.Locale.getDefault())
+        val all = (values + counts.keys).filter { it.isNotEmpty() }.distinct()
+        val used = all.filter { (counts[it] ?: 0) > 0 }.sortedWith(compareByDescending<String> { counts[it] ?: 0 }.thenComparator { a, b -> byName.compare(a, b) })
+        val rest = all.filter { (counts[it] ?: 0) <= 0 }.sortedWith { a, b -> byName.compare(a, b) }
+        return Choices(used.map { it to (counts[it] ?: 0) }, rest)
+    }
+
+    const val PURPOSE = "purpose"
+    const val DESTINATION = "destination"
+    const val REASON = "visit_reason"
 
     const val TRIP = "trip"
     const val OPEN = "open"
@@ -204,11 +237,19 @@ object ServerLogbook {
     internal fun parseOptions(telegram: JSONObject): Options {
         val d = telegram.getJSONObject("data")
         val p = d.optJSONArray("purposes")
+        val u = d.optJSONObject("usage_30d")
+        fun counts(field: String) = u?.optJSONObject(field)?.let { o -> o.keys().asSequence().associateWith { o.optInt(it) } }.orEmpty()
         return Options(
             d.optBoolean("edit"),
-            (0 until (p?.length() ?: 0)).map { p!!.getJSONObject(it).let { o -> Purpose(o.optString("name"), o.optBoolean("private")) } }
+            (0 until (p?.length() ?: 0)).map { p!!.getJSONObject(it).let { o ->
+                Purpose(o.optString("name"), o.optBoolean("private"), o.optBoolean("main"), o.str("color")?.let(::color)) } }
                 .filter { it.name.isNotEmpty() },
             d.optJSONArray("destinations").strings(), d.optJSONArray("visit_reasons").strings(),
+            mapOf(PURPOSE to counts(PURPOSE), DESTINATION to counts(DESTINATION), REASON to counts(REASON)),
         )
     }
+
+    /** "#rrggbb" as ARGB, null for anything else. */
+    internal fun color(hex: String): Int? = hex.trim().removePrefix("#").takeIf { it.length == 6 }
+        ?.toLongOrNull(16)?.let { (0xFF000000 or it).toInt() }
 }

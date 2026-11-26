@@ -1575,10 +1575,8 @@
     <string name="logbook_route_404">Den Weg liefert IDmate erst ab Version 1.2.359</string>
     <string name="logbook_map_bigger">Größer</string>
     <string name="logbook_map_smaller">Kleiner</string>
-    <string name="logbook_assign_hint">Zuordnen: Bei einer Fahrt ohne Zweck den Zweck direkt antippen – oder Haken setzen und oben für alle zuordnen. Eine Fahrt antippen zeigt Karte und Werte.</string>
+    <string name="logbook_assign_hint">Zuordnen wie in IDmate: Haken an die Fahrten setzen, unten den Hauptzweck antippen oder Zweck, Fahrziel und Besuchsgrund wählen und „Anwenden“. Eine Fahrt antippen zeigt Karte und Werte, dort lässt sich jedes Feld einzeln ändern.</string>
     <string name="logbook_assign_only_open">Nur ohne Zweck (%1$d)</string>
-    <string name="logbook_assign_quick">Zuordnen:</string>
-    <string name="logbook_assign_apply">Zuordnen</string>
     <string name="logbook_assign_clear">Auswahl aufheben</string>
     <string name="logbook_assign_failed">%1$d nicht gespeichert: %2$s</string>
     <string name="logbook_edit_off_title">Zuordnen ist auf dem Server noch aus</string>
@@ -1586,18 +1584,25 @@
         <item quantity="one">%1$d Fahrt zugeordnet – steht auch in IDmate.</item>
         <item quantity="other">%1$d Fahrten zugeordnet – stehen auch in IDmate.</item>
     </plurals>
-    <plurals name="logbook_assign_selected">
-        <item quantity="one">%1$d Fahrt ausgewählt</item>
-        <item quantity="other">%1$d Fahrten ausgewählt</item>
-    </plurals>
+    <string name="logbook_select_all">Alle auswählen</string>
+    <string name="logbook_batch_selected">%1$d ausgewählt</string>
+    <string name="logbook_batch_apply">Anwenden</string>
+    <string name="logbook_pick_purpose">…Zweck</string>
+    <string name="logbook_pick_destination">…Fahrziel</string>
+    <string name="logbook_pick_reason">…Besuchsgrund</string>
+    <string name="logbook_pick_keep">nicht ändern</string>
+    <string name="logbook_pick_clear">löschen</string>
+    <string name="logbook_pick_clear_set">%1$s löschen</string>
+    <string name="logbook_pick_new">Neu …</string>
+    <string name="logbook_field_purpose">Zweck</string>
+    <string name="logbook_field_destination">Fahrziel</string>
+    <string name="logbook_field_reason">Besuchsgrund</string>
+    <string name="logbook_clear_confirm">%1$s löschen?</string>
     <string name="logbook_edit_title">Fahrt im Fahrtenbuch</string>
     <string name="logbook_edit_purpose">Zweck</string>
-    <string name="logbook_edit_partner">Geschäftspartner</string>
-    <string name="logbook_edit_occasion">Anlass</string>
     <string name="logbook_edit_note">Notiz</string>
     <string name="logbook_edit_save">Speichern</string>
     <string name="logbook_edit_failed">Nicht gespeichert: %1$s</string>
-    <string name="logbook_edit_private_hint">Eine Privatfahrt braucht keinen Partner und keinen Anlass.</string>
     <plurals name="logbook_server_open">
         <item quantity="one">%d Fahrt ohne Zweck</item>
         <item quantity="other">%d Fahrten ohne Zweck</item>
