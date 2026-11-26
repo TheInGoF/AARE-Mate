@@ -383,6 +383,8 @@ class ProjectionService : Service() {
         val cert = certs.pick(settings.certificateIndex)
         log("connecting ${transport.name} with certificate \"${cert.key}\"")
         acquireWakeLock(wireless)
+        // what the battery lost while the car was away (System I-135)
+        BatteryWatch.carBack(this)
         sessionStart = SystemClock.elapsedRealtime()
         val s = CarSession(this, transport, cert.identity, settings, media, { projection }, wireless, peerKey, trustOnFirstUse, sessionListener, mirror)
         session = s
@@ -401,6 +403,7 @@ class ProjectionService : Service() {
             if (destroyed || this@ProjectionService.session !== session) return
             this@ProjectionService.session = null
             releaseWakeLock()
+            BatteryWatch.carGone(this@ProjectionService)
             if (lanSession && pinRefusal != null && tcpServerLan) {
                 // Refused at the handshake, before any car screen: keep listening so it can reconnect after Trust.
                 lanSession = false
