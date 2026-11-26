@@ -950,7 +950,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             if (net.prototux.aare.dash.DashData.charging(context)) watch.reset()
             else if (bt != null && at > lastAt) {
                 lastAt = at
-                watch.reading(bt, at)?.let { rate -> if (out != null) {
+                watch.reading(bt, at, net.prototux.aare.dash.DashData.sourceOf(context, "t_batt"))?.let { rate -> if (out != null) {
                     val r = NaviPreheat.Rates.of(context).learn(out, rate)
                     NaviPreheat.Rates.save(context, r)
                     net.prototux.aare.DiagLog.add("battery warm: %.2f K/min seen at %.0f °C outside - %s".format(java.util.Locale.ROOT, rate, out, r), area = "CHARGE")
@@ -973,8 +973,12 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     LaunchedEffect(preheat?.first) {
         val (c, a) = preheat ?: return@LaunchedEffect
         if (c === preheatLeft || !preheatSaid.add(c)) return@LaunchedEffect
-        net.prototux.aare.DiagLog.add("battery warm: start now - %.0f °C, %.0f min to %.0f °C, about %.1f kWh, %d kW charger".format(java.util.Locale.ROOT,
-            a.fromC, a.minutes, NaviPreheat.TARGET_C, a.kwh, c.kw), area = "CHARGE")
+        // what the time rests on (I-065): the rate and how many warmings it was learned from, the reading's source and age
+        val out = net.prototux.aare.dash.DashData.outsideCelsius(context)
+        val age = (System.currentTimeMillis() - net.prototux.aare.dash.DashData.batteryAtMs(context)) / 60_000
+        net.prototux.aare.DiagLog.add("battery warm: start now - %.0f °C, %.0f min to %.0f °C, about %.1f kWh, %d kW charger; at %s, outside %s, battery read %d min ago (%s)".format(java.util.Locale.ROOT,
+            a.fromC, a.minutes, NaviPreheat.TARGET_C, a.kwh, c.kw, NaviPreheat.Rates.of(context).said(out),
+            out?.let { "%.0f °C".format(java.util.Locale.ROOT, it) } ?: "unknown", age, net.prototux.aare.dash.DashData.sourceOf(context, "t_batt") ?: "?"), area = "CHARGE")
         // a tone is enough, no words (22.11.2026: "Dafür muss er aber nicht unbedingt eine Navi-Ansage machen … sondern ein
         // Hinweiston würde reichen"); the hint itself blinks three times (NaviPreheatHint)
         if (voiceMode != NaviSpeaker.Mode.MUTE && !NaviKeep.away) NaviSpeedAlert.play(NaviSpeedAlert.Companion.Tone.DOUBLE, 0.8f, 1)

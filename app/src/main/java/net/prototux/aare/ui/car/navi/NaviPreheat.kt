@@ -26,9 +26,16 @@ internal object NaviPreheat {
     const val HEATER_KW = 5.0
     /** A little more than the warming takes, so the battery is warm on arrival and not only then. */
     const val MARGIN_MIN = 8.0
-    /** Rates outside this are no warming (a reading jumped, the car stood in the sun). */
+    /**
+     * Rates outside this are no warming by the heater (a reading jumped, the car stood in the sun, it charged). Navi I-065
+     * (26.11.2026: "die Zeiten … sehr spät oder fast zu spät"): 3 K/min let one jump of 1.45 K/min through, and with it every
+     * hint thought 25 K took 17 min; the MEB's heater does some 0.25-0.5 K/min.
+     */
     const val MIN_RATE = 0.08
-    const val MAX_RATE = 3.0
+    const val MAX_RATE = 0.8
+    /** Until a band has [TRUST_N] warmings, its rate counts at most this fast: rather a hint too early than too late. */
+    const val CAUTIOUS_RATE = 0.5
+    const val TRUST_N = 3
 
     /** The hint: start now, it takes [minutes] and about [kwh] (from [fromC] to [TARGET_C]). */
     class Advice(val minutes: Double, val kwh: Double, val fromC: Double)
@@ -58,11 +65,27 @@ internal object NaviPreheat {
     class Rates(private val seen: Map<Int, List<Double>> = emptyMap()) {
         private fun band(c: Double) = Math.floorDiv(Math.floor(c).toInt(), BAND_C) * BAND_C
 
-        fun at(outsideC: Double?): Double {
-            if (seen.isEmpty() || outsideC == null) return seen.values.flatten().takeIf { it.isNotEmpty() }?.average() ?: START_RATE_K_MIN
+        /** The warmings the rate at [outsideC] rests on: its band's, the nearest band's, or all; empty without any. */
+        private fun basis(outsideC: Double?): List<Double> {
+            if (seen.isEmpty()) return emptyList()
+            if (outsideC == null) return seen.values.flatten()
             val b = band(outsideC)
-            val near = seen.keys.minByOrNull { Math.abs(it - b) } ?: return START_RATE_K_MIN
-            return seen.getValue(near).average()
+            return seen.getValue(seen.keys.minByOrNull { Math.abs(it - b) }!!)
+        }
+
+        /** The middle one of the warmings seen (one odd reading does not pull it); a few only: at most [CAUTIOUS_RATE]. */
+        fun at(outsideC: Double?): Double {
+            val l = basis(outsideC).sorted()
+            if (l.isEmpty()) return START_RATE_K_MIN
+            val median = if (l.size % 2 == 1) l[l.size / 2] else (l[l.size / 2 - 1] + l[l.size / 2]) / 2
+            return if (l.size < TRUST_N) minOf(median, CAUTIOUS_RATE) else median
+        }
+
+        /** What the rate at [outsideC] rests on, for the log. */
+        fun said(outsideC: Double?): String {
+            val n = basis(outsideC).size
+            return "%.2f K/min (%s)".format(java.util.Locale.ROOT, at(outsideC),
+                if (n == 0) "start value" else if (n < TRUST_N) "$n warming(s) seen, held back" else "$n warmings seen")
         }
 
         /** A warming of [kPerMin] seen at [outsideC]: kept, unless it is no warming. */
@@ -82,7 +105,10 @@ internal object NaviPreheat {
             const val KEEP = 10
             fun decode(s: String?): Rates = Rates(runCatching {
                 s.orEmpty().split(';').filter { it.contains(':') }.associate { part ->
-                    val (b, l) = part.split(':'); b.toInt() to l.split(',').filter { it.isNotBlank() }.map { it.toDouble() } }
+                    val (b, l) = part.split(':'); b.toInt() to l.split(',').filter { it.isNotBlank() }.map { it.toDouble() }
+                        // kept before the bounds were narrowed (I-065): what is no heater's warming goes
+                        .filter { it in MIN_RATE..MAX_RATE } }
+                    .filterValues { it.isNotEmpty() }
             }.getOrDefault(emptyMap()))
 
             private fun prefs(c: Context) = c.getSharedPreferences("battery_warm", Context.MODE_PRIVATE)
@@ -98,14 +124,20 @@ internal object NaviPreheat {
      */
     class Watch {
         private var startC = Double.NaN; private var startMs = 0L; private var lastC = Double.NaN
+        private var lastMs = 0L; private var lastSource: String? = null
 
         /** Nothing seen so far counts (the car charged meanwhile). */
-        fun reset() { startC = Double.NaN; lastC = Double.NaN; startMs = 0L }
+        fun reset() { startC = Double.NaN; lastC = Double.NaN; startMs = 0L; lastMs = 0L; lastSource = null }
 
-        /** A reading of [batteryC] at [atMs]; the rate in K/min when a warming has just been seen, else null. */
-        fun reading(batteryC: Double, atMs: Long): Double? {
-            if (lastC.isNaN() || batteryC < lastC - 0.5 || atMs - startMs > WINDOW_MIN * 60_000) { startC = batteryC; startMs = atMs }
-            lastC = batteryC
+        /**
+         * A reading of [batteryC] at [atMs] from [source] ("stick", "backend" …); the rate in K/min when a warming has just
+         * been seen, else null. A gap of more than [GAP_MIN] or another source starts anew (I-065: an old server value
+         * followed by the stick's looked like a fast warming).
+         */
+        fun reading(batteryC: Double, atMs: Long, source: String? = null): Double? {
+            val jump = lastMs > 0 && (atMs - lastMs > GAP_MIN * 60_000 || source != lastSource)
+            if (lastC.isNaN() || jump || batteryC < lastC - 0.5 || atMs - startMs > WINDOW_MIN * 60_000) { startC = batteryC; startMs = atMs }
+            lastC = batteryC; lastMs = atMs; lastSource = source
             val min = (atMs - startMs) / 60_000.0
             if (min < MIN_SPAN_MIN || batteryC - startC < RISE_C) return null
             val rate = (batteryC - startC) / min
@@ -118,6 +150,8 @@ internal object NaviPreheat {
             const val RISE_C = 2.0
             const val WINDOW_MIN = 40
             const val MIN_SPAN_MIN = 5.0
+            /** Readings further apart than this are no watch of one warming. */
+            const val GAP_MIN = 6
         }
     }
 }
