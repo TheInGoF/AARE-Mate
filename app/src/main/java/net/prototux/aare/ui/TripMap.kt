@@ -22,6 +22,7 @@ import org.maplibre.compose.layers.LineLayer
 import org.maplibre.compose.map.MapOptions
 import org.maplibre.compose.map.MaplibreMap
 import org.maplibre.compose.map.OrnamentOptions
+import org.maplibre.compose.map.RenderOptions
 import org.maplibre.compose.sources.GeoJsonData
 import org.maplibre.compose.sources.rememberGeoJsonSource
 import org.maplibre.compose.style.BaseStyle
@@ -37,6 +38,10 @@ import org.maplibre.spatialk.geojson.Position
 internal fun TripRouteMap(route: ServerLogbook.Route, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     net.prototux.aare.ui.car.Mate.init(ctx)
+    // the map server's token on MapLibre's downloads (System I-140, 26.11.2026: "die Map im Fahrtenbuch irgendwie verpixelt"):
+    // in the phone app only Mate Navi had set it up - without it the server refused the fine tiles and coarse ones were
+    // stretched over the map
+    remember { net.prototux.aare.ui.car.navi.NaviServer.install(ctx) }
     val dark = isSystemInDarkTheme()
     val box = route.box
     val mid = box?.let { Position(longitude = (it[0] + it[2]) / 2, latitude = (it[1] + it[3]) / 2) } ?: Position(longitude = 10.45, latitude = 51.16)
@@ -49,8 +54,10 @@ internal fun TripRouteMap(route: ServerLogbook.Route, modifier: Modifier = Modif
         if (b[2] - b[0] < 0.002 && b[3] - b[1] < 0.002) runCatching { camera.animateTo(CameraPosition(target = mid, zoom = 15.0)) }
         else runCatching { camera.animateTo(BoundingBox(b[0], b[1], b[2], b[3]), 0.0, 0.0, PaddingValues(28.dp)) }
     }
+    // drawn as a texture: part of the page (rounded corners, scrolling, the dialog) instead of a surface of its own beneath it
     MaplibreMap(modifier = modifier, baseStyle = style, cameraState = camera,
-        options = remember { MapOptions(ornamentOptions = OrnamentOptions.AllDisabled) }) {
+        options = remember { MapOptions(renderOptions = RenderOptions.Standard.copy(renderMode = RenderOptions.RenderMode.TextureView),
+            ornamentOptions = OrnamentOptions.AllDisabled) }) {
         val line = rememberGeoJsonSource(remember(route.id) { GeoJsonData.JsonString(route.lineJson()) })
         LineLayer(id = "trip-way-halo", source = line, color = const(if (dark) Color(0xFF0D1117) else Color.White), width = const(7.dp),
             cap = const(LineCap.Round), join = const(LineJoin.Round))

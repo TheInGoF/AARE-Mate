@@ -1566,6 +1566,23 @@
     <string name="logbook_route_none">Für diese Fahrt hat IDmate keinen Weg.</string>
     <string name="logbook_route_failed">Weg nicht geladen: %1$s</string>
     <string name="logbook_route_404">Den Weg liefert IDmate erst ab Version 1.2.359</string>
+    <string name="logbook_map_bigger">Größer</string>
+    <string name="logbook_map_smaller">Kleiner</string>
+    <string name="logbook_assign_hint">Zuordnen: Bei einer Fahrt ohne Zweck den Zweck direkt antippen – oder Haken setzen und oben für alle zuordnen. Eine Fahrt antippen zeigt Karte und Werte.</string>
+    <string name="logbook_assign_only_open">Nur ohne Zweck (%1$d)</string>
+    <string name="logbook_assign_quick">Zuordnen:</string>
+    <string name="logbook_assign_apply">Zuordnen</string>
+    <string name="logbook_assign_clear">Auswahl aufheben</string>
+    <string name="logbook_assign_failed">%1$d nicht gespeichert: %2$s</string>
+    <string name="logbook_edit_off_title">Zuordnen ist auf dem Server noch aus</string>
+    <plurals name="logbook_assign_done">
+        <item quantity="one">%1$d Fahrt zugeordnet – steht auch in IDmate.</item>
+        <item quantity="other">%1$d Fahrten zugeordnet – stehen auch in IDmate.</item>
+    </plurals>
+    <plurals name="logbook_assign_selected">
+        <item quantity="one">%1$d Fahrt ausgewählt</item>
+        <item quantity="other">%1$d Fahrten ausgewählt</item>
+    </plurals>
     <string name="logbook_edit_title">Fahrt im Fahrtenbuch</string>
     <string name="logbook_edit_purpose">Zweck</string>
     <string name="logbook_edit_partner">Geschäftspartner</string>

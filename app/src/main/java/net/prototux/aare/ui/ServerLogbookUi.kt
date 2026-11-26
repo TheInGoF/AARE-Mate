@@ -72,6 +72,25 @@ internal fun ServerLogbookView() {
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
     var opened by remember { mutableStateOf<ServerLogbook.Item?>(null) }
+    // assigning as in IDmate's trip list (System I-141, 26.11.2026: "Dann weiß ich nicht, wie ich Fahrten zuordne"): ticks on
+    // trips, then purpose, partner and occasion for all of them; a trip without purpose takes a purpose with one tap
+    var selected by remember(ym) { mutableStateOf(setOf<Long>()) }
+    var onlyOpen by remember { mutableStateOf(false) }
+    var assignNote by remember { mutableStateOf<String?>(null) }
+    var assigning by remember { mutableStateOf(false) }
+    fun assign(ids: Collection<Long>, fields: Map<String, String>) {
+        if (ids.isEmpty() || fields.isEmpty()) return
+        assigning = true; assignNote = null
+        scope.launch {
+            var failed = 0; var why: String? = null
+            withContext(Dispatchers.IO) {
+                ids.forEach { id -> runCatching { ServerLogbook.edit(ctx, id, fields) }.onFailure { failed++; if (why == null) why = ShownFailure.text(ctx, it) } }
+            }
+            assignNote = if (failed == 0) ctx.resources.getQuantityString(R.plurals.logbook_assign_done, ids.size, ids.size)
+                else ctx.getString(R.string.logbook_assign_failed, failed, why.orEmpty())
+            selected = emptySet(); assigning = false; reload++
+        }
+    }
     LaunchedEffect(ym, reload) {
         loading = true
         withContext(Dispatchers.IO) { runCatching { ServerLogbook.month(ctx, ym?.first, ym?.second) } }
@@ -107,25 +126,73 @@ internal fun ServerLogbookView() {
         }
         if (m.open > 0) Text(pluralStringResource(R.plurals.logbook_server_open, m.open, m.open),
             style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.error)
-        if (!m.edit) Text(stringResource(R.string.logbook_server_edit_off), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ServerLogbookMonth(m) { id -> m.item(id)?.let { opened = it } }
+        if (!m.edit) LogCard {
+            Text(stringResource(R.string.logbook_edit_off_title), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.logbook_server_edit_off), style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Text(stringResource(R.string.logbook_assign_hint), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (m.open > 0 || onlyOpen) FilterChip(onlyOpen, { onlyOpen = !onlyOpen }, label = { Text(stringResource(R.string.logbook_assign_only_open, m.open)) })
+        }
+        assignNote?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium) }
+        if (m.edit && selected.isNotEmpty()) AssignBatch(selected.size, options, assigning, onClear = { selected = emptySet() }) { assign(selected, it) }
+        val pick = if (m.edit) Pick(selected, { id -> selected = if (id in selected) selected - id else selected + id },
+            options?.purposes.orEmpty()) { id, purpose -> assign(listOf(id), mapOf("purpose" to purpose)) } else null
+        ServerLogbookMonth(m, pick, onlyOpen) { id -> m.item(id)?.let { opened = it } }
     }
 }
 
-/** The rows and totals of [m]; [open] a trip (by id) to edit it. Without loading, for the page and its preview. */
+/** Trips picked to assign ([selected], [toggle]) and the purposes to take with one tap ([quick] a trip with one). */
+internal class Pick(val selected: Set<Long>, val toggle: (Long) -> Unit, val purposes: List<ServerLogbook.Purpose>,
+                    val quick: (Long, String) -> Unit)
+
+/**
+ * The rows and totals of [m]; [open] a trip (by id) to see it. With [pick] (the server allows editing) ticks to choose
+ * trips and purposes on the trips without one; [onlyOpen] only those. Without loading, for the page and its preview.
+ */
 @Composable
-internal fun ServerLogbookMonth(m: ServerLogbook.Month, open: (Long) -> Unit) {
+internal fun ServerLogbookMonth(m: ServerLogbook.Month, pick: Pick? = null, onlyOpen: Boolean = false, open: (Long) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (m.rows.isEmpty()) Text(stringResource(R.string.logbook_server_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        m.rows.forEach { r ->
+        // newest at the top (System I-139, 26.11.2026: "Fahrtenbuch, neueste immer oben"); a gap stays between its two rows
+        m.rows.asReversed().filter { !onlyOpen || it.kind == ServerLogbook.OPEN }.forEach { r ->
             when (r.kind) {
                 ServerLogbook.GAP -> GapRow(r)
-                ServerLogbook.PRIVATE -> PrivateRow(r, m, open)
-                else -> TripRow(r) { r.trips.firstOrNull()?.let(open) }
+                ServerLogbook.PRIVATE -> PrivateRow(r, m, pick, open)
+                else -> TripRow(r, pick) { r.trips.firstOrNull()?.let(open) }
             }
         }
-        if (m.rows.isNotEmpty()) TotalsCard(m.totals)
+        if (m.rows.isNotEmpty() && !onlyOpen) TotalsCard(m.totals)
+    }
+}
+
+/** Purpose, partner and occasion for all [count] picked trips (IDmate's bar under its trip list). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AssignBatch(count: Int, options: ServerLogbook.Options?, busy: Boolean, onClear: () -> Unit, apply: (Map<String, String>) -> Unit) {
+    var purpose by remember { mutableStateOf("") }
+    var partner by remember { mutableStateOf("") }
+    var occasion by remember { mutableStateOf("") }
+    val private = options?.purposes?.firstOrNull { it.name == purpose }?.private == true
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.primaryContainer).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(pluralStringResource(R.plurals.logbook_assign_selected, count, count), style = MaterialTheme.typography.titleMedium)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options?.purposes.orEmpty().forEach { p -> FilterChip(purpose == p.name, { purpose = if (purpose == p.name) "" else p.name }, label = { Text(p.name) }) }
+        }
+        if (!private) {
+            SuggestField(stringResource(R.string.logbook_edit_partner), partner, options?.destinations.orEmpty()) { partner = it }
+            SuggestField(stringResource(R.string.logbook_edit_occasion), occasion, options?.visitReasons.orEmpty()) { occasion = it }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.Button(enabled = !busy && (purpose.isNotEmpty() || partner.isNotBlank() || occasion.isNotBlank()), onClick = {
+                apply(linkedMapOf<String, String>().apply {
+                    if (purpose.isNotEmpty()) put("purpose", purpose)
+                    if (!private && partner.isNotBlank()) put("destination", partner.trim())
+                    if (!private && occasion.isNotBlank()) put("visit_reason", occasion.trim())
+                })
+            }) { Text(stringResource(R.string.logbook_assign_apply)) }
+            TextButton(enabled = !busy, onClick = onClear) { Text(stringResource(R.string.logbook_assign_clear)) }
+        }
     }
 }
 
@@ -160,17 +227,29 @@ private fun km(v: Double?) = logNum(v, 1)
 private fun odo(v: Double?) = logNum(v, 0)
 
 @Composable
-private fun TripRow(r: ServerLogbook.Row, onClick: () -> Unit) {
+@OptIn(ExperimentalLayoutApi::class)
+private fun TripRow(r: ServerLogbook.Row, pick: Pick?, onClick: () -> Unit) {
     val unknown = stringResource(R.string.logbook_place_unknown)
+    val id = r.trips.firstOrNull()
     LogCard(onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            if (pick != null && id != null) androidx.compose.material3.Checkbox(id in pick.selected, { pick.toggle(id) })
             Text(r.startMs?.let { "${logDay(it)}, ${logTime(it)}" + (r.endMs?.let { e -> "–" + logTime(e) } ?: "") }.orEmpty(),
                 style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             Text(stringResource(R.string.logbook_server_km, km(r.distance)), style = MaterialTheme.typography.titleSmall)
         }
         Text("${r.from ?: unknown} → ${r.to ?: unknown}", style = MaterialTheme.typography.bodyLarge)
-        if (r.kind == ServerLogbook.OPEN) Text(stringResource(R.string.logbook_server_no_purpose), color = MaterialTheme.colorScheme.error,
-            fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+        if (r.kind == ServerLogbook.OPEN) {
+            Text(stringResource(R.string.logbook_server_no_purpose), color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+            // one tap: this trip takes the purpose
+            if (pick != null && id != null && pick.purposes.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.Center) {
+                Text(stringResource(R.string.logbook_assign_quick), style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.align(Alignment.CenterVertically))
+                pick.purposes.forEach { p -> SuggestionChip(onClick = { pick.quick(id, p.name) }, label = { Text(p.name) }) }
+            }
+        }
         else Text(listOfNotNull(r.purpose, r.destination, r.visitReason).joinToString(" · "), color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.bodyMedium)
         r.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic) }
@@ -180,7 +259,7 @@ private fun TripRow(r: ServerLogbook.Row, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PrivateRow(r: ServerLogbook.Row, m: ServerLogbook.Month, open: (Long) -> Unit) {
+private fun PrivateRow(r: ServerLogbook.Row, m: ServerLogbook.Month, pick: Pick?, open: (Long) -> Unit) {
     var shown by remember(r.trips) { mutableStateOf(false) }
     LogCard(onClick = { shown = !shown }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -193,10 +272,11 @@ private fun PrivateRow(r: ServerLogbook.Row, m: ServerLogbook.Month, open: (Long
         Text(stringResource(R.string.logbook_server_odo, odo(r.odoStart), odo(r.odoEnd)), style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         // the single trips, e.g. to make one of them a business trip
-        if (shown) r.trips.mapNotNull(m::item).forEach { t ->
+        if (shown) r.trips.mapNotNull(m::item).sortedByDescending { it.startMs ?: 0L }.forEach { t ->
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp))
                 .clickable { open(t.id) }.padding(horizontal = 4.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically) {
+                if (pick != null) androidx.compose.material3.Checkbox(t.id in pick.selected, { pick.toggle(t.id) })
                 Text(t.startMs?.let { "${logDay(it)}, ${logTime(it)}" }.orEmpty(), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                 Text(t.purpose + " · " + stringResource(R.string.logbook_server_km, km(t.distance)), style = MaterialTheme.typography.bodyMedium)
             }
@@ -262,7 +342,8 @@ private fun TripDetail(item0: ServerLogbook.Item, edit: Boolean, options: Server
                     TextButton(onClick = onClose) { Text(stringResource(R.string.logbook_detail_close)) }
                 }
                 Text("${item.from ?: unknown} → ${item.to ?: unknown}", style = MaterialTheme.typography.bodyLarge)
-                androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(300.dp).clip(RoundedCornerShape(20.dp))
+                var big by remember(item0.id) { mutableStateOf(false) }
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().height(if (big) 640.dp else 380.dp).clip(RoundedCornerShape(20.dp))
                     .background(MaterialTheme.colorScheme.surfaceContainer), contentAlignment = Alignment.Center) {
                     val r = route
                     when {
@@ -271,6 +352,10 @@ private fun TripDetail(item0: ServerLogbook.Item, edit: Boolean, options: Server
                             color = MaterialTheme.colorScheme.error)
                         r != null -> Text(stringResource(R.string.logbook_route_none), Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         else -> Text(stringResource(R.string.logbook_route_loading), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (route != null) androidx.compose.material3.FilledTonalButton(onClick = { big = !big },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp)) {
+                        Text(stringResource(if (big) R.string.logbook_map_smaller else R.string.logbook_map_bigger))
                     }
                 }
                 TripValues(item)

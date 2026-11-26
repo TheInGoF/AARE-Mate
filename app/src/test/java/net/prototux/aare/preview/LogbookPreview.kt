@@ -46,6 +46,25 @@ class LogbookPreview {
         File(dir, "10-fahrtenbuch-server.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    /** System I-141: assigning as in IDmate - ticks, and the purposes on a trip without one. */
+    @Test fun serverMonthAssign() {
+        if (System.getProperty("preview") == null) return
+        val m = net.prototux.aare.dash.ServerLogbook.parseMonth(JSONObject(javaClass.classLoader!!.getResource("idmate/logbook.json")!!.readText()))
+        val o = net.prototux.aare.dash.ServerLogbook.parseOptions(JSONObject(javaClass.classLoader!!.getResource("idmate/logbook_options.json")!!.readText()))
+        val first = m.rows.first { it.kind == net.prototux.aare.dash.ServerLogbook.TRIP }.trips.first()
+        rule.setContent {
+            net.prototux.aare.ui.theme.PhoneTheme(dark = false) {
+                Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).verticalScroll(rememberScrollState()).padding(20.dp)) {
+                    net.prototux.aare.ui.ServerLogbookMonth(m, net.prototux.aare.ui.Pick(setOf(first), {}, o.purposes) { _, _ -> }) {}
+                }
+            }
+        }
+        rule.waitForIdle()
+        val bmp = rule.onRoot().captureToImage().asAndroidBitmap()
+        val dir = File("build/preview/phone").apply { mkdirs() }
+        File(dir, "10c-fahrtenbuch-zuordnen.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
     /** System L-111: a trip's values as IDmate's trip page lists them (the map beside them needs the device). */
     @Test fun tripValues() {
         if (System.getProperty("preview") == null) return

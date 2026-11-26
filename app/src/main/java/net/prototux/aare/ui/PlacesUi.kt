@@ -333,6 +333,8 @@ private const val GEOCODE_WAIT_MS = 900L
 private fun MapPicker(start: Position?, onPick: (Position) -> Unit, onCancel: () -> Unit) {
     val ctx = LocalContext.current
     net.prototux.aare.ui.car.Mate.init(ctx)
+    // the map server's token on the tiles, as for Mate Navi (System I-140)
+    remember { net.prototux.aare.ui.car.navi.NaviServer.install(ctx) }
     val dark = androidx.compose.foundation.isSystemInDarkTheme()
     val style = remember(dark) { BaseStyle.Json(net.prototux.aare.ui.car.navi.mapStyle(ctx, dark)) }
     // 17.11.2026: "Wenn ich auf der Map suche, startet er immer in Berlin ... cooler, wenn er da startet, wo ich mich

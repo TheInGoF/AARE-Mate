@@ -1579,6 +1579,23 @@
     <string name="logbook_route_none">IDmate has no way for this trip.</string>
     <string name="logbook_route_failed">Way not loaded: %1$s</string>
     <string name="logbook_route_404">IDmate serves the way from version 1.2.359 on</string>
+    <string name="logbook_map_bigger">Bigger</string>
+    <string name="logbook_map_smaller">Smaller</string>
+    <string name="logbook_assign_hint">Assigning: tap a purpose right on a trip without one – or tick trips and assign them all at the top. Tapping a trip shows its map and values.</string>
+    <string name="logbook_assign_only_open">Only without purpose (%1$d)</string>
+    <string name="logbook_assign_quick">Assign:</string>
+    <string name="logbook_assign_apply">Assign</string>
+    <string name="logbook_assign_clear">Clear selection</string>
+    <string name="logbook_assign_failed">%1$d not saved: %2$s</string>
+    <string name="logbook_edit_off_title">Assigning is still off on the server</string>
+    <plurals name="logbook_assign_done">
+        <item quantity="one">%1$d trip assigned – in IDmate too.</item>
+        <item quantity="other">%1$d trips assigned – in IDmate too.</item>
+    </plurals>
+    <plurals name="logbook_assign_selected">
+        <item quantity="one">%1$d trip chosen</item>
+        <item quantity="other">%1$d trips chosen</item>
+    </plurals>
     <string name="logbook_edit_title">Trip in the logbook</string>
     <string name="logbook_edit_purpose">Purpose</string>
     <string name="logbook_edit_partner">Business partner</string>
