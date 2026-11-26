@@ -12,7 +12,9 @@ import android.os.SystemClock
 object MediaFade {
     const val DOWN_MS = 500L
     const val UP_MS = 800L
-    private const val LOW = 0.3
+    /** The music's level under a prompt (System L-106: "z. B. 20 %", Settings.promptDuckPercent), set at each session. */
+    @Volatile var low = 0.2
+        set(v) { field = v.coerceIn(0.0, 1.0) }
     private const val MAX_DUCK_MS = 30_000L
     @Volatile private var from = 1.0
     @Volatile private var to = 1.0
@@ -33,8 +35,8 @@ object MediaFade {
         return from + (to - from) * t
     }
 
-    /** A prompt is coming: down to [LOW] over [DOWN_MS]. */
-    @Synchronized fun duck() { SpokenPause.hold(); val now = SystemClock.elapsedRealtime(); from = level(now); to = LOW; since = now; span = DOWN_MS; duckedAt = now; upAt = 0L }
+    /** A prompt is coming: down to [low] over [DOWN_MS]. */
+    @Synchronized fun duck() { SpokenPause.hold(); val now = SystemClock.elapsedRealtime(); from = level(now); to = low; since = now; span = DOWN_MS; duckedAt = now; upAt = 0L }
 
     /**
      * The prompt is over: the music stays low until the car gives it back ([start], then up over [UP_MS]) - rising earlier
@@ -43,7 +45,7 @@ object MediaFade {
     @Synchronized fun release() { SpokenPause.letGo(); if (to >= 1.0) return; upAt = SystemClock.elapsedRealtime() + WAIT_CAR_MS }
 
     /** The car gave the music back after a prompt: a soft start even when nothing of Mate's own lowered it. */
-    @Synchronized fun start() { val now = SystemClock.elapsedRealtime(); from = if (to < 1.0) level(now) else LOW; to = 1.0; since = now; span = UP_MS; upAt = 0L }
+    @Synchronized fun start() { val now = SystemClock.elapsedRealtime(); from = if (to < 1.0) level(now) else low; to = 1.0; since = now; span = UP_MS; upAt = 0L }
 
     // The microphone (18.11.2026: "Die Whisper-Erkennung erkennt ja auch Musik ... er muss schon, wenn das Mikrofon
     // angeht, die Musik runterfahren. Sonst ist das unmachbar"): while Mate listens, everything on the media channel is

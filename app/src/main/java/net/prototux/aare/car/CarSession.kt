@@ -229,6 +229,8 @@ class CarSession(
         }
         // podcasts and audio books pause for Mate's prompts instead of lying under them (System I-083)
         net.prototux.aare.audio.SpokenPause.init(context)
+        // the music's level under a prompt, as chosen (System L-106)
+        net.prototux.aare.audio.MediaFade.low = settings.promptDuckPercent / 100.0
         // a trip that waited during a short break goes on (System I-082)
         net.prototux.aare.ui.car.navi.NaviKeep.scope.launch { net.prototux.aare.ui.car.navi.NaviKeep.carBack() }
         runtime.onPhoneGuidance = { g ->

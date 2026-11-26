@@ -17,6 +17,8 @@ import android.util.Log
  * Im Idealfall sogar noch 3 Sekunden zurückspringen"): when a prompt starts ([hold]) and the app playing now is of the
  * kind "book" (CarSound.kind: audio books, podcasts), Mate pauses it; when the prompt is over ([letGo]) it goes back
  * [BACK_MS] and plays on. Prompts close together keep it paused through all of them. Music stays as it is (lowered).
+ * Since System L-106 (26.11.2026) the kind decides by the driver's choice (Settings.promptPauses): music lowered, podcasts
+ * and audio books paused unless set otherwise.
  */
 object SpokenPause {
     private const val TAG = "MateSpoken"
@@ -42,7 +44,8 @@ object SpokenPause {
         if (paused != null) { main.postDelayed(resume, MAX_PAUSE_MS); return@post }
         val c = app ?: return@post
         val pkg = CarSound.playing ?: return@post
-        if (CarSound.kind(c, pkg) != CarSound.Kind.BOOK) return@post
+        val kind = CarSound.kind(c, pkg)
+        if (kind == CarSound.Kind.NAVI || !net.prototux.aare.Settings(c).promptPauses(kind)) return@post
         val ctl = runCatching {
             c.getSystemService(MediaSessionManager::class.java)
                 .getActiveSessions(ComponentName(c, "net.prototux.aare.notify.CarNotificationListener"))

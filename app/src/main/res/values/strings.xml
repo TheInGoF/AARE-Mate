@@ -749,6 +749,7 @@
     <string name="sound_preset_layer_hint">Lies above the measurement. Per kind of app: music apps take the music preset, audiobook apps the audiobook preset.</string>
     <string name="sound_kind_for">Preset for</string>
     <string name="sound_kind_music">Music</string>
+    <string name="sound_kind_podcast">Podcast</string>
     <string name="sound_kind_book">Audiobook</string>
     <string name="sound_kind_navi">Navigation</string>
     <string name="sound_preset_save">Save as own preset</string>
@@ -1529,6 +1530,11 @@
     <string name="music_check_notification_access_subtitle">Needed to see and control other music apps in the car (title, pause, next)</string>
     <string name="sound_level_section">Volume</string>
     <string name="duck_section">Music while reading aloud</string>
+    <string name="prompt_duck_section">Music under prompts</string>
+    <string name="prompt_duck_level">Under prompts and warning tones: %1$d %%</string>
+    <string name="prompt_way_duck">quieter</string>
+    <string name="prompt_way_pause">pause</string>
+    <string name="prompt_duck_hint">For Mate Navi\u2019s prompts, the speed warning and the ring in the car. Paused apps go on 3 s earlier after the prompt. The car may lower the music a little more by itself.</string>
     <string name="speech_models_storage">Whether they lie on the memory card is chosen under Settings → Navigation → Offline maps → Storage place.</string>
     <string name="first_restore_done_title">Restore</string>
     <string name="logbook_source_server">Server (IDmate)</string>

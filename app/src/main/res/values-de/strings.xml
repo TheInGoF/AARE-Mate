@@ -688,6 +688,7 @@
     <string name="sound_preset_layer_hint">Liegt über der Einmessung. Gilt je App-Art: Musik-Apps nehmen das Musik-Preset, Hörbuch-Apps das Hörbuch-Preset.</string>
     <string name="sound_kind_for">Preset für</string>
     <string name="sound_kind_music">Musik</string>
+    <string name="sound_kind_podcast">Podcast</string>
     <string name="sound_kind_book">Hörbuch</string>
     <string name="sound_kind_navi">Navigation</string>
     <string name="sound_preset_save">Als eigenes Preset speichern</string>
@@ -1516,6 +1517,11 @@
     <string name="music_check_notification_access_subtitle">Erforderlich, um andere Musik-Apps im Auto zu sehen und zu steuern (Titel, Pause, Weiter)</string>
     <string name="sound_level_section">Lautstärke</string>
     <string name="duck_section">Musik beim Vorlesen</string>
+    <string name="prompt_duck_section">Musik bei Ansagen</string>
+    <string name="prompt_duck_level">Bei Ansagen und Warntönen: %1$d %%</string>
+    <string name="prompt_way_duck">leiser</string>
+    <string name="prompt_way_pause">anhalten</string>
+    <string name="prompt_duck_hint">Für Ansagen von Mate Navi, die Tempowarnung und den Klingelton im Auto. Angehaltene Apps laufen nach der Ansage 3 s früher weiter. Das Auto senkt die Musik dabei womöglich selbst noch etwas ab.</string>
     <string name="speech_models_storage">Ob sie auf der Speicherkarte liegen, wählst du unter Einstellungen → Navigation → Offline-Karten → Speicherort.</string>
     <string name="first_restore_done_title">Wiederherstellung</string>
     <string name="logbook_source_server">Server (IDmate)</string>

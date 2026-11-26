@@ -18,8 +18,12 @@ object CarSound {
     private const val PREFS = "mate_sound"
     private const val TAG = "MateSound"
 
-    /** The kinds of app a preset follows (E-006); [NAVI]'s prompts stay unfiltered, its other sound counts as music. */
-    enum class Kind(val key: String) { MUSIC("music"), BOOK("book"), NAVI("navi");
+    /**
+     * The kinds of app a preset follows (E-006); [NAVI]'s prompts stay unfiltered, its other sound counts as music. [PODCAST]
+     * apart from [BOOK] since System L-106 (26.11.2026: "Verhalten je Art (Musik, Podcast, Hörbuch)"), with the audio book's
+     * preset unless one is chosen for it.
+     */
+    enum class Kind(val key: String) { MUSIC("music"), BOOK("book"), PODCAST("podcast"), NAVI("navi");
         companion object { fun of(k: String?) = entries.firstOrNull { it.key == k } }
     }
 
@@ -129,6 +133,7 @@ object CarSound {
     /** The preset for a kind of app (L-009): music flat, audio books the audio book preset unless chosen otherwise. */
     fun presetKey(c: Context, kind: Kind): String = prefs(c).getString("preset:${kind.key}", null) ?: when (kind) {
         Kind.BOOK -> "book"
+        Kind.PODCAST -> presetKey(c, Kind.BOOK)
         else -> prefs(c).getString("legacy_preset", null) ?: "flat"
     }
 
@@ -136,17 +141,24 @@ object CarSound {
 
     // ---------------------------------------------------------------- kinds of app
 
-    private val BOOK_APPS = Regex("audible|audiobook|audiobookshelf|hoerbuch|podcast|podimo|pocketcast|antennapod|castbox|storytel|bookbeat|librivox|nextory|bookmate", RegexOption.IGNORE_CASE)
+    private val BOOK_APPS = Regex("audible|audiobook|h(ö|oe)rb(u|ü|ue)ch|storytel|bookbeat|librivox|nextory|bookmate", RegexOption.IGNORE_CASE)
+    private val PODCAST_APPS = Regex("podcast|podimo|pocketcast|antennapod|castbox|podbean|spreaker|overcast|castro|podcastaddict", RegexOption.IGNORE_CASE)
+
+    /** The kind by a name alone (package or label): audio book, podcast, or null. */
+    internal fun kindOfName(name: String): Kind? = when {
+        BOOK_APPS.containsMatchIn(name) -> Kind.BOOK
+        PODCAST_APPS.containsMatchIn(name) -> Kind.PODCAST
+        else -> null
+    }
 
     /** The kind Mate sees in [pkg]: an audio book or podcast app by its name, a map app by its category, else music. */
     fun autoKind(c: Context, pkg: String): Kind {
-        if (BOOK_APPS.containsMatchIn(pkg)) return Kind.BOOK
+        kindOfName(pkg)?.let { return it }
         val pm = c.packageManager
         val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull()
         if (info?.category == android.content.pm.ApplicationInfo.CATEGORY_MAPS) return Kind.NAVI
         val label = info?.let { runCatching { pm.getApplicationLabel(it).toString() }.getOrNull() }.orEmpty()
-        if (BOOK_APPS.containsMatchIn(label) || label.contains("hörbuch", ignoreCase = true)) return Kind.BOOK
-        return Kind.MUSIC
+        return kindOfName(label) ?: Kind.MUSIC
     }
 
     /** The kind of [pkg]: the driver's choice for it (E-006: "jede App lässt sich von Hand einer anderen Art zuweisen"), else [autoKind]. */

@@ -395,6 +395,22 @@ class Settings(context: Context) {
         get() = prefs.getString("tts_voice_local", null)
         set(v) = prefs.edit { if (v == null) remove("tts_voice_local") else putString("tts_voice_local", v) }
 
+    /**
+     * How loud the music stays under a prompt or a warning tone, in percent of its level (System L-106, 26.11.2026: "Musik
+     * leiser weiter (z. B. 20 %) … Lautstärke beim Leiserstellen (z. B. 0/10/20/30 % oder frei)"); 0 to 60.
+     */
+    var promptDuckPercent: Int
+        get() = prefs.getInt("prompt_duck_percent", 20).coerceIn(0, 60)
+        set(v) = prefs.edit { putInt("prompt_duck_percent", v.coerceIn(0, 60)) }
+
+    /**
+     * What a kind of app does under a prompt (System L-106: "Verhalten je Art (Musik, Podcast, Hörbuch)"): true = paused and
+     * a little back afterwards, false = on, lowered. Music lowered, podcasts and audio books paused unless chosen otherwise.
+     */
+    fun promptPauses(kind: net.prototux.aare.audio.CarSound.Kind): Boolean =
+        prefs.getBoolean("prompt_pause:${kind.key}", kind == net.prototux.aare.audio.CarSound.Kind.BOOK || kind == net.prototux.aare.audio.CarSound.Kind.PODCAST)
+    fun setPromptPauses(kind: net.prototux.aare.audio.CarSound.Kind, pause: Boolean) = prefs.edit { putBoolean("prompt_pause:${kind.key}", pause) }
+
     /** How loud the built-in music stays while a message is read aloud, in percent (0 to 20; 0 = silent). */
     var voiceDuckPercent: Int
         get() = prefs.getInt("voice_duck_percent", 10).coerceIn(0, 20)

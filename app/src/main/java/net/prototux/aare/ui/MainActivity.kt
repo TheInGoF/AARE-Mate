@@ -446,6 +446,7 @@ private fun Home() {
                             item { AudioSettings(settings, state, refresh) { refresh++ } }
                             // the ring in the car while a call comes in (18.11.2026: "verschiedene Klingeltöne, die wir in der App einstellen können")
                             item { RingtoneSection(settings) }
+                            item { PromptDuckSection(settings) }
                             item { DuckSection(settings) }
                         }
                         Page.CONNECTION -> item { ConnectionSettings(settings, refresh) }
@@ -1448,7 +1449,8 @@ private fun SoundCard(settings: Settings) {
         Section(stringResource(R.string.sound_section_preset)) {
             Text(stringResource(R.string.sound_preset_layer_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
-            Choices(stringResource(R.string.sound_kind_for), listOf(SoundKind.MUSIC.key to stringResource(R.string.sound_kind_music), SoundKind.BOOK.key to stringResource(R.string.sound_kind_book)), kind.key) {
+            Choices(stringResource(R.string.sound_kind_for), listOf(SoundKind.MUSIC.key to stringResource(R.string.sound_kind_music),
+                SoundKind.PODCAST.key to stringResource(R.string.sound_kind_podcast), SoundKind.BOOK.key to stringResource(R.string.sound_kind_book)), kind.key) {
                 kind = SoundKind.of(it) ?: SoundKind.MUSIC }
             Spacer(Modifier.height(8.dp))
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1492,13 +1494,15 @@ private fun SoundCard(settings: Settings) {
             if (list == null) Text(stringResource(R.string.setup_app_list_loading), style = MaterialTheme.typography.bodyMedium)
             else remember(list, version) { list.groupBy { S.kind(ctx, it.packageName) } }.toSortedMap(compareBy { it.ordinal }).forEach { (k, inKind) ->
                 Spacer(Modifier.height(8.dp))
-                Text(stringResource(when (k) { SoundKind.MUSIC -> R.string.sound_kind_music; SoundKind.BOOK -> R.string.sound_kind_book; SoundKind.NAVI -> R.string.sound_kind_navi }),
+                Text(stringResource(when (k) { SoundKind.MUSIC -> R.string.sound_kind_music; SoundKind.BOOK -> R.string.sound_kind_book
+                    SoundKind.PODCAST -> R.string.sound_kind_podcast; SoundKind.NAVI -> R.string.sound_kind_navi }),
                     style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 inKind.sortedBy { it.label.lowercase() }.forEach { app ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(app.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                         val auto = S.autoKind(ctx, app.packageName)
-                        listOf(SoundKind.MUSIC to R.string.sound_kind_music, SoundKind.BOOK to R.string.sound_kind_book, SoundKind.NAVI to R.string.sound_kind_navi).forEach { (kk, label) ->
+                        listOf(SoundKind.MUSIC to R.string.sound_kind_music, SoundKind.PODCAST to R.string.sound_kind_podcast,
+                            SoundKind.BOOK to R.string.sound_kind_book, SoundKind.NAVI to R.string.sound_kind_navi).forEach { (kk, label) ->
                             androidx.compose.material3.FilterChip(selected = k == kk, modifier = Modifier.padding(start = 4.dp),
                                 onClick = { S.setKind(ctx, app.packageName, if (kk == auto) null else kk); changed() },
                                 label = { Text(if (kk == auto) stringResource(R.string.sound_kind_auto, stringResource(label)) else stringResource(label)) })
@@ -3303,6 +3307,32 @@ private fun RingtoneSection(settings: net.prototux.aare.Settings) = Section(stri
         Spacer(Modifier.height(12.dp))
         Choices(stringResource(R.string.ringtone_volume), listOf("40", "70", "100").map { it to "$it %" }, vol) { vol = it; settings.carRingtoneVolume = it.toInt(); sample() }
     }
+}
+
+/**
+ * Music under Mate's prompts and warning tones (System L-106, 26.11.2026: "Bei Warntönen und Navi-Ansagen läuft Musik
+ * leiser weiter (z. B. 20 %). Podcasts und Hörbücher werden wie bisher angehalten und zurückgespult. In den Einstellungen
+ * frei wählbar: Lautstärke beim Leiserstellen (z. B. 0/10/20/30 % oder frei), Verhalten je Art (Musik, Podcast, Hörbuch)."):
+ * the level, and per kind of app lowered or paused.
+ */
+@Composable
+private fun PromptDuckSection(settings: Settings) = Section(stringResource(R.string.prompt_duck_section)) {
+    var level by remember { mutableIntStateOf(settings.promptDuckPercent) }
+    fun keep(v: Int) { level = v; settings.promptDuckPercent = v; net.prototux.aare.audio.MediaFade.low = v / 100.0 }
+    Text(stringResource(R.string.prompt_duck_level, level), style = MaterialTheme.typography.bodyLarge)
+    Choices("", listOf(0, 10, 20, 30).map { "$it" to "$it %" }, "$level") { keep(it.toInt()) }
+    androidx.compose.material3.Slider(
+        value = level.toFloat(), valueRange = 0f..60f, steps = 11,
+        onValueChange = { level = Math.round(it / 5f) * 5 }, onValueChangeFinished = { keep(level) },
+    )
+    Spacer(Modifier.height(8.dp))
+    listOf(SoundKind.MUSIC to R.string.sound_kind_music, SoundKind.PODCAST to R.string.sound_kind_podcast, SoundKind.BOOK to R.string.sound_kind_book).forEach { (k, name) ->
+        var pause by remember { mutableStateOf(settings.promptPauses(k)) }
+        Choices(stringResource(name), listOf("duck" to stringResource(R.string.prompt_way_duck), "pause" to stringResource(R.string.prompt_way_pause)),
+            if (pause) "pause" else "duck") { pause = it == "pause"; settings.setPromptPauses(k, pause) }
+        Spacer(Modifier.height(8.dp))
+    }
+    Text(stringResource(R.string.prompt_duck_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /**
