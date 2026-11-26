@@ -12,8 +12,8 @@ import android.util.Log
 
 /**
  * The car's microphone as the tablet's for other apps, Android Auto's way (System I-134, 26.11.2026: Google's recognition
- * "tut so, als ob sie zuhört, aber es passiert nichts" - it took no sound handed through, and the tablet's own microphone in
- * the seat pocket hears nobody): an audio policy whose mix catches every recording of the kinds a recognizer uses
+ * "tut so, als ob sie zuhört, aber es passiert nichts" - it took no sound handed through, and the tablet's own microphone,
+ * in the centre console, gave it nothing either: ten times "no speech heard"): an audio policy whose mix catches every recording of the kinds a recognizer uses
  * (microphone, voice recognition, unprocessed) and feeds it what Mate writes - the car's microphone - instead of the
  * tablet's. Needs MODIFY_AUDIO_ROUTING, which the ROM gives Mate (System E-039). [open] null: not possible here.
  */

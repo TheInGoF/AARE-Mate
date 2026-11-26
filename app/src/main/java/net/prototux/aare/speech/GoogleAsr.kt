@@ -49,8 +49,9 @@ object GoogleAsr {
 
     /**
      * Whether Google hears the car's microphone injected as the tablet's (MicInject): null untried, false not (then Whisper
-     * listens in the car, until Mate restarts). The tablet's own microphone is never asked in the car: in the seat pocket
-     * it hears nobody (System I-134, log 26.11.2026 16:43-16:44: ten times "no speech heard").
+     * listens in the car, until Mate restarts). The tablet's own microphone is not asked in the car: there it gave Google
+     * nothing (System I-134, log 26.11.2026 16:43-16:44: ten times "no speech heard", the tablet in the centre console -
+     * likely silence from Android, the service lacking the microphone with the screen off), the car's is meant for it.
      */
     @Volatile var carMicInjected: Boolean? = null
 
@@ -80,7 +81,7 @@ object GoogleAsr {
         fun run(onEnd: () -> Unit = {}, maxMs: Long = 30_000L): List<String>? {
             if (mic != null) {
                 // in the car: the car's microphone injected as the tablet's (26.11.2026: handed through by a pipe Google
-                // took nothing, and the tablet's microphone in the seat pocket heard nobody) - not possible: Whisper
+                // took nothing, and through the tablet's microphone Google heard nothing either) - not possible: Whisper
                 if (carMicInjected == false) return null
                 val (r, heardSpeech) = once(onEnd, maxMs, mic)
                 if (cancelled) return emptyList()
@@ -105,6 +106,7 @@ object GoogleAsr {
             var result: List<String>? = null
             var error: Int? = null
             var spoke = false
+            var silenced: Boolean? = null
             val t0 = android.os.SystemClock.elapsedRealtime()
             var endAt = 0L
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -155,6 +157,9 @@ object GoogleAsr {
                         startListening(intent)
                     }
                 }.onFailure { Log.w(TAG, "system recognition did not start", it); done.countDown() }
+                // whether Android hands the recording silence (System I-134: an app without the right to the microphone
+                // in the background gets silence, not an error - Google then hears "no speech")
+                main.postDelayed({ silenced = silencedNow(app) }, 1_000)
             }
             val inTime = done.await(maxMs, TimeUnit.MILLISECONDS)
             runCatching { handle?.close() }
@@ -174,12 +179,20 @@ object GoogleAsr {
             // what was said stays out of the log (dictated messages)
             net.prototux.aare.DiagLog.add("speech: system recognition (${service.packageName}, " + (if (car != null) "car's microphone injected" else "tablet's microphone") +
                 ") $how after ${(now - t0) / 1000.0} s" + (if (endAt > 0) ", ${now - endAt} ms after the speaker stopped" else "") +
-                (if (spoke) "" else ", no speech heard") + (if (car != null) (if (loud) ", the car's microphone heard speech" else ", the car's microphone quiet") else ""))
+                (if (spoke) "" else ", no speech heard") + (if (silenced == true) ", Android silenced the recording" else "") + (if (car != null) (if (loud) ", the car's microphone heard speech" else ", the car's microphone quiet") else ""))
             if (cancelled) return emptyList<String>() to loud
             // nobody spoke: an answer (silence); everything else falls back
             if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) return emptyList<String>() to loud
             return (if (inTime && error == null) r else null) to loud
         }
+    }
+
+    /** Whether a recording now running is silenced by Android (its app may not use the microphone); null unknown. */
+    private fun silencedNow(context: Context): Boolean? {
+        if (android.os.Build.VERSION.SDK_INT < 29) return null
+        val am = context.getSystemService(android.media.AudioManager::class.java) ?: return null
+        val now = runCatching { am.activeRecordingConfigurations }.getOrNull() ?: return null
+        return if (now.isEmpty()) null else now.any { it.isClientSilenced }
     }
 
     private val END = ByteArray(0)

@@ -388,6 +388,9 @@ class ProjectionService : Service() {
         sessionStart = SystemClock.elapsedRealtime()
         val s = CarSession(this, transport, cert.identity, settings, media, { projection }, wireless, peerKey, trustOnFirstUse, sessionListener, mirror)
         session = s
+        // started from the background (USB), Android refuses the microphone type; once Mate's car screen is up Mate counts as
+        // in front, and asking again may get it (System I-134)
+        if (micHeld != true) main.postDelayed({ if (session === s && micHeld != true) goForeground() }, MIC_AGAIN_MS)
         _state.update { it.copy(connected = true, transport = transport.name, certificate = cert.name, lastError = null, pendingTrust = null) }
         s.start()
     }
@@ -539,6 +542,9 @@ class ProjectionService : Service() {
 
     // ------------------------------------------------------------------ foreground, notification
 
+    /** Whether the service runs with the microphone type (null: not known yet). */
+    private var micHeld: Boolean? = null
+
     private fun goForeground(mediaProjection: Boolean = projection != null) {
         var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
         if (mediaProjection) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
@@ -572,6 +578,15 @@ class ProjectionService : Service() {
                 if (ok) {
                     if (location && t and locationType == 0) Log.i(TAG, "no location foreground type: ${last?.message}")
                     if (mic && t and micType == 0) Log.i(TAG, "no microphone foreground type: ${last?.message}")
+                    // into the kept log when it changes (System I-134, 26.11.2026: Google heard nothing through the tablet's
+                    // microphone in the centre console - without this type Android hands Mate's recordings silence while the
+                    // tablet's screen is off, the recognizer's on Mate's behalf too)
+                    val held = mic && t and micType != 0
+                    if (held != micHeld) {
+                        micHeld = held
+                        log(if (held) "foreground: the microphone may be used with the screen off"
+                            else "foreground: no microphone with the screen off (Android refused it: ${last?.message ?: "no permission"}) - recordings get silence")
+                    }
                     return@runCatching
                 }
             }
@@ -789,6 +804,8 @@ class ProjectionService : Service() {
     companion object {
         /** After the cable is pulled: this long a look for the USB head unit coming back, then wireless (18.11.2026). */
         private const val WIRELESS_AFTER_UNPLUG_MS = 3_000L
+        /** After the car screen is up: the microphone type asked for once more. */
+        private const val MIC_AGAIN_MS = 8_000L
         private const val TAG = "AareService"
         private const val CHANNEL = "connection"
         private const val NOTIFICATION_ID = 1
