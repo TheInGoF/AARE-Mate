@@ -76,15 +76,46 @@ final class DashPainter {
      * uebrigen Werte. Ist die Flaeche schmal (geteilte Ansicht von Android Auto), entfaellt das Kartenfeld.
      */
     private void dashboard(Canvas cv, Paint p, Rect r, float dp, boolean mapPlaceholder) {
-        float pad = 24 * dp, top = r.top + 76 * dp, bottom = r.bottom - 64 * dp;
+        float pad = 24 * dp, mapTop = r.top + 76 * dp, bottom = r.bottom - 64 * dp;
         boolean wide = mapPlaceholder && r.width() > 1.35f * r.height();
         float colL = r.left + pad, colR = r.right - pad;
         if (wide) {
             float mapR = r.left + r.width() * 0.56f;
-            mapPanel(cv, p, new RectF(r.left + pad, top, mapR, bottom), dp);
+            mapPanel(cv, p, new RectF(r.left + pad, mapTop, mapR, bottom), dp);
             colL = mapR + pad * 1.4f;
         }
-        float y = top + 6 * dp;
+        /*
+         * System I-133 (26.11.2026: "Die Karte … sitzt zu tief, die Zeile ‚vor … Sekunden …' ist halb verdeckt, und man kann
+         * nicht scrollen. Ladezustand an die Oberkante der Karte"): in Mate's car screen the values start level with the
+         * map's top edge (the reload button top right is beside them), and they always fit - the last trip and charge go
+         * first, then everything is drawn a little smaller. Nothing runs below the bottom edge any more.
+         */
+        float top = mapPlaceholder ? mapTop : r.top + pad;
+        float room = r.bottom - 8 * dp - top;
+        boolean extras = true;
+        float need = measure(p, r, colL, colR, top, dp, true);
+        if (need > room) { extras = false; need = measure(p, r, colL, colR, top, dp, false); }
+        if (need <= room) { values(cv, p, colL, colR, top, dp, extras); return; }
+        float k = Math.max(0.6f, room / need);
+        cv.save();
+        cv.scale(k, k, colL, top);
+        values(cv, p, colL, colL + (colR - colL) / k, top, dp, false);
+        cv.restore();
+    }
+
+    /** The height the values take, drawn into a recording only. */
+    private float measure(Paint p, Rect r, float colL, float colR, float top, float dp, boolean extras) {
+        android.graphics.Picture pic = new android.graphics.Picture();
+        Canvas c = pic.beginRecording(Math.max(1, r.width()), Math.max(1, r.height()));
+        float end = values(c, p, colL, colR, top, dp, extras);
+        pic.endRecording();
+        return end - top;
+    }
+
+    /** The values from [top] down; the y below the last line. extras: the last trip and the last charge too. */
+    @androidx.annotation.VisibleForTesting
+    float values(Canvas cv, Paint p, float colL, float colR, float top, float dp, boolean extras) {
+        float y = top;
 
         /* Ladezustand */
         Double soc = mTelemetry.number("soc");
@@ -152,10 +183,10 @@ final class DashPainter {
                     + num(mTelemetry.number("t_batt"), 0) + " °C", colL, colR, y, dp);
         if (mTelemetry.number("odometer") != null)
             y = row(cv, p, s(R.string.dash_odometer), num(mTelemetry.number("odometer"), 0) + " km", colL, colR, y, dp);
-        if (sum.tripKm != null && y < bottom - 60 * dp)
+        if (sum.tripKm != null && extras)
             y = row(cv, p, s(R.string.dash_last_trip), num(sum.tripKm, 1) + " km"
                     + (sum.tripTo != null ? " · " + sum.tripTo : ""), colL, colR, y, dp);
-        if (sum.chargeKwh != null && y < bottom - 60 * dp)
+        if (sum.chargeKwh != null && extras)
             y = row(cv, p, s(R.string.dash_last_charge), num(sum.chargeKwh, 1) + " kWh"
                     + (sum.chargeKw != null ? " · Ø " + num(sum.chargeKw, 0) + " kW" : "")
                     + (Boolean.TRUE.equals(sum.chargeDc) ? " DC" : "")
@@ -173,7 +204,9 @@ final class DashPainter {
                     : "car".equals(sv.src) ? R.string.dash_src_car : "backend".equals(sv.src) ? R.string.dash_src_backend : 0;
             String line = mCtx.getString(R.string.dash_age, age);
             cv.drawText(from != 0 ? line + " · " + s(from) : line, colL, y + 22 * dp, p);
+            y += 30 * dp;
         }
+        return y;
     }
 
     private float label(Canvas cv, Paint p, String text, float x, float y, float dp) {
