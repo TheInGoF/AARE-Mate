@@ -26,12 +26,40 @@ object ServerLogbook {
         val trips: List<Long>, val count: Int,
     )
 
-    /** One trip of the month with its logbook fields. */
+    /**
+     * One trip of the month with its logbook fields, and what it used as IDmate's trip page shows it (System L-111, IDMate
+     * L-013: energy in kWh, consumption in kWh/100 km, outside temperature in °C - null where the server has none).
+     */
     data class Item(
         val id: Long, val startMs: Long?, val endMs: Long?, val from: String?, val to: String?, val odoStart: Double?, val odoEnd: Double?,
         val distance: Double?, val socStart: Double?, val socEnd: Double?, val purpose: String, val destination: String,
         val visitReason: String, val note: String, val private: Boolean,
+        val energy: Double? = null, val consumption: Double? = null, val tExt: Double? = null,
     )
+
+    /** Where a trip began or ended. */
+    data class End(val lat: Double, val lon: Double, val name: String?)
+
+    /** The way a trip went (System L-110, `GET /trips/<id>/route`): [points] as (lat, lon) in driving order. */
+    data class Route(val id: Long, val points: List<DoubleArray>, val start: End?, val end: End?) {
+        /** west, south, east, north of the way and its ends; null without any place. */
+        val box: DoubleArray? get() {
+            val all = points + listOfNotNull(start, end).map { doubleArrayOf(it.lat, it.lon) }
+            if (all.isEmpty()) return null
+            return doubleArrayOf(all.minOf { it[1] }, all.minOf { it[0] }, all.maxOf { it[1] }, all.maxOf { it[0] })
+        }
+        /** The way as GeoJSON for the map (a line from two points on). */
+        fun lineJson(): String = if (points.size < 2) EMPTY_JSON else
+            """{"type":"Feature","properties":{},"geometry":{"type":"LineString","coordinates":[""" +
+                points.joinToString(",") { "[${it[1]},${it[0]}]" } + "]}}"
+        /** Where it began, as a GeoJSON point (empty without one). */
+        fun startJson(): String = pointJson(start)
+        /** Where it ended. */
+        fun endJson(): String = pointJson(end)
+        private fun pointJson(e: End?) = e?.let { """{"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[${it.lon},${it.lat}]}}""" } ?: EMPTY_JSON
+    }
+
+    const val EMPTY_JSON = """{"type":"FeatureCollection","features":[]}"""
 
     data class Totals(
         val odoStart: Double?, val odoEnd: Double?, val trips: Int, val total: Double, val business: Double, val private: Double,
@@ -65,6 +93,11 @@ object ServerLogbook {
     fun month(context: Context, year: Int? = null, month: Int? = null): Month =
         parseMonth(JSONObject(request(context, "/logbook" + if (year != null && month != null) "?year=$year&month=$month" else "", null)))
 
+    /** The way trip [id] went (an older server without it: 404, shown as such). */
+    @Throws(IOException::class)
+    fun route(context: Context, id: Long): Route =
+        parseRoute(JSONObject(request(context, "/trips/$id/route", null, notFound = R.string.logbook_route_404)))
+
     @Throws(IOException::class)
     fun options(context: Context): Options = parseOptions(JSONObject(request(context, "/logbook/options", null)))
 
@@ -75,7 +108,7 @@ object ServerLogbook {
         return parseItem(JSONObject(request(context, "/trips/$id", body.toString())).getJSONObject("data"))
     }
 
-    private fun request(context: Context, path: String, post: String?): String {
+    private fun request(context: Context, path: String, post: String?, notFound: Int = R.string.logbook_server_404): String {
         val link = Link.load(context) ?: throw ShownFailure("no IDmate access", R.string.logbook_server_none)
         val c = URL(link.url + path).openConnection() as HttpURLConnection
         try {
@@ -96,7 +129,7 @@ object ServerLogbook {
                 401 -> throw ShownFailure("access refused (401)", R.string.api_401)
                 403 -> throw ShownFailure("logbook editing not allowed (403)", R.string.logbook_server_no_edit)
                 // an older server without the logbook answers 404 too: the read API may be on all the same
-                404 -> throw ShownFailure("no logbook on the server (404)", R.string.logbook_server_404)
+                404 -> throw ShownFailure("not on the server (404): $path", notFound)
                 429 -> throw ShownFailure("too many failed attempts (429)", R.string.api_429)
                 else -> throw IOException("HTTP $code")
             }
@@ -146,7 +179,18 @@ object ServerLogbook {
         o.getLong("id"), o.time("start"), o.time("end"), o.str("from"), o.str("to"), o.num("odo_start"), o.num("odo_end"),
         o.num("distance"), o.num("soc_start"), o.num("soc_end"), o.str("purpose").orEmpty(), o.str("destination").orEmpty(),
         o.str("visit_reason").orEmpty(), o.str("note").orEmpty(), o.optBoolean("private"),
+        o.num("energy"), o.num("consumption"), o.num("t_ext"),
     )
+
+    internal fun parseRoute(telegram: JSONObject): Route {
+        val d = telegram.getJSONObject("data")
+        val pts = d.optJSONArray("points")
+        fun end(o: JSONObject?) = o?.let { e -> e.num("lat")?.let { la -> e.num("lon")?.let { lo -> End(la, lo, e.str("name")) } } }
+        return Route(d.optLong("id"),
+            (0 until (pts?.length() ?: 0)).mapNotNull { i -> pts!!.optJSONArray(i)?.takeIf { it.length() >= 2 }?.let { doubleArrayOf(it.optDouble(0), it.optDouble(1)) } }
+                .filter { !it[0].isNaN() && !it[1].isNaN() },
+            end(d.optJSONObject("start")), end(d.optJSONObject("end")))
+    }
 
     private fun parseTotals(o: JSONObject): Totals {
         val p = o.optJSONObject("purposes")

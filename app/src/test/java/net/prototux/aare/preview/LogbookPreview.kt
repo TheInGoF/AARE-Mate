@@ -45,4 +45,22 @@ class LogbookPreview {
         val dir = File("build/preview/phone").apply { mkdirs() }
         File(dir, "10-fahrtenbuch-server.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
+
+    /** System L-111: a trip's values as IDmate's trip page lists them (the map beside them needs the device). */
+    @Test fun tripValues() {
+        if (System.getProperty("preview") == null) return
+        val m = net.prototux.aare.dash.ServerLogbook.parseMonth(JSONObject(javaClass.classLoader!!.getResource("idmate/logbook_energy.json")!!.readText()))
+        val t = m.items.first { it.energy != null }
+        rule.setContent {
+            net.prototux.aare.ui.theme.PhoneTheme(dark = false) {
+                Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).padding(20.dp)) {
+                    net.prototux.aare.ui.TripValues(t)
+                }
+            }
+        }
+        rule.waitForIdle()
+        val bmp = rule.onRoot().captureToImage().asAndroidBitmap()
+        val dir = File("build/preview/phone").apply { mkdirs() }
+        File(dir, "10b-fahrt-werte.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
 }

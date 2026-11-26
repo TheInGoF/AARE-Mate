@@ -235,9 +235,12 @@ object GoogleAsr {
         main.post {
             runCatching {
                 val rec = SpeechRecognizer.createSpeechRecognizer(context, service)
+                // Google answers more than once (and with error 14 when it cannot report the download): one line only
+                val said = java.util.concurrent.atomic.AtomicBoolean(false)
                 fun has(list: List<String>) = list.any { it.equals(lang, true) || it.substringBefore('-').equals(lang.substringBefore('-'), true) }
                 rec.checkRecognitionSupport(intent, { it.run() }, object : android.speech.RecognitionSupportCallback {
                     override fun onSupportResult(s: android.speech.RecognitionSupport) {
+                        if (!said.compareAndSet(false, true)) return
                         val installed = has(s.installedOnDeviceLanguages)
                         val pending = has(s.pendingOnDeviceLanguages)
                         val possible = has(s.supportedOnDeviceLanguages)
@@ -249,6 +252,7 @@ object GoogleAsr {
                         main.postDelayed({ runCatching { rec.destroy() } }, 2_000)
                     }
                     override fun onError(error: Int) {
+                        if (error == 14 || !said.compareAndSet(false, true)) return    // 14: download events not reported - no news
                         net.prototux.aare.DiagLog.add("speech: ${service.packageName} does not tell its languages (error $error)")
                         main.post { runCatching { rec.destroy() } }
                     }
