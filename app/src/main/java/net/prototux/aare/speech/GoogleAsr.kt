@@ -16,8 +16,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Android's own speech recognition (System O-036, Q-064, 25.11.2026: "dann baue Google in den Einstellungen ein"), as an
- * alternative to Whisper. The recognizer listens itself, from the tablet's microphone ([Live]; sound handed over by Mate
- * it did not take, 25.11.2026). What it hears goes through the same matching as Whisper's text
+ * alternative to Whisper. In the car the car's microphone is handed through while the speaker talks, else - or where
+ * Google does not take it - the recognizer listens from the tablet's microphone ([Live]). What it hears goes through the same matching as Whisper's text
  * (VoiceMatch against the own music, VoiceCommands). Mate's own recognition service is never asked (it would ask Whisper).
  * Any failure: null - the caller falls back to Whisper.
  */
@@ -46,27 +46,51 @@ object GoogleAsr {
         runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(c.packageName, 0)).toString() }.getOrNull() ?: c.packageName
     }
 
+    /** Whether Google took the car's microphone handed through: null untried, false refused (then the tablet's at once). */
+    @Volatile var carMicTaken: Boolean? = null
+
     /**
-     * One listening of the system's recognizer, from the tablet's microphone (25.11.2026, log of the test: Google's
-     * recognizer took no sound handed over by Mate - it answered "nothing heard" after a second every time; now it listens
-     * itself, ends at the speaker's pause and is done within a second). [run] blocks; [stop] ends the listening now and
-     * gets what was said, [cancel] gives it up.
+     * One listening of the system's recognizer. In the car ([mic], the car's microphone through the car session) its sound
+     * is handed through to the recognizer while the speaker talks, piece by piece as it comes (26.11.2026: "Erst den Versuch
+     * mit dem laufend durchgereichten Mikrofon, wie im Original" - 2.5.10 had handed over a whole recording afterwards and
+     * Google answered "nothing" at once). Refused - Google answers nothing while the car's microphone heard speech, or an
+     * error - the recognizer listens itself, from the tablet's microphone, and the car's is not tried again until Mate
+     * restarts. [run] blocks; [stop] ends the listening now and gets what was said, [cancel] gives it up.
      */
-    class Live(context: Context, private val pauseMs: Int = 1200) {
+    class Live(context: Context, private val pauseMs: Int = 1200,
+               private val mic: ((sink: (ByteArray, Int, Int) -> Unit, onStopped: () -> Unit) -> net.prototux.aare.host.MicHandle?)? = Dictation.carMic) {
         private val app = context.applicationContext
         private val main = Handler(Looper.getMainLooper())
         @Volatile private var recognizer: SpeechRecognizer? = null
         @Volatile private var cancelled = false
+        @Volatile private var feed: java.util.concurrent.LinkedBlockingQueue<ByteArray>? = null
 
-        fun stop() { main.post { runCatching { recognizer?.stopListening() } } }
-        fun cancel() { cancelled = true; main.post { runCatching { recognizer?.cancel() } } }
+        fun stop() { feed?.offer(END); main.post { runCatching { recognizer?.stopListening() } } }
+        fun cancel() { cancelled = true; feed?.offer(END); main.post { runCatching { recognizer?.cancel() } } }
 
         /**
          * The alternatives heard, best first; empty when nobody spoke; null when the system's recognition failed (then
          * Whisper). [onEnd]: the speaker has finished, the words are being worked out.
          */
         fun run(onEnd: () -> Unit = {}, maxMs: Long = 30_000L): List<String>? {
-            val service = services(app).firstOrNull() ?: return null
+            if (mic != null && carMicTaken != false && android.os.Build.VERSION.SDK_INT >= 33) {
+                val (r, heardSpeech) = once(onEnd, maxMs, mic)
+                if (cancelled) return emptyList()
+                if (r != null && (r.isNotEmpty() || !heardSpeech)) {
+                    if (r.isNotEmpty() && carMicTaken != true) { carMicTaken = true; net.prototux.aare.DiagLog.add("speech: Google takes the car's microphone handed through") }
+                    return r
+                }
+                carMicTaken = false
+                net.prototux.aare.DiagLog.add("speech: Google did not take the car's microphone (" + (if (r == null) "an error" else "nothing recognized while the car's microphone heard speech") +
+                    ") - from now on it listens through the tablet's microphone")
+            }
+            return once(onEnd, maxMs, null).first
+        }
+
+        /** One listening; the alternatives (as [run]) and whether the car's microphone heard speech meanwhile. */
+        private fun once(onEnd: () -> Unit, maxMs: Long,
+                         car: ((sink: (ByteArray, Int, Int) -> Unit, onStopped: () -> Unit) -> net.prototux.aare.host.MicHandle?)?): Pair<List<String>?, Boolean> {
+            val service = services(app).firstOrNull() ?: return null to false
             val done = CountDownLatch(1)
             var result: List<String>? = null
             var error: Int? = null
@@ -80,6 +104,35 @@ object GoogleAsr {
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, pauseMs)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, pauseMs)
+            }
+            // the car's microphone: its 16 kHz chunks into a pipe the recognizer reads, by a thread of its own (a recognizer
+            // that does not read must not hold up the car's microphone)
+            var handle: net.prototux.aare.host.MicHandle? = null
+            var writer: Thread? = null
+            var loud = false
+            if (car != null && android.os.Build.VERSION.SDK_INT >= 33) {
+                val pipe = android.os.ParcelFileDescriptor.createPipe()
+                val q = java.util.concurrent.LinkedBlockingQueue<ByteArray>()
+                feed = q
+                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, pipe[0])
+                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
+                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
+                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, Dictation.RATE)
+                writer = Thread({
+                    runCatching {
+                        android.os.ParcelFileDescriptor.AutoCloseOutputStream(pipe[1]).use { out ->
+                            while (true) { val b = q.take(); if (b === END) break; out.write(b) }
+                        }
+                    }
+                    runCatching { pipe[0].close() }
+                }, "mate-asr-carmic").apply { isDaemon = true; start() }
+                handle = runCatching { car({ b, off, len ->
+                    var sum = 0.0; val n = len / 2
+                    for (i in 0 until n) { val v = ((b[off + 2 * i].toInt() and 0xff) or (b[off + 2 * i + 1].toInt() shl 8)).toShort().toDouble(); sum += v * v }
+                    if (n > 0 && kotlin.math.sqrt(sum / n) > LOUD) loud = true
+                    q.offer(b.copyOfRange(off, off + len))
+                }, { q.offer(END) }) }.getOrNull()
+                if (handle == null) { q.offer(END); feed = null; return null to false }
             }
             main.post {
                 if (cancelled) { done.countDown(); return@post }
@@ -101,6 +154,9 @@ object GoogleAsr {
                 }.onFailure { Log.w(TAG, "system recognition did not start", it); done.countDown() }
             }
             val inTime = done.await(maxMs, TimeUnit.MILLISECONDS)
+            runCatching { handle?.close() }
+            feed?.offer(END); feed = null
+            runCatching { writer?.join(500) }
             main.post { runCatching { if (!inTime) recognizer?.cancel(); recognizer?.destroy(); recognizer = null } }
             val now = android.os.SystemClock.elapsedRealtime()
             val r = result?.map { it.trim() }?.filter { it.isNotEmpty() }
@@ -112,12 +168,17 @@ object GoogleAsr {
                 else -> "${r.size} alternatives"
             }
             // what was said stays out of the log (dictated messages)
-            net.prototux.aare.DiagLog.add("speech: system recognition (${service.packageName}) $how after ${(now - t0) / 1000.0} s" +
-                (if (endAt > 0) ", ${now - endAt} ms after the speaker stopped" else "") + (if (spoke) "" else ", no speech heard"))
-            if (cancelled) return emptyList()
-            // nobody spoke: an answer (silence); everything else falls back to Whisper
-            if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) return emptyList()
-            return if (inTime && error == null) r else null
+            net.prototux.aare.DiagLog.add("speech: system recognition (${service.packageName}, " + (if (car != null) "car's microphone handed through" else "tablet's microphone") +
+                ") $how after ${(now - t0) / 1000.0} s" + (if (endAt > 0) ", ${now - endAt} ms after the speaker stopped" else "") +
+                (if (spoke) "" else ", no speech heard") + (if (car != null) (if (loud) ", the car's microphone heard speech" else ", the car's microphone quiet") else ""))
+            if (cancelled) return emptyList<String>() to loud
+            // nobody spoke: an answer (silence); everything else falls back
+            if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) return emptyList<String>() to loud
+            return (if (inTime && error == null) r else null) to loud
         }
     }
+
+    private val END = ByteArray(0)
+    /** Above this the car's microphone hears speech (as Dictation's pause detection: clearly above a quiet car). */
+    private const val LOUD = 900.0
 }
