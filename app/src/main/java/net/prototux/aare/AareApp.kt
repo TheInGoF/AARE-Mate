@@ -21,8 +21,17 @@ class AareApp : Application() {
         net.prototux.aare.car.PhoneLocationFeed.clearLeftovers(this)
         // a Wi-Fi network coming later starts Shizuku too (E-045)
         if (mainProcess) net.prototux.aare.adb.SelfAdb.watchWifi(this)
-        // the wallpaper of the Android Auto style, left behind since the style went (E-044): looked for once per installation
         val once = getSharedPreferences("mate_once", MODE_PRIVATE)
+        // the car's Wi-Fi left out (System I-131, 26.11.2026): wireless Android Auto never got through on the tablet, and a
+        // car Wi-Fi without internet kept the other apps offline - mobile data only, switched off once per installation
+        if (mainProcess && !once.getBoolean("car_wifi_off", false)) {
+            Settings(this).wireless = false
+            Settings(this).carInternet = false
+            runCatching { net.prototux.aare.transport.wireless.CarInternet.withdraw(this) }
+            once.edit().putBoolean("car_wifi_off", true).apply()
+            DiagLog.add("car Wi-Fi: left out - wireless Android Auto and the car's internet off, mobile data only (can be switched on again)", area = "NET")
+        }
+        // the wallpaper of the Android Auto style, left behind since the style went (E-044): looked for once per installation
         if (!once.getBoolean("wallpaper_gone", false)) Thread {
             runCatching { java.io.File(filesDir, "wallpaper.jpg").takeIf { it.exists() }?.let { if (it.delete()) DiagLog.add("old wallpaper removed") } }
             once.edit().putBoolean("wallpaper_gone", true).apply()

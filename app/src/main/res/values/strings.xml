@@ -142,7 +142,7 @@
     <string name="setup_check_rival_chosen_subtitle">Android Auto is chosen as the default app for the car. Choose Mate in Settings under \u201cAndroid Auto\u201d.</string>
     <string name="setup_check_rival_subtitle">Both apps answer the car, which then shows an error. When plugging in, choose \u201cMate\u201d and \u201cAlways\u201d; here, clear Android Auto\u2019s defaults under \u201cOpen by default\u201d.</string>
     <string name="setup_toggle_wireless_title">Wireless</string>
-    <string name="setup_toggle_wireless_subtitle">Connect to paired cars over Wi-Fi when they come into Bluetooth range</string>
+    <string name="setup_toggle_wireless_subtitle">Connect to paired cars over Wi-Fi when they come into Bluetooth range. Off: cable and mobile data only (on the tablet Android refused the link to the car\'s Wi-Fi)</string>
     <string name="setup_toggle_resume_music_title">Resume music</string>
     <string name="setup_toggle_resume_music_subtitle">Start the last music app playing when the car connects. Music that was paused last time stays paused</string>
     <string name="setup_bt_address_label">Phone Bluetooth address (optional)</string>

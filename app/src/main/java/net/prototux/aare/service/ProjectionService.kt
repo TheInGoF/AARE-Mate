@@ -382,7 +382,7 @@ class ProjectionService : Service() {
         lastSessionWireless = wireless
         val cert = certs.pick(settings.certificateIndex)
         log("connecting ${transport.name} with certificate \"${cert.key}\"")
-        acquireWakeLock()
+        acquireWakeLock(wireless)
         sessionStart = SystemClock.elapsedRealtime()
         val s = CarSession(this, transport, cert.identity, settings, media, { projection }, wireless, peerKey, trustOnFirstUse, sessionListener, mirror)
         session = s
@@ -690,13 +690,14 @@ class ProjectionService : Service() {
      * dass wenn die Mate-App im Hintergrund läuft und das Gerät in Standby geht, dass das Telefon dann nicht einfach
      * drosseln darf").
      */
-    private fun acquireWakeLock() {
+    private fun acquireWakeLock(wireless: Boolean) {
         if (wakeLock?.isHeld == true) return
         wakeLock = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "aare:projection").apply {
             setReferenceCounted(false)
             acquire(12 * 60 * 60 * 1000L)
         }
-        runCatching {
+        // the Wi-Fi radio only for a wireless link: over the cable it kept the Wi-Fi awake for nothing (System I-135)
+        if (wireless) runCatching {
             val wifi = applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
             @Suppress("DEPRECATION")
             val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY
@@ -704,7 +705,7 @@ class ProjectionService : Service() {
             wifiLock = wifi.createWifiLock(mode, "aare:projection").apply { setReferenceCounted(false); acquire() }
         }.onFailure { log("power: Wi-Fi kept awake - not possible: ${it.message}") }
         PowerState.screenOn = getSystemService(PowerManager::class.java).isInteractive
-        log("power: " + PowerState.describe(this) + ", processor and Wi-Fi kept awake while connected")
+        log("power: " + PowerState.describe(this) + ", processor " + (if (wireless) "and Wi-Fi " else "") + "kept awake while connected")
         if (screenWatch == null) {
             screenWatch = object : android.content.BroadcastReceiver() {
                 override fun onReceive(c: android.content.Context, i: Intent) {

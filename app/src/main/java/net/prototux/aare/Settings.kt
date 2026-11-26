@@ -54,9 +54,12 @@ class Settings(context: Context) {
     var speedWarnTimes: Int
         get() = prefs.getInt("speed_warn_times", 1)
         set(v) = prefs.edit { putInt("speed_warn_times", v) }
-    /** Suggest the car's Wi-Fi to Android as a normal network, so the tablet takes the car's internet (CarInternet). */
+    /**
+     * Suggest the car's Wi-Fi to Android as a normal network, so the tablet takes the car's internet (CarInternet). Off by
+     * default since System I-131 (26.11.2026: "das Auto-WLAN ganz weglassen, damit nur noch Mobilfunk genutzt wird").
+     */
     var carInternet: Boolean
-        get() = prefs.getBoolean("car_internet", true)
+        get() = prefs.getBoolean("car_internet", false)
         set(v) = prefs.edit { putBoolean("car_internet", v) }
     /** The ring in the car while a call comes in (CarRingtone): a tone's key, "tablet" or "off". */
     var carRingtone: String
@@ -189,9 +192,12 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("hu_server_localhost", false)
         set(v) = prefs.edit { putBoolean("hu_server_localhost", v) }
 
-    /** Connect wirelessly to bonded head units that advertise wireless Android Auto. */
+    /**
+     * Connect wirelessly to bonded head units that advertise wireless Android Auto. Off by default since System I-131: on the
+     * tablet it never got through (Android refuses Mate's sockets on the car's Wi-Fi, EPERM), the cable charges it anyway.
+     */
     var wireless: Boolean
-        get() = prefs.getBoolean("wireless", true)
+        get() = prefs.getBoolean("wireless", false)
         set(v) = prefs.edit { putBoolean("wireless", v) }
 
     /** Largest video height we accept from the head unit's offers (480, 720, 1080, 1440, 2160). */
