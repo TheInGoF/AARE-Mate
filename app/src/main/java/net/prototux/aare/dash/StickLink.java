@@ -221,13 +221,20 @@ final class StickLink {
 
     /** Connected 25 s ago and still not subscribed: the old pairing is dropped and made anew, or the driver is told how. */
     private final Runnable mStuck = this::stuck;
+    /** Connections in a row that never got subscribed (reset by data and by a start). */
+    private int mStuckTries;
 
     private void stuck() {
         BluetoothGatt g = mGatt;
         if (g == null || mSubscribed || mBonding || !mRunning) return;
         log("connected 25 s ago, still not subscribed (bond " + english(bond(g.getDevice().getBondState())) + ")");
-        /* a stick just woken up (car switched on) may be slow: connected anew, the pairing kept (System I-132) */
-        if (!pairAllowed()) { again(R.string.stick_no_data); return; }
+        /* a stick just woken up (car switched on) may be slow: connected anew, the pairing kept (System I-132) - three
+           times, then the driver is told as before (a pairing only Android kept would loop for good) */
+        if (!pairAllowed()) {
+            if (++mStuckTries >= 3) { fail(R.string.stick_no_data); close(); mRunning = false; return; }
+            again(R.string.stick_no_data);
+            return;
+        }
         mGotData = false;
         noData();
     }
@@ -276,6 +283,7 @@ final class StickLink {
             if (mRunning) return;
             mRunning = true;
             mMisses = 0;
+            mStuckTries = 0;
             connect();
         });
     }
@@ -495,7 +503,7 @@ final class StickLink {
     };
 
     private void telegram(byte[] value) {
-        if (!mGotData) { mGotData = true; mMain.post(() -> log("first data from the stick")); }
+        if (!mGotData) { mGotData = true; mMain.post(() -> { mStuckTries = 0; log("first data from the stick"); }); }
         String json = Cbor.toJson(value);
         if (json == null || !mTelemetry.accept(json)) mTelemetry.error(SRC, mCtx.getString(R.string.stick_bad_telegram, value.length));
         mChanged.run();

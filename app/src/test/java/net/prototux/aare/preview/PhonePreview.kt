@@ -44,6 +44,8 @@ class PhonePreview {
         // a page opened from the settings goes back to them
         rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Ton im Auto"))
         rule.onNodeWithText("Ton im Auto").performClick(); shot("3-ton-im-auto")
+        // System L-106: the music under prompts, per kind
+        rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Hörbuch")); shot("3b-musik-bei-ansagen")
         rule.activity.onBackPressedDispatcher.onBackPressed(); rule.waitForIdle()
         rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Ansichten"))
         rule.onNodeWithText("Ansichten").performClick(); rule.waitForIdle()
