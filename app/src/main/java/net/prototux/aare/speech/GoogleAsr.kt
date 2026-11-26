@@ -70,6 +70,8 @@ object GoogleAsr {
         @Volatile private var recognizer: SpeechRecognizer? = null
         @Volatile private var cancelled = false
         @Volatile private var feed: java.util.concurrent.LinkedBlockingQueue<ByteArray>? = null
+        /** The last listening heard speech and got no text (System I-138). */
+        @Volatile private var emptyAfterSpeech = false
 
         fun stop() { feed?.offer(END); main.post { runCatching { recognizer?.stopListening() } } }
         fun cancel() { cancelled = true; feed?.offer(END); main.post { runCatching { recognizer?.cancel() } } }
@@ -85,6 +87,8 @@ object GoogleAsr {
                 if (carMicInjected == false) return null
                 val (r, heardSpeech) = once(onEnd, maxMs, mic)
                 if (cancelled) return emptyList()
+                // Google heard the speech but gave no text: not the injection's fault - Whisper this time (System I-138)
+                if (r == null && emptyAfterSpeech) return null
                 if (r != null && (r.isNotEmpty() || !heardSpeech)) {
                     if (r.isNotEmpty() && carMicInjected != true) { carMicInjected = true; net.prototux.aare.DiagLog.add("speech: Google hears the car's microphone (injected)") }
                     return r
@@ -107,12 +111,17 @@ object GoogleAsr {
             var error: Int? = null
             var spoke = false
             var silenced: Boolean? = null
+            var partial: List<String>? = null
+            var partials = 0
+            var keys: String? = null
             val t0 = android.os.SystemClock.elapsedRealtime()
             var endAt = 0L
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, java.util.Locale.getDefault().toLanguageTag())
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, preferOffline)
+                // the interim results too: where the final one comes back empty, the last of them counts (System I-138)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, pauseMs)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, pauseMs)
@@ -139,19 +148,28 @@ object GoogleAsr {
                 }, { q.offer(END) }) }.getOrNull()
                 if (handle == null) { q.offer(END); feed = null; inject.close(); return null to false }
             }
+            checkSupport(app, service, intent)
             main.post {
                 if (cancelled) { done.countDown(); return@post }
                 runCatching {
                     recognizer = SpeechRecognizer.createSpeechRecognizer(app, service).apply {
                         setRecognitionListener(object : RecognitionListener {
-                            override fun onResults(b: Bundle?) { result = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty(); done.countDown() }
+                            override fun onResults(b: Bundle?) {
+                                result = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
+                                keys = b?.keySet()?.sorted()?.joinToString("/")
+                                done.countDown()
+                            }
                             override fun onError(e: Int) { error = e; done.countDown() }
                             override fun onReadyForSpeech(p: Bundle?) {}
                             override fun onBeginningOfSpeech() { spoke = true }
                             override fun onRmsChanged(v: Float) {}
                             override fun onBufferReceived(b: ByteArray?) {}
                             override fun onEndOfSpeech() { endAt = android.os.SystemClock.elapsedRealtime(); onEnd() }
-                            override fun onPartialResults(b: Bundle?) {}
+                            override fun onPartialResults(b: Bundle?) {
+                                partials++
+                                b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.map { it.trim() }?.filter { it.isNotEmpty() }
+                                    ?.takeIf { it.isNotEmpty() }?.let { partial = it }
+                            }
                             override fun onEvent(t: Int, b: Bundle?) {}
                         })
                         startListening(intent)
@@ -168,7 +186,14 @@ object GoogleAsr {
             inject?.close()
             main.post { runCatching { if (!inTime) recognizer?.cancel(); recognizer?.destroy(); recognizer = null } }
             val now = android.os.SystemClock.elapsedRealtime()
-            val r = result?.map { it.trim() }?.filter { it.isNotEmpty() }
+            var r = result?.map { it.trim() }?.filter { it.isNotEmpty() }
+            // System I-138 (26.11.2026, 2.5.13 at home: "erkennt er ja genauso lange, wie lange ich auch spreche … Aber dann
+            // blockiert er" - the log: Google heard the speech end, then "0 alternatives"): an empty final result after
+            // speech takes the last interim one; still empty, it is a failure - Whisper listens - and Google is asked online
+            val tookPartial = r != null && r.isEmpty() && partial != null
+            if (tookPartial) r = partial
+            val emptyAfterSpeech = r != null && r.isEmpty() && spoke && error == null && inTime && !cancelled
+            this.emptyAfterSpeech = emptyAfterSpeech
             val how = when {
                 cancelled -> "given up"
                 !inTime -> "no answer in ${maxMs / 1000} s"
@@ -179,11 +204,56 @@ object GoogleAsr {
             // what was said stays out of the log (dictated messages)
             net.prototux.aare.DiagLog.add("speech: system recognition (${service.packageName}, " + (if (car != null) "car's microphone injected" else "tablet's microphone") +
                 ") $how after ${(now - t0) / 1000.0} s" + (if (endAt > 0) ", ${now - endAt} ms after the speaker stopped" else "") +
-                (if (spoke) "" else ", no speech heard") + (if (silenced == true) ", Android silenced the recording" else "") + (if (car != null) (if (loud) ", the car's microphone heard speech" else ", the car's microphone quiet") else ""))
+                (if (spoke) "" else ", no speech heard") + (if (silenced == true) ", Android silenced the recording" else "") +
+                ", ${if (intent.getBooleanExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)) "offline" else "online"}, $partials interim" +
+                (if (tookPartial) " (the final one empty: the last interim one taken)" else "") +
+                (if (emptyAfterSpeech) " - speech heard, no text: a failure (answer's keys ${keys ?: "-"})" else "") + (if (car != null) (if (loud) ", the car's microphone heard speech" else ", the car's microphone quiet") else ""))
             if (cancelled) return emptyList<String>() to loud
+            if (emptyAfterSpeech) {
+                if (preferOffline) { preferOffline = false; net.prototux.aare.DiagLog.add("speech: Google gave no text offline - from now on it is asked online (until Mate restarts)") }
+                return null to loud
+            }
             // nobody spoke: an answer (silence); everything else falls back
             if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) return emptyList<String>() to loud
             return (if (inTime && error == null) r else null) to loud
+        }
+    }
+
+    /** Offline first (the German package on the device); off once Google gave no text offline (System I-138). */
+    @Volatile var preferOffline = true
+    @Volatile private var supportChecked = false
+
+    /**
+     * Once per start of Mate: whether the recognizer has the language on the device (installed, being downloaded, possible)
+     * and online - into the log; possible but not installed, its download is started (System I-138).
+     */
+    private fun checkSupport(context: Context, service: ComponentName, intent: Intent) {
+        if (supportChecked || android.os.Build.VERSION.SDK_INT < 33) return
+        supportChecked = true
+        val lang = intent.getStringExtra(RecognizerIntent.EXTRA_LANGUAGE) ?: return
+        val main = Handler(Looper.getMainLooper())
+        main.post {
+            runCatching {
+                val rec = SpeechRecognizer.createSpeechRecognizer(context, service)
+                fun has(list: List<String>) = list.any { it.equals(lang, true) || it.substringBefore('-').equals(lang.substringBefore('-'), true) }
+                rec.checkRecognitionSupport(intent, { it.run() }, object : android.speech.RecognitionSupportCallback {
+                    override fun onSupportResult(s: android.speech.RecognitionSupport) {
+                        val installed = has(s.installedOnDeviceLanguages)
+                        val pending = has(s.pendingOnDeviceLanguages)
+                        val possible = has(s.supportedOnDeviceLanguages)
+                        net.prototux.aare.DiagLog.add("speech: ${service.packageName} for $lang - on the device " +
+                            (if (installed) "installed" else if (pending) "being downloaded" else if (possible) "possible, not installed" else "not offered") +
+                            ", online " + (if (has(s.onlineLanguages)) "yes" else "not said"))
+                        if (possible && !installed && !pending) runCatching { rec.triggerModelDownload(intent) }
+                            .onSuccess { net.prototux.aare.DiagLog.add("speech: the download of the $lang package for the device was started") }
+                        main.postDelayed({ runCatching { rec.destroy() } }, 2_000)
+                    }
+                    override fun onError(error: Int) {
+                        net.prototux.aare.DiagLog.add("speech: ${service.packageName} does not tell its languages (error $error)")
+                        main.post { runCatching { rec.destroy() } }
+                    }
+                })
+            }.onFailure { net.prototux.aare.DiagLog.add("speech: languages not asked (${it.javaClass.simpleName})") }
         }
     }
 
