@@ -1293,6 +1293,9 @@
     <string name="setup_log_filter_problems">Probleme (%1$d)</string>
     <string name="setup_log_save_file">Log speichern</string>
     <string name="setup_log_save_issue">Issue-Log speichern</string>
+    <string name="setup_log_save_full">Ganzes Log</string>
+    <string name="setup_log_new_since">%1$d neue Zeilen seit dem letzten Speichern (%2$s). „Log speichern“ nimmt nur diese, „Ganzes Log“ alles Gespeicherte.</string>
+    <string name="setup_log_new_never">Noch nie gespeichert: „Log speichern“ nimmt alle %1$d Zeilen. Danach nur noch das Neue seit dem letzten Speichern.</string>
     <string name="setup_log_save_issue_hint">Der Issue-Log lässt Positionen, Orte, Namen, Netze, Adressen und Tokens weg, für einen öffentlichen Fehlerbericht. Vor dem Posten kurz durchsehen.</string>
     <string name="debug_app_label">Mate Debug</string>
     <string name="debug_audio">Audio</string>

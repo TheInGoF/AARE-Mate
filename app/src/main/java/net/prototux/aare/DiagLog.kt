@@ -27,6 +27,7 @@ object DiagLog {
     private val writer = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "mate-diaglog").apply { isDaemon = true } }
     val lines: StateFlow<List<String>> = _lines
     private var file: File? = null
+    private var prefs: android.content.SharedPreferences? = null
 
     /** Loads the saved log. Called by [AareApp]; lines added before go to logcat only. */
     @Synchronized
@@ -34,6 +35,7 @@ object DiagLog {
         if (file != null) return
         val f = File(context.filesDir, "connection.log")
         file = f
+        prefs = context.getSharedPreferences("diaglog", Context.MODE_PRIVATE)
         _lines.value = runCatching { f.readLines() }.getOrDefault(emptyList()).takeLast(MAX_LINES)
     }
 
@@ -102,13 +104,16 @@ object DiagLog {
      * drops, the fault marks with what was said - then every line in the order it happened, its area in front, without
      * the protocol's minute-by-minute pings. In time order on purpose: what came just before a fault tells most.
      */
-    fun digest(lines: List<String>, version: String, clean: ((String) -> String)? = null): String {
+    fun digest(lines: List<String>, version: String, clean: ((String) -> String)? = null, part: String? = null): String {
         val kept = lines.filterNot { NOISE.containsMatchIn(it) }
         val entries = kept.map(::parse).let { all -> if (clean == null) all else all.map { Entry(it.stamp, it.level, it.area, clean(it.text)) } }
         val out = StringBuilder()
         out.append("Mate ").append(version).append(if (clean == null) " · Diagnostic log" else " · Issue log (anonymised)")
         if (kept.isNotEmpty()) out.append(" ").append(kept.first().take(STAMP - 2)).append(" to ").append(kept.last().take(STAMP - 2))
-        out.append(" · ").append(kept.size).append(" lines (").append(lines.size - kept.size).append(" pings left out)\n")
+        out.append(" · ").append(kept.size).append(" lines (").append(lines.size - kept.size).append(" pings left out)")
+        // which part of the kept log this is (System L-109): new since the last save, or the whole
+        if (part != null) out.append(" · ").append(part)
+        out.append("\n")
         out.append("Levels: ").append(Level.values().joinToString { lv -> "${lv.name} ${entries.count { it.level == lv }}" }).append("\n")
         out.append("Areas: ").append(entries.groupingBy { it.area }.eachCount().entries.sortedByDescending { it.value }
             .joinToString { "${it.key} ${it.value}" }).append("\n")
@@ -159,7 +164,32 @@ object DiagLog {
     }
 
     @Synchronized
+    /*
+     * Only what is new (System L-109, 26.11.2026: "standardmäßig nur ausgibt vom letzten Speichern bis zu diesem Speichern.
+     * Dass der Log nicht riesig wird. Den Full Log … nur …, wenn man sagt, ich will den Full Log downloaden"): the last line
+     * of each save is kept; the next save starts after it.
+     */
+
+    /** The lines after the last save; all of them when nothing was saved yet, or that line is gone from the kept ones. */
+    fun sinceSaved(): List<String> = since(_lines.value, prefs?.getString("saved_line", null))
+
+    internal fun since(all: List<String>, mark: String?): List<String> {
+        if (mark == null) return all
+        val i = all.lastIndexOf(mark)
+        return if (i < 0) all else all.drop(i + 1)
+    }
+
+    /** When the last save was (System.currentTimeMillis), 0 never. */
+    fun savedAt(): Long = prefs?.getLong("saved_at", 0L) ?: 0L
+
+    /** [lines] were saved: the next save starts after their last one. */
+    fun saved(lines: List<String>) {
+        val last = lines.lastOrNull() ?: return
+        prefs?.edit()?.putString("saved_line", last)?.putLong("saved_at", System.currentTimeMillis())?.apply()
+    }
+
     fun clear() {
+        prefs?.edit()?.remove("saved_line")?.apply()
         _lines.value = emptyList()
         file?.let { f -> writer.execute { runCatching { f.writeText("") } } }
     }

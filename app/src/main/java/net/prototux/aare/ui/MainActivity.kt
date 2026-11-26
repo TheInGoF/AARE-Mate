@@ -2962,21 +2962,33 @@ private fun LogCard() {
     // man darüber gar nicht kopieren. Nicht mal speichern ... der herkömmliche Weg über speichern. Dann kann Kopie ganz
     // raus."): the version for reading through (DiagLog.digest); the issue log is the same without private data (LogScrub)
     var issue by remember { mutableStateOf(false) }
+    // System L-109 (26.11.2026: "standardmäßig nur … vom letzten Speichern bis zu diesem Speichern … Den Full Log … nur …,
+    // wenn man sagt, ich will den Full Log downloaden"): "Log speichern" takes what is new since the last save, "Ganzes Log"
+    // everything kept; either one sets the mark for the next
+    var whole by remember { mutableStateOf(false) }
+    var savedAt by remember { mutableStateOf(DiagLog.savedAt()) }
+    val fresh = remember(log, savedAt) { DiagLog.sinceSaved() }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         runCatching {
-            val lines = DiagLog.lines.value
+            val lines = if (whole) DiagLog.lines.value else DiagLog.sinceSaved()
+            val since = DiagLog.savedAt()
+            val part = if (whole || since == 0L || lines.size == DiagLog.lines.value.size) "the whole kept log"
+                else "new since the last save (" + java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.ROOT).format(java.util.Date(since)) + ")"
             val text = if (issue) {
                 val known = privateValues(ctx)
-                DiagLog.digest(lines, net.prototux.aare.BuildConfig.VERSION_NAME) { net.prototux.aare.debug.LogScrub.scrub(it, known) }
-            } else DiagLog.digest(lines, net.prototux.aare.BuildConfig.VERSION_NAME)
+                DiagLog.digest(lines, net.prototux.aare.BuildConfig.VERSION_NAME, { net.prototux.aare.debug.LogScrub.scrub(it, known) }, part)
+            } else DiagLog.digest(lines, net.prototux.aare.BuildConfig.VERSION_NAME, part = part)
             ctx.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+            // the issue log (a public report) leaves the mark where it is
+            if (!issue) { DiagLog.saved(lines); savedAt = DiagLog.savedAt() }
         }.onFailure { Toast.makeText(ctx, ctx.getString(R.string.file_save_failed, it.message ?: it.javaClass.simpleName), Toast.LENGTH_SHORT).show() }
     }
-    fun saveAs(asIssue: Boolean) {
+    fun saveAs(asIssue: Boolean, all: Boolean = false) {
         issue = asIssue
+        whole = all
         val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.ROOT).format(java.util.Date())
-        save.launch(if (asIssue) "mate-issue-log-$stamp.txt" else "mate-log-$stamp.txt")
+        save.launch(if (asIssue) "mate-issue-log-$stamp.txt" else if (all) "mate-log-full-$stamp.txt" else "mate-log-$stamp.txt")
     }
     Section(title) {
         // Always shown, so the trace can be turned on before connecting.
@@ -3006,9 +3018,15 @@ private fun LogCard() {
                         DiagLog.Level.WARN -> androidx.compose.ui.graphics.Color(0xFFB26A00)
                         else -> MaterialTheme.colorScheme.onSurfaceVariant })
             }
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                androidx.compose.material3.FilledTonalButton(onClick = { saveAs(false) }) { Text(stringResource(R.string.setup_log_save_file)) }
-                androidx.compose.material3.OutlinedButton(onClick = { saveAs(true) }) { Text(stringResource(R.string.setup_log_save_issue)) }
+            Text(if (savedAt == 0L) stringResource(R.string.setup_log_new_never, fresh.size)
+                else stringResource(R.string.setup_log_new_since, fresh.size,
+                    java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(savedAt))),
+                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 8.dp))
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.FilledTonalButton(onClick = { saveAs(false) }, enabled = fresh.isNotEmpty()) { Text(stringResource(R.string.setup_log_save_file)) }
+                androidx.compose.material3.OutlinedButton(onClick = { saveAs(false, all = true) }) { Text(stringResource(R.string.setup_log_save_full)) }
+                androidx.compose.material3.OutlinedButton(onClick = { saveAs(true) }, enabled = fresh.isNotEmpty()) { Text(stringResource(R.string.setup_log_save_issue)) }
             }
             Text(stringResource(R.string.setup_log_save_issue_hint), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
