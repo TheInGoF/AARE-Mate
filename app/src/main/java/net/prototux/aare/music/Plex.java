@@ -37,6 +37,8 @@ final class Plex {
         int stars;              /* Bewertung des Benutzers in halben Sternen: 0 = keine, 10 = fuenf Sterne */
         String part;            /* Pfad der Audiodatei am Server, nur bei Titeln */
         String thumb;           /* Pfad des Bildes */
+        int plays, skips;       /* wie oft am Server gespielt bzw. uebersprungen (viewCount, skipCount) */
+        long lastPlayedMs;      /* zuletzt gespielt (lastViewedAt), 0 = nie */
     }
 
     /** Ein Fehler von plex.tv oder vom Server (net.prototux.aare.ShownFailure, so heisst er auch in PlexAccount). */
@@ -217,6 +219,111 @@ final class Plex {
                 + Math.max(0, Math.min(10, halfStars)), token, CLIENT_FALLBACK, null, 5000);
     }
 
+    // ── System L-105: was Plex sonst kann ───────────────────────────────────────
+
+    /**
+     * Abspielstand an den Server melden (wie Plexamp): state "playing", "paused" oder "stopped", Stelle und Laenge in ms.
+     * Plex zaehlt daraus selbst "gespielt" (ab etwa 90 %), "zuletzt gespielt" und den Verlauf; die Autofahrten fehlten dort bisher.
+     */
+    void timeline(String key, String state, long timeMs, long durationMs) throws IOException {
+        http("GET", url + "/:/timeline?ratingKey=" + Uri.encode(key) + "&key=" + Uri.encode("/library/metadata/" + key)
+                + "&state=" + state + "&time=" + Math.max(0, timeMs) + "&duration=" + Math.max(0, durationMs)
+                + "&identifier=com.plexapp.plugins.library", token, CLIENT_FALLBACK, null, 4000);
+    }
+
+    /** Einen Titel als gespielt zaehlen (nachgereicht, was ohne Netz gespielt wurde). */
+    void scrobble(String key) throws IOException {
+        http("GET", url + "/:/scrobble?key=" + Uri.encode(key) + "&identifier=com.plexapp.plugins.library", token, CLIENT_FALLBACK, null, 4000);
+    }
+
+    /** Statistik-Listen der Titel: Meistgespielt, Zuletzt gespielt, Lange nicht gehoert, Lieblingslieder. */
+    static final String TOP = "top", RECENT = "recent", FORGOTTEN = "forgotten", FAVORITES = "favorites";
+
+    List<Item> statTracks(String kind, int size) throws IOException {
+        String q;
+        switch (kind) {
+            case TOP: q = "&viewCount%3E%3E=0&sort=viewCount:desc"; break;
+            case RECENT: q = "&viewCount%3E%3E=0&sort=lastViewedAt:desc"; break;
+            /* oft gehoert, aber lange nicht: mindestens dreimal gespielt, das Aelteste zuerst */
+            case FORGOTTEN: q = "&viewCount%3E%3E=2&sort=lastViewedAt:asc"; break;
+            /* vier Sterne und mehr, gemischt */
+            case FAVORITES: q = "&userRating%3E%3E=7&sort=random"; break;
+            default: return new ArrayList<>();
+        }
+        return items(get("/library/sections/" + Uri.encode(section()) + "/all?type=10" + q
+                + "&X-Plex-Container-Start=0&X-Plex-Container-Size=" + Math.max(0, size)), true);
+    }
+
+    /** Klanglich aehnliche Titel (Plex-Klanganalyse, Plex Pass): die naechsten Nachbarn eines Titels. */
+    List<Item> similar(String trackKey, int size) throws IOException {
+        return items(get("/library/metadata/" + Uri.encode(trackKey) + "/nearest?limit=" + Math.max(1, size)
+                + "&maxDistance=0.25"), true);
+    }
+
+    /** Die Stimmungen der Titel (Plex): Schluessel und Name (englisch, wie Plex sie fuehrt: Calm, Energetic ...). */
+    List<Item> moods() throws IOException {
+        List<Item> out = new ArrayList<>();
+        try {
+            JSONArray a = new JSONObject(get("/library/sections/" + Uri.encode(section()) + "/mood?type=10"))
+                    .getJSONObject("MediaContainer").optJSONArray("Directory");
+            for (int i = 0; a != null && i < a.length(); i++) {
+                JSONObject o = a.getJSONObject(i);
+                Item it = new Item();
+                it.key = o.optString("key");
+                it.title = o.optString("title");
+                if (!it.key.isEmpty() && !it.title.isEmpty()) out.add(it);
+            }
+        } catch (JSONException e) {
+            throw new Failure("unexpected answer from Plex", R.string.music_plex_unexpected);
+        }
+        return out;
+    }
+
+    /** Titel einer Stimmung, gemischt. */
+    List<Item> moodTracks(String moodKey, int size) throws IOException {
+        return items(get("/library/sections/" + Uri.encode(section()) + "/all?type=10&mood=" + Uri.encode(moodKey)
+                + "&sort=random&X-Plex-Container-Start=0&X-Plex-Container-Size=" + Math.max(0, size)), true);
+    }
+
+    /**
+     * Der Lautheitsverlauf eines Titels ueber seine ganze Laenge ([points] gleich verteilte Werte in dB, Plex' eigene
+     * Analyse); null, wenn der Server keinen hat.
+     */
+    float[] levels(String trackKey, int points) throws IOException {
+        try {
+            JSONArray a = new JSONObject(get("/library/metadata/" + Uri.encode(trackKey))).getJSONObject("MediaContainer").optJSONArray("Metadata");
+            JSONArray media = a == null || a.length() == 0 ? null : a.getJSONObject(0).optJSONArray("Media");
+            JSONArray parts = media == null || media.length() == 0 ? null : media.getJSONObject(0).optJSONArray("Part");
+            JSONArray streams = parts == null || parts.length() == 0 ? null : parts.getJSONObject(0).optJSONArray("Stream");
+            String id = null;
+            for (int i = 0; streams != null && i < streams.length(); i++)
+                if (streams.getJSONObject(i).optInt("streamType") == 2) { id = streams.getJSONObject(i).optString("id", null); break; }
+            if (id == null) return null;
+            JSONArray l = new JSONObject(get("/library/streams/" + Uri.encode(id) + "/levels?subsample=" + Math.max(8, points)))
+                    .getJSONObject("MediaContainer").optJSONArray("Level");
+            if (l == null || l.length() == 0) return null;
+            float[] out = new float[l.length()];
+            for (int i = 0; i < out.length; i++) out[i] = (float) l.getJSONObject(i).optDouble("v", -100);
+            return out;
+        } catch (JSONException e) {
+            return null;
+        }
+    }
+
+    /** Ein einzelner Titel nach seinem Schluessel (null, wenn es ihn nicht mehr gibt). */
+    Item track(String key) throws IOException {
+        List<Item> l = items(get("/library/metadata/" + Uri.encode(key)), true);
+        return l.isEmpty() ? null : l.get(0);
+    }
+
+    /** Was ohne Netz gespielt wurde, an Plex nachreichen (L-105). */
+    static void flushPlayed(android.content.Context c, Plex plex) {
+        MusicStats.flush(c, k -> {
+            try { plex.scrobble(k); } catch (IOException e) { throw new java.io.UncheckedIOException(e); }
+            return kotlin.Unit.INSTANCE;
+        });
+    }
+
     /** Zahl der Titel einer Liste. */
     int count(String playlistKey) throws IOException {
         try {
@@ -282,6 +389,9 @@ final class Plex {
                 it.artist = o.optString("grandparentTitle", o.optString("originalTitle", ""));
                 it.album = o.optString("parentTitle", "");
                 it.thumb = o.optString("thumb", o.optString("composite", null));
+                it.plays = o.optInt("viewCount");
+                it.skips = o.optInt("skipCount");
+                it.lastPlayedMs = o.optLong("lastViewedAt") * 1000L;
                 if (tracks) {
                     JSONArray media = o.optJSONArray("Media");
                     JSONArray parts = media == null || media.length() == 0 ? null : media.getJSONObject(0).optJSONArray("Part");

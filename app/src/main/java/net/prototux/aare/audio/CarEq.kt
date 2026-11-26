@@ -41,6 +41,13 @@ object CarEq {
     @Volatile var mediaLinked = false
     /** System L-104: lift the bass of music that has little of it ([BassLevel]); only for music, not audio books. */
     @Volatile var bassLevel = false
+    /**
+     * The song Mate's own music plays now (System L-105): its Plex key and its bass share over the whole song when known
+     * (NaN: not yet). Null for other apps' music - their bass is measured as it plays.
+     */
+    @Volatile var song: Pair<String, Double>? = null
+    /** Told the bass share of a song once enough of it was heard (key, dB below the whole) - Mate's music keeps it. */
+    @Volatile var onSongShare: ((String, Double) -> Unit)? = null
         set(v) { if (field != v) { field = v; version++ } }
 
     fun set(on: Boolean, dB: FloatArray) {
@@ -165,6 +172,11 @@ class BassLevel(private val rate: Int, private val channels: Int) {
     var shareDb = 0.0
         private set
     private var shelfDb = 0.0
+    private var songKey: String? = null
+    private var songLow = 0.0
+    private var songAll = 0.0
+    private var songS = 0.0
+    private var songKnown = false
     private var saidDb = 0.0
     private var saidAt = 0L
 
@@ -192,9 +204,19 @@ class BassLevel(private val rate: Int, private val channels: Int) {
             val a = frames.toDouble() / rate / AVERAGE_S
             lowPower += a * (lp / frames - lowPower); allPower += a * (ap / frames - allPower)
         }
-        if (allPower > 0 && lowPower > 0) {
-            shareDb = 10 * log10(lowPower / allPower)
-            val want = liftFor(shareDb)
+        // the whole song (L-105): measured over all of it while it plays, told once enough was heard; a song measured
+        // before gets its lift from the first second and keeps it - no swaying with its parts
+        val song = CarEq.song
+        if (song?.first != songKey) {
+            songKey?.let { k -> if (songS >= SONG_MIN_S && songLow > 0 && songAll > 0) CarEq.onSongShare?.invoke(k, 10 * log10(songLow / songAll)) }
+            songKey = song?.first; songLow = 0.0; songAll = 0.0; songS = 0.0
+        }
+        if (songKey != null && ap / frames > QUIET * QUIET) { songLow += lp; songAll += ap; songS += frames.toDouble() / rate }
+        val known = song?.second?.takeUnless { it.isNaN() }
+        songKnown = known != null
+        if (known != null || (allPower > 0 && lowPower > 0)) {
+            if (allPower > 0 && lowPower > 0) shareDb = 10 * log10(lowPower / allPower)
+            val want = liftFor(known ?: shareDb)
             val step = STEP_DB * frames / (rate * 0.02)
             liftDb += (want - liftDb).coerceIn(-step, step)
         }
@@ -234,8 +256,9 @@ class BassLevel(private val rate: Int, private val channels: Int) {
         if (now - measuredMs < FIRST_SAY_MS || now - saidAt < SAY_MS) return
         if (abs(liftDb - saidDb) < 1.0 && abs(shareDb - saidShare) < 2.0) return
         saidDb = liftDb; saidShare = shareDb; saidAt = now
-        net.prototux.aare.DiagLog.add("sound: bass of the music %.0f dB below its whole, lifted by %.0f dB (%s)"
-            .format(java.util.Locale.ROOT, -shareDb, liftDb, CarSound.playing ?: "?"), area = "AUDIO")
+        net.prototux.aare.DiagLog.add("sound: bass of the music %.0f dB below its whole, lifted by %.0f dB (%s)%s"
+            .format(java.util.Locale.ROOT, -shareDb, liftDb, CarSound.playing ?: "?",
+                if (songKnown) String.format(java.util.Locale.ROOT, " - the song's own %.0f dB, measured over all of it", -(CarEq.song?.second ?: 0.0)) else ""), area = "AUDIO")
     }
 
     companion object {
@@ -273,6 +296,8 @@ class BassLevel(private val rate: Int, private val channels: Int) {
         const val AVERAGE_S = 12.0
         const val QUIET = 300.0
         const val SAY_MS = 20_000L
+        /** Heard this long, a song's bass share counts as measured over the whole of it. */
+        const val SONG_MIN_S = 60.0
         const val FIRST_SAY_MS = 10_000L
 
         /** RBJ low pass (Q 0.707) as (b0, b1, b2, a1, a2). */

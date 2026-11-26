@@ -32,6 +32,14 @@ public final class MusicSyncJob extends JobService {
     public boolean onStartJob(JobParameters params) {
         Thread work = new Thread(() -> {
             int r = Offline.sync(this, null);
+            /* System L-105: what was played offline told to Plex, and the bass of new offline songs measured over their whole length */
+            try {
+                Plex plex = Plex.load(this);
+                if (plex != null) Plex.flushPlayed(this, plex);
+                SongBass.measureOffline(this, 60);
+            } catch (RuntimeException e) {
+                Log.w("MusicSyncJob", "after the sync: " + e.getClass().getSimpleName());
+            }
             /* I-118e: ohne Server (abgemeldet) kein neuer Versuch mit Backoff - erst zur naechsten Periode wieder */
             boolean server = r < 0 && Plex.load(this) != null;
             if (r < 0 && !server) Log.i("MusicSyncJob", "sync skipped: no server (signed out), next try at the next period");

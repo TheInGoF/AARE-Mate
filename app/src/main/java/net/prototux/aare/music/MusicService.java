@@ -83,6 +83,32 @@ public final class MusicService extends MediaLibraryService {
                     s.mVocabAt = now;
                     Log.i(TAG, "Wortschatz fuer Sprachwuensche: " + v.size() + " Namen");
                 }
+                /* L-105: Lieblingslieder, Meistgespieltes, "was Aehnliches", eine Stimmung */
+                Object[] special = s.voiceSpecial(text, plex);
+                if (special != null) {
+                    @SuppressWarnings("unchecked") List<MediaItem> items = (List<MediaItem>) special[0];
+                    boolean radio = (Boolean) special[2];
+                    final String said0 = (String) special[1];
+                    final long after = 1500 + 70L * said0.length();
+                    s.mMain.post(() -> {
+                        s.mRadio = radio;
+                        if (radio) {
+                            /* das Laufende bleibt, das Aehnliche kommt dahinter */
+                            int at = s.mPlayer.getCurrentMediaItemIndex() + 1;
+                            s.mPlayer.removeMediaItems(at, s.mPlayer.getMediaItemCount());
+                            s.mPlayer.addMediaItems(items);
+                        } else {
+                            s.mPlayer.pause();
+                            s.mPlayer.setMediaItems(items, 0, C.TIME_UNSET);
+                            s.mPlayer.prepare();
+                        }
+                    });
+                    if (!radio) s.mMain.postDelayed(() -> s.mPlayer.play(), after);
+                    final String r0 = said0;
+                    s.mMain.post(() -> done.accept(r0));
+                    return;
+                }
+                s.mMain.post(() -> s.mRadio = false);
                 net.prototux.aare.speech.VoiceMatch.Hit hit = net.prototux.aare.speech.VoiceMatch.INSTANCE.pick(text, s.mVocab);
                 Log.i(TAG, "Sprachwunsch \"" + text + "\" -> " + hit);
                 if (hit != null) {
@@ -163,10 +189,39 @@ public final class MusicService extends MediaLibraryService {
         mCallback = new Callback();
         mSession = new MediaLibrarySession.Builder(this, mPlayer, mCallback).setMediaButtonPreferences(buttons()).build();
         sRunning = this;
+        /* System L-105: Bass je Lied gemerkt; Stille am Ende uebersprungen */
+        net.prototux.aare.audio.CarEq.INSTANCE.setOnSongShare((k, share) -> {
+            MusicStats.bass(this, k, share);
+            return kotlin.Unit.INSTANCE;
+        });
+        mMain.postDelayed(mEndWatch, 1000);
         /* Wo die Wiedergabe steht, wird gemerkt: nach einem Neustart (App, Tablet, neue Fahrt) geht es dort weiter. */
         mPlayer.addListener(new androidx.media3.common.Player.Listener() {
             @Override
-            public void onMediaItemTransition(@Nullable MediaItem item, int reason) { remember(); level(); }
+            public void onMediaItemTransition(@Nullable MediaItem item, int reason) { remember(); level(); song(); radioMore(); }
+
+            /* System L-105: a title played to its end or skipped - told to Plex, counted for the shuffle */
+            @Override
+            public void onPositionDiscontinuity(@NonNull androidx.media3.common.Player.PositionInfo old,
+                    @NonNull androidx.media3.common.Player.PositionInfo now, int reason) {
+                String key = keyOf(old.mediaItem);
+                if (key == null) return;
+                long dur = durationOf(old.mediaItem);
+                boolean silentEnd = mSilentSkip;
+                mSilentSkip = false;
+                if (reason == androidx.media3.common.Player.DISCONTINUITY_REASON_AUTO_TRANSITION || (silentEnd
+                        && reason == androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK)) {
+                    finished(key, dur);
+                } else if (reason == androidx.media3.common.Player.DISCONTINUITY_REASON_SEEK
+                        && now.mediaItem != null && !now.mediaItem.equals(old.mediaItem)) {
+                    long pos = old.positionMs;
+                    if (dur > 0 && pos >= dur * 9 / 10) finished(key, dur);
+                    else {
+                        if (dur > 0 && pos < dur / 2) MusicStats.INSTANCE.skipped(MusicService.this, key);
+                        report(key, "stopped", pos, dur);
+                    }
+                }
+            }
 
             @Override
             public void onShuffleModeEnabledChanged(boolean on) { mSession.setMediaButtonPreferences(buttons()); }
@@ -177,6 +232,9 @@ public final class MusicService extends MediaLibraryService {
             @Override
             public void onIsPlayingChanged(boolean playing) {
                 remember();
+                MediaItem cur = mPlayer.getCurrentMediaItem();
+                String k = keyOf(cur);
+                if (k != null) report(k, playing ? "playing" : "paused", mPlayer.getCurrentPosition(), durationOf(cur));
                 mMain.removeCallbacks(mKeep);
                 if (playing) mMain.postDelayed(mKeep, KEEP_MS);
             }
@@ -280,15 +338,241 @@ public final class MusicService extends MediaLibraryService {
         @Override
         public void run() {
             remember();
+            MediaItem cur = mPlayer.getCurrentMediaItem();
+            String k = keyOf(cur);
+            if (k != null && mPlayer.isPlaying()) report(k, "playing", mPlayer.getCurrentPosition(), durationOf(cur));
             mMain.postDelayed(this, KEEP_MS);
         }
     };
+
+    // ── System L-105: Plex besser nutzen ─────────────────────────────────────
+
+    private static final String EXTRA_DUR = "plex_dur";
+
+    private static long durationOf(@Nullable MediaItem item) {
+        Bundle x = item == null ? null : item.mediaMetadata.extras;
+        return x == null ? 0 : x.getLong(EXTRA_DUR, 0);
+    }
+
+    /** Ein Titel lief bis zum Ende: Plex zaehlt ihn als gespielt (ohne Netz spaeter), Mate zaehlt mit. */
+    private void finished(String key, long dur) {
+        MusicStats.INSTANCE.played(this, key);
+        mIo.execute(() -> {
+            try {
+                Plex plex = plex();
+                plex.timeline(key, "stopped", dur, dur);
+                Plex.flushPlayed(this, plex);
+            } catch (IOException e) {
+                MusicStats.INSTANCE.pending(this, key);
+            }
+        });
+    }
+
+    /** Den Abspielstand an Plex melden (wie Plexamp); geht es nicht, bleibt es still. */
+    private void report(String key, String state, long pos, long dur) {
+        mIo.execute(() -> {
+            try {
+                plex().timeline(key, state, pos, dur);
+            } catch (IOException ignored) {
+            }
+        });
+    }
+
+    /*
+     * Stille am Ende (Lautheitsverlauf von Plex): manche Titel enden mit langer Stille (versteckte Stuecke, Ausklang).
+     * Ab 6 s Stille geht es beim Beginn der Stille zum naechsten Titel; das zaehlt als zu Ende gespielt.
+     */
+    private final java.util.Map<String, Long> mQuietFrom = java.util.Collections.synchronizedMap(new java.util.HashMap<>());
+    private boolean mSilentSkip;
+    private static final float SILENT_DB = -50f;
+    private static final long SILENT_MIN_MS = 6000;
+    private final Runnable mEndWatch = new Runnable() {
+        @Override
+        public void run() {
+            if (mPlayer == null) return;
+            MediaItem cur = mPlayer.getCurrentMediaItem();
+            String k = keyOf(cur);
+            Long from = k == null ? null : mQuietFrom.get(k);
+            if (from != null && from > 0 && mPlayer.isPlaying() && mPlayer.getCurrentPosition() >= from && mPlayer.hasNextMediaItem()) {
+                net.prototux.aare.DiagLog.INSTANCE.add("music: " + (durationOf(cur) - from) / 1000 + " s of silence at the end - on to the next title", null, "AUDIO");
+                mSilentSkip = true;
+                mPlayer.seekToNextMediaItem();
+            }
+            mMain.postDelayed(this, 1000);
+        }
+    };
+
+    /** Lautheitsverlauf eines Titels holen und merken, ob er mit langer Stille endet. */
+    private void quietEnd(String key, long dur) {
+        if (key == null || dur <= 0 || mQuietFrom.containsKey(key)) return;
+        mQuietFrom.put(key, 0L);
+        mIo.execute(() -> {
+            try {
+                float[] l = plex().levels(key, 256);
+                if (l == null) return;
+                int last = l.length - 1;
+                while (last >= 0 && l[last] < SILENT_DB) last--;
+                long from = (long) ((last + 1) / (double) l.length * dur);
+                if (dur - from >= SILENT_MIN_MS && last > l.length / 2) mQuietFrom.put(key, from);
+            } catch (IOException ignored) {
+                mQuietFrom.remove(key);
+            }
+        });
+    }
+
+    /** Der Bass des laufenden Titels ueber das ganze Lied (Klang im Auto, BassLevel): bekannt oder noch zu messen. */
+    private void song() {
+        MediaItem cur = mPlayer.getCurrentMediaItem();
+        String k = keyOf(cur);
+        net.prototux.aare.audio.CarEq.INSTANCE.setSong(k == null ? null : new kotlin.Pair<>(k, MusicStats.bass(this, k)));
+        quietEnd(k, durationOf(cur));
+    }
+
+    /** Radio (aehnliche Titel): laeuft die Warteschlange aus, kommen Nachbarn des laufenden Titels dazu. */
+    private boolean mRadio;
+
+    private void radioMore() {
+        if (!mRadio || mPlayer == null) return;
+        int left = mPlayer.getMediaItemCount() - 1 - mPlayer.getCurrentMediaItemIndex();
+        String k = keyOf(mPlayer.getCurrentMediaItem());
+        if (left > 3 || k == null) return;
+        java.util.Set<String> have = new java.util.HashSet<>();
+        for (int i = 0; i < mPlayer.getMediaItemCount(); i++) { String x = keyOf(mPlayer.getMediaItemAt(i)); if (x != null) have.add(x); }
+        mIo.execute(() -> {
+            try {
+                Plex plex = plex();
+                List<MediaItem> more = new ArrayList<>();
+                for (Plex.Item t : plex.similar(k, 30)) if (have.add(t.key) && more.size() < 15) more.add(track("rk:" + t.key, t, plex, true));
+                if (!more.isEmpty()) mMain.post(() -> { if (mRadio) mPlayer.addMediaItems(more); });
+            } catch (IOException e) {
+                Log.w(TAG, "Radio: " + e.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /** Ein Radio: der Titel [key] und klanglich aehnliche (Plex Pass), danach immer weiter. */
+    private List<MediaItem> radio(Plex plex, List<Plex.Item> seeds) throws IOException {
+        java.util.LinkedHashMap<String, Plex.Item> all = new java.util.LinkedHashMap<>();
+        for (Plex.Item s : seeds) {
+            all.putIfAbsent(s.key, s);
+            for (Plex.Item t : plex.similar(s.key, 20)) all.putIfAbsent(t.key, t);
+        }
+        List<Plex.Item> l = new ArrayList<>(all.values());
+        /* der erste Titel bleibt vorn, der Rest gemischt */
+        if (l.size() > 2) java.util.Collections.shuffle(l.subList(1, l.size()), new java.security.SecureRandom());
+        List<MediaItem> out = new ArrayList<>();
+        for (Plex.Item t : l) out.add(track("rk:" + t.key, t, plex, true));
+        return out;
+    }
+
+    /**
+     * Im Zufall seltener, was oft uebersprungen wird (L-105): ein Titel, der bei der Haelfte seiner Starts weitergedrueckt
+     * wurde, rutscht mit dieser Wahrscheinlichkeit ans Ende der Mischung.
+     */
+    private List<MediaItem> lessSkipped(List<MediaItem> mixed) {
+        java.security.SecureRandom rnd = new java.security.SecureRandom();
+        List<MediaItem> front = new ArrayList<>(), back = new ArrayList<>();
+        for (MediaItem m : mixed) {
+            String k = keyOf(m);
+            double r = k == null ? 0 : MusicStats.INSTANCE.skipRate(this, k);
+            (rnd.nextDouble() < r ? back : front).add(m);
+        }
+        front.addAll(back);
+        return front;
+    }
+
+    /** Die zuletzt geholte Statistik-Liste je Art: die Eintraege einer Seite und die Warteschlange zeigen dieselbe Folge. */
+    private final java.util.Map<String, List<Plex.Item>> mStats = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private List<Plex.Item> stat(Plex plex, String kind, boolean fresh) throws IOException {
+        List<Plex.Item> l = fresh ? null : mStats.get(kind);
+        if (l == null) { l = plex.statTracks(kind, QUEUE_MAX); mStats.put(kind, l); }
+        return l;
+    }
+
+    private int statTitle(String kind) {
+        switch (kind) {
+            case Plex.TOP: return R.string.music_stat_top;
+            case Plex.RECENT: return R.string.music_stat_recent;
+            case Plex.FORGOTTEN: return R.string.music_stat_forgotten;
+            default: return R.string.music_stat_favorites;
+        }
+    }
+
+    /** Woerter fuer Stimmungen (Plex fuehrt sie englisch) und Statistik-Wuensche per Sprache. */
+    private static final String[][] MOODS = {
+            { "ruhig", "calm", "mellow", "peaceful", "relaxed", "soothing" },
+            { "entspannt", "relaxed", "laid-back", "calm", "mellow" },
+            { "chill", "relaxed", "laid-back", "mellow" },
+            { "energ", "energetic", "rousing", "driving", "aggressive" },
+            { "power", "energetic", "aggressive", "rousing" },
+            { "fetzig", "energetic", "rousing", "fiery" },
+            { "rock", "rousing", "aggressive", "energetic" },
+            { "froeh", "happy", "cheerful", "upbeat", "playful" },
+            { "fröh", "happy", "cheerful", "upbeat", "playful" },
+            { "gute laune", "happy", "cheerful", "upbeat" },
+            { "lustig", "happy", "playful", "humorous" },
+            { "traurig", "sad", "melancholy", "bittersweet" },
+            { "melanchol", "melancholy", "sad", "brooding" },
+            { "romant", "romantic", "sensual", "tender" },
+            { "party", "party", "celebratory", "upbeat" },
+    };
+
+    /** Ein Sprachwunsch nach Statistik, Aehnlichem oder einer Stimmung; die Warteschlange und das Gesagte, sonst null. */
+    @Nullable
+    private Object[] voiceSpecial(String text, Plex plex) throws IOException {
+        String t = text.toLowerCase(java.util.Locale.GERMAN);
+        String kind = t.contains("liebling") || t.contains("favorit") ? Plex.FAVORITES
+                : t.contains("meistgespielt") || t.contains("meist gespielt") || t.contains("am meisten") || t.contains("am häufigsten") ? Plex.TOP
+                : t.contains("lange nicht") ? Plex.FORGOTTEN
+                : t.contains("zuletzt") ? Plex.RECENT : null;
+        if (kind != null) {
+            List<Plex.Item> l = new ArrayList<>(stat(plex, kind, true));
+            if (l.isEmpty()) return null;
+            java.util.Collections.shuffle(l, new java.security.SecureRandom());
+            List<MediaItem> out = new ArrayList<>();
+            for (int i = 0; i < l.size(); i++) out.add(track("rk:" + l.get(i).key, l.get(i), plex, true));
+            return new Object[] { lessSkipped(out), getString(statTitle(kind)), false };
+        }
+        if (t.contains("ähnlich") || t.contains("aehnlich") || t.contains("mehr davon") || t.contains("so was") || t.contains("sowas") || t.contains("radio")) {
+            String[] k = new String[1];
+            java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+            mMain.post(() -> { k[0] = keyOf(mPlayer.getCurrentMediaItem()); done.countDown(); });
+            try { done.await(2, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+            if (k[0] == null) return null;
+            Plex.Item seed = plex.track(k[0]);
+            if (seed == null) return null;
+            List<Plex.Item> seeds = new ArrayList<>();
+            seeds.add(seed);
+            List<MediaItem> q = radio(plex, seeds);
+            if (!q.isEmpty()) q.remove(0);   /* der laufende Titel ist schon zu hoeren */
+            return q.isEmpty() ? null : new Object[] { q, getString(R.string.music_voice_similar, seed.title), true };
+        }
+        java.util.Set<String> want = new java.util.LinkedHashSet<>();
+        for (String[] m : MOODS) if (t.contains(m[0])) for (int i = 1; i < m.length; i++) want.add(m[i]);
+        if (want.isEmpty()) return null;
+        java.util.LinkedHashMap<String, Plex.Item> all = new java.util.LinkedHashMap<>();
+        List<String> named = new ArrayList<>();
+        for (Plex.Item mood : plex.moods()) {
+            if (!want.contains(mood.title.toLowerCase(java.util.Locale.ROOT)) || named.size() >= 3) continue;
+            named.add(mood.title);
+            for (Plex.Item x : plex.moodTracks(mood.key, QUEUE_MAX / 3)) all.putIfAbsent(x.key, x);
+        }
+        Log.i(TAG, "Stimmung \"" + text + "\" -> " + named + ", " + all.size() + " Titel");
+        if (all.isEmpty()) return null;
+        List<Plex.Item> l = new ArrayList<>(all.values());
+        java.util.Collections.shuffle(l, new java.security.SecureRandom());
+        List<MediaItem> out = new ArrayList<>();
+        for (Plex.Item x : l) out.add(track("rk:" + x.key, x, plex, true));
+        return new Object[] { lessSkipped(out), getString(R.string.music_voice_mood), false };
+    }
 
     /** Titel und Stelle der Wiedergabe sichern. Treffer einer Suche ("sr:") gibt es nach einem Neustart nicht mehr. */
     private void remember() {
         MediaItem item = mPlayer.getCurrentMediaItem();
         /* Treffer einer Suche (auch per Sprache) und die Mischung eines Genres lassen sich nach einem Neustart nicht wieder aufbauen */
-        if (item == null || item.mediaId.startsWith("sr:") || item.mediaId.startsWith("vr:") || item.mediaId.startsWith("gk:")) return;
+        if (item == null || item.mediaId.startsWith("sr:") || item.mediaId.startsWith("vr:") || item.mediaId.startsWith("gk:")
+                || item.mediaId.startsWith("rk:")) return;
         Plex.prefs(this).edit().putString("last_id", item.mediaId)
                 .putLong("last_pos", Math.max(0, mPlayer.getCurrentPosition())).apply();
     }
@@ -303,6 +587,9 @@ public final class MusicService extends MediaLibraryService {
     public void onDestroy() {
         sRunning = null;
         mMain.removeCallbacks(mKeep);
+        mMain.removeCallbacks(mEndWatch);
+        net.prototux.aare.audio.CarEq.INSTANCE.setSong(null);
+        net.prototux.aare.audio.CarEq.INSTANCE.setOnSongShare(null);
         remember();
         mSession.release();
         mPlayer.release();
@@ -332,7 +619,7 @@ public final class MusicService extends MediaLibraryService {
     }
 
     /** Ein Reiter der Sammlung: Wiedergabelisten, Kuenstler, Alben. */
-    private static final String LISTS = "pls", ARTISTS = "ars", ALBUMS = "als", GENRES = "ges";
+    private static final String LISTS = "pls", ARTISTS = "ars", ALBUMS = "als", GENRES = "ges", FOR_YOU = "fys", MOODS_ID = "mos";
 
     private static MediaItem section(String id, String title) {
         return new MediaItem.Builder().setMediaId(id).setMediaMetadata(new MediaMetadata.Builder().setTitle(title)
@@ -340,8 +627,13 @@ public final class MusicService extends MediaLibraryService {
     }
 
     private MediaItem shuffleOf(String id, int hint) {
+        return shuffleOf(id, hint, null);
+    }
+
+    private MediaItem shuffleOf(String id, int hint, @Nullable String title) {
+        if (id.startsWith("rd:") || id.startsWith("ra:")) title = getString(R.string.music_radio);
         return new MediaItem.Builder().setMediaId(id).setMediaMetadata(new MediaMetadata.Builder()
-                .setTitle(getString(R.string.music_shuffle))
+                .setTitle(title != null ? title : getString(R.string.music_shuffle))
                 .setArtist(getString(hint))
                 .setIsBrowsable(false).setIsPlayable(true).setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC).build()).build();
     }
@@ -359,6 +651,7 @@ public final class MusicService extends MediaLibraryService {
         m.setUserRating(t.stars > 0 ? new androidx.media3.common.StarRating(5, t.stars / 2f) : new androidx.media3.common.StarRating(5));
         Bundle extras = new Bundle();
         extras.putString(EXTRA_KEY, t.key);
+        extras.putLong(EXTRA_DUR, t.durationMs);
         m.setExtras(extras);
         MediaItem.Builder b = new MediaItem.Builder().setMediaId(id).setMediaMetadata(m.build());
         java.io.File file = playable ? Offline.track(this, t.key) : null;
@@ -466,8 +759,10 @@ public final class MusicService extends MediaLibraryService {
         int start = 0;
         if (id.startsWith("sh:")) {
             java.util.Collections.shuffle(l, new java.security.SecureRandom());
+            List<MediaItem> picked = new ArrayList<>();
             for (int i = 0; i < Math.min(l.size(), QUEUE_MAX); i++)
-                out.add(track("tr:" + p[1] + ":" + l.get(i)[0], (Plex.Item) l.get(i)[1], plex, true));
+                picked.add(track("tr:" + p[1] + ":" + l.get(i)[0], (Plex.Item) l.get(i)[1], plex, true));
+            out.addAll(lessSkipped(picked));
         } else {
             int at = id.startsWith("tr:") && p.length > 2 ? Integer.parseInt(p[2]) : 0;
             /* ganz hinein, wenn sie passt; sonst ab dem angetippten Titel */
@@ -504,11 +799,28 @@ public final class MusicService extends MediaLibraryService {
                     int size = size0;
                     int from0 = (int) Math.min(Integer.MAX_VALUE, (long) Math.max(0, page) * size);
                     if (ROOT.equals(parentId)) {
-                        /* Drei Wege in die Sammlung; die Oberflaeche zeigt sie als Reiter */
+                        /* Vier Wege in die Sammlung; die Oberflaeche zeigt sie als Reiter */
                         out.add(section(LISTS, getString(R.string.music_tab_playlists)));
                         out.add(section(ARTISTS, getString(R.string.music_tab_artists)));
                         out.add(section(ALBUMS, getString(R.string.music_tab_albums)));
+                        /* hoechstens vier Reiter (Android Auto): die Genres stehen unter "Fuer dich" (L-105) */
+                        out.add(section(FOR_YOU, getString(R.string.music_tab_for_you)));
+                    } else if (FOR_YOU.equals(parentId)) {
+                        /* L-105: was Plex ueber das Hoeren weiss, aehnliche Titel und Stimmungen */
+                        out.add(shuffleOf("rd:now", R.string.music_radio_now_hint));
+                        for (String k : new String[] { Plex.TOP, Plex.RECENT, Plex.FORGOTTEN, Plex.FAVORITES })
+                            out.add(section("st:" + k, getString(statTitle(k))));
+                        out.add(section(MOODS_ID, getString(R.string.music_moods)));
                         out.add(section(GENRES, getString(R.string.music_tab_genres)));
+                    } else if (parentId.startsWith("st:")) {
+                        String kind = parentId.substring(3);
+                        List<Plex.Item> l = stat(plex, kind, from0 == 0);
+                        if (from0 == 0 && l.size() > 1) out.add(shuffleOf("ss:" + kind, R.string.music_shuffle_hint));
+                        int first = Math.max(0, from0 == 0 ? 0 : from0 - 1), want = from0 == 0 ? size - 1 : size;
+                        for (int i = first; i < Math.min(l.size(), first + want); i++) out.add(track("sk:" + kind + ":" + i, l.get(i), plex, false));
+                        return LibraryResult.ofItemList(out.build(), params);
+                    } else if (MOODS_ID.equals(parentId)) {
+                        for (Plex.Item m : plex.moods()) out.add(shuffleOf("sm:" + m.key, R.string.music_shuffle_mood, m.title));
                     } else if (GENRES.equals(parentId)) {
                         for (Plex.Item g : plex.genres()) out.add(section("ge:" + g.key, g.title));
                     } else if (parentId.startsWith("ge:")) {
@@ -539,6 +851,7 @@ public final class MusicService extends MediaLibraryService {
                         List<Plex.Item> albums = plex.albumsOf(key);
                         if (!albums.isEmpty()) {
                             out.add(shuffleOf("sa:" + key, R.string.music_shuffle_artist));
+                            out.add(shuffleOf("ra:" + key, R.string.music_radio_artist_hint));
                             out.add(section("aa:" + key, getString(R.string.music_all_tracks)));
                         }
                         for (Plex.Item a : albums)
@@ -705,6 +1018,12 @@ public final class MusicService extends MediaLibraryService {
                     } else if (id.startsWith("an:")) {
                         List<Plex.Item> one = plex.artistTracksByTitle(p[1], Integer.parseInt(p[2]), 1);
                         if (!one.isEmpty()) t = one.get(0);
+                    } else if (id.startsWith("sk:")) {
+                        List<Plex.Item> l = stat(plex, p[1], false);
+                        int i = Integer.parseInt(p[2]);
+                        if (i >= 0 && i < l.size()) t = l.get(i);
+                    } else if (id.startsWith("rk:") || id.startsWith("gk:")) {
+                        t = plex.track(p[1]);
                     }
                     if (t != null) out.add(track(id, t, plex, true));
                 }
@@ -719,7 +1038,8 @@ public final class MusicService extends MediaLibraryService {
                 @NonNull MediaSession.ControllerInfo controller, @NonNull List<MediaItem> items, int startIndex, long startPositionMs) {
             String first = items.isEmpty() ? "" : items.get(0).mediaId;
             /* a mix ("Mischen" of a list, an artist, a genre) is remembered as such, so a restart mixes anew */
-            boolean mix = first.startsWith("sh:") || first.startsWith("sa:") || first.startsWith("sg:");
+            boolean mix = first.startsWith("sh:") || first.startsWith("sa:") || first.startsWith("sg:") || first.startsWith("ss:") || first.startsWith("sm:");
+            mRadio = first.startsWith("rd:") || first.startsWith("ra:");
             android.content.SharedPreferences.Editor e = Plex.prefs(MusicService.this).edit();
             if (mix) e.putString("last_mix", first); else e.remove("last_mix");
             e.apply();
@@ -784,7 +1104,7 @@ public final class MusicService extends MediaLibraryService {
                         if (tracks.size() < CHUNK) break;
                     }
                     java.util.Collections.shuffle(picked, new java.security.SecureRandom());
-                    out.addAll(picked.subList(0, Math.min(picked.size(), QUEUE_MAX)));
+                    out.addAll(lessSkipped(picked.subList(0, Math.min(picked.size(), QUEUE_MAX))));
                 } else if (id.startsWith("an:")) {
                     /* aus "Alle Titel" eines Kuenstlers: ab dem angetippten weiter nach dem Alphabet */
                     String[] p = id.split(":");
@@ -795,7 +1115,9 @@ public final class MusicService extends MediaLibraryService {
                     /* ein Genre, vom Server gemischt; die Titel behalten die Kennung ihres Albums nicht - sie spielen als Mischung */
                     String key = id.substring(3);
                     List<Plex.Item> tracks = plex.genreShuffle(key, QUEUE_MAX);
-                    for (int i = 0; i < tracks.size(); i++) out.add(track("gk:" + tracks.get(i).key, tracks.get(i), plex, true));
+                    List<MediaItem> picked = new ArrayList<>();
+                    for (int i = 0; i < tracks.size(); i++) picked.add(track("gk:" + tracks.get(i).key, tracks.get(i), plex, true));
+                    out.addAll(lessSkipped(picked));
                 } else if (id.startsWith("ak:")) {
                     /* ein Titel aus der Mischung eines Kuenstlers (nach einem Neustart): ab dort durch seine Titel */
                     String[] p = id.split(":");
@@ -828,7 +1150,39 @@ public final class MusicService extends MediaLibraryService {
                         }
                     }
                     java.util.Collections.shuffle(picked, rnd);
-                    out.addAll(picked);
+                    out.addAll(lessSkipped(picked));
+                } else if (id.startsWith("sk:")) {
+                    /* eine Statistik-Liste ab dem angetippten Titel */
+                    String[] p = id.split(":");
+                    List<Plex.Item> l = stat(plex, p[1], false);
+                    for (int i = 0; i < l.size(); i++) out.add(track("sk:" + p[1] + ":" + i, l.get(i), plex, true));
+                    start = Math.max(0, Math.min(l.size() - 1, Integer.parseInt(p[2])));
+                } else if (id.startsWith("ss:")) {
+                    List<Plex.Item> l = new ArrayList<>(stat(plex, id.substring(3), true));
+                    java.util.Collections.shuffle(l, new java.security.SecureRandom());
+                    List<MediaItem> picked = new ArrayList<>();
+                    for (Plex.Item t : l) picked.add(track("rk:" + t.key, t, plex, true));
+                    out.addAll(lessSkipped(picked));
+                } else if (id.startsWith("sm:")) {
+                    List<MediaItem> picked = new ArrayList<>();
+                    for (Plex.Item t : plex.moodTracks(id.substring(3), QUEUE_MAX)) picked.add(track("rk:" + t.key, t, plex, true));
+                    out.addAll(lessSkipped(picked));
+                } else if (id.startsWith("rd:")) {
+                    /* Radio zum laufenden Titel (oder zum zuletzt gespielten) */
+                    String[] k = new String[1];
+                    java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+                    mMain.post(() -> { k[0] = keyOf(mPlayer.getCurrentMediaItem()); done.countDown(); });
+                    try { done.await(2, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+                    Plex.Item seed = k[0] == null ? null : plex.track(k[0]);
+                    if (seed != null) { List<Plex.Item> seeds = new ArrayList<>(); seeds.add(seed); out.addAll(radio(plex, seeds)); }
+                } else if (id.startsWith("ra:")) {
+                    /* Radio zu einem Kuenstler: drei seiner Titel und was ihnen klanglich aehnelt */
+                    List<Plex.Item> his = new ArrayList<>(plex.artistTracks(id.substring(3), 0, 200));
+                    java.util.Collections.shuffle(his, new java.security.SecureRandom());
+                    out.addAll(radio(plex, his.subList(0, Math.min(3, his.size()))));
+                } else if (id.startsWith("rk:") || id.startsWith("gk:")) {
+                    Plex.Item t = plex.track(id.substring(3));
+                    if (t != null) out.add(track(id, t, plex, true));
                 } else if (id.startsWith("pl:")) {
                     String key = id.substring(3);
                     List<Plex.Item> tracks = plex.tracks(key, 0, QUEUE_MAX);

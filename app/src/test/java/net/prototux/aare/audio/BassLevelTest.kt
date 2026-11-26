@@ -80,6 +80,35 @@ class BassLevelTest {
         assertEquals(BassLevel.liftFor(b.shareDb), b.liftDb, 0.5)
     }
 
+    @Test fun aSongMeasuredBeforeGetsItsLiftFromTheStart() {
+        // L-105: a thin song known from before - its lift from the start, whatever its first seconds sound like
+        CarEq.song = "k1" to -12.0
+        try {
+            val b = BassLevel(rate, 2)
+            run(b, 8, bassAmp = 8000.0, highAmp = 4000.0)   // a bass-rich opening
+            assertEquals(10.0, b.liftDb, 0.01)
+        } finally { CarEq.song = null }
+    }
+
+    @Test fun aSongHeardLongEnoughIsToldItsShare() {
+        val told = mutableListOf<Pair<String, Double>>()
+        CarEq.onSongShare = { k, share -> told += k to share }
+        CarEq.song = "k2" to Double.NaN
+        try {
+            val b = BassLevel(rate, 2)
+            run(b, 30, bassAmp = 4000.0, highAmp = 8000.0)
+            CarEq.song = "k3" to Double.NaN
+            run(b, 1, bassAmp = 4000.0, highAmp = 8000.0)
+            assertTrue("not told under a minute: $told", told.isEmpty())
+            run(b, 62, bassAmp = 4000.0, highAmp = 8000.0)
+            CarEq.song = null
+            run(b, 1, bassAmp = 4000.0, highAmp = 8000.0)
+            assertEquals(1, told.size)
+            assertEquals("k3", told[0].first)
+            assertEquals(-7.0, told[0].second, 0.7)
+        } finally { CarEq.song = null; CarEq.onSongShare = null }
+    }
+
     @Test fun quietPassagesChangeNothing() {
         val b = BassLevel(rate, 2)
         run(b, 10, bassAmp = 10.0, highAmp = 100.0)
