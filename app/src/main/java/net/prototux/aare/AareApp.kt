@@ -12,7 +12,9 @@ class AareApp : Application() {
         net.prototux.aare.audio.AudioTrials.load(this)
         // which Mate runs, once per start (System L-075: bugs reported against an older version stay recognisable)
         val mainProcess = android.os.Build.VERSION.SDK_INT < 28 || getProcessName() == packageName
-        if (mainProcess) DiagLog.add("Mate started: ${versionLine()}")
+        // with the tablet's time since its start: a start of the tablet itself shows (System N-040, I-136)
+        if (mainProcess) DiagLog.add("Mate started: ${versionLine()}, tablet up ${android.os.SystemClock.elapsedRealtime() / 60_000} min")
+        if (mainProcess) readyAfterRestart()
         lastExit()
         // what Mate gives back when the tablet's memory is tight (Memory)
         Memory.givers += { if (net.prototux.aare.dash.DashData.dropParkedStage()) "the dashboard's page kept behind another area" else null }
@@ -36,6 +38,20 @@ class AareApp : Application() {
             runCatching { java.io.File(filesDir, "wallpaper.jpg").takeIf { it.exists() }?.let { if (it.delete()) DiagLog.add("old wallpaper removed") } }
             once.edit().putBoolean("wallpaper_gone", true).apply()
         }.start()
+    }
+
+    /**
+     * Whether the tablet comes up by itself after a restart (System L-108, 26.11.2026: "Strom an → startet von selbst →
+     * Internet → Mate läuft"): a screen lock keeps every app, Mate too, from running until it is unlocked, and a SIM PIN
+     * keeps mobile data off. Said in the log when one of them stands in the way.
+     */
+    private fun readyAfterRestart() = runCatching {
+        val lock = getSystemService(android.app.KeyguardManager::class.java)?.isDeviceSecure == true
+        val sim = getSystemService(android.telephony.TelephonyManager::class.java)?.simState
+        val pin = sim == android.telephony.TelephonyManager.SIM_STATE_PIN_REQUIRED || sim == android.telephony.TelephonyManager.SIM_STATE_PUK_REQUIRED
+        if (lock || pin) DiagLog.add("after a restart: " + listOfNotNull(
+            if (lock) "the tablet has a screen lock (PIN, pattern or password) - Mate only runs once it is unlocked" else null,
+            if (pin) "the SIM card waits for its PIN - no mobile data until it is typed" else null).joinToString("; "), area = "POWER")
     }
 
     /**

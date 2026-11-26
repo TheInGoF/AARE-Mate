@@ -85,6 +85,9 @@ class CarNotificationListener : NotificationListenerService() {
     private var callerKey: String? = null
 
     override fun onListenerConnected() {
+        // into the log (System N-040, 26.11.2026: "Nachrichten funktionieren neuerdings, vermutlich seit einem Neustart" -
+        // from 23.11. to 26.11. 16:23 not one message line, after Mate's start then many)
+        if (instance == null) net.prototux.aare.DiagLog.add("messages: Android bound the notification access", area = "PHONE")
         instance = this
         // A car that connected before this listener was bound still gets what waits unread.
         catchUp()
@@ -94,6 +97,8 @@ class CarNotificationListener : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         instance = null
+        net.prototux.aare.DiagLog.add("messages: Android unbound the notification access - asked to bind it again", area = "PHONE")
+        runCatching { requestRebind(ComponentName(this, CarNotificationListener::class.java)) }
         _guidance.value = null
         // Its removal would not reach us any more.
         callerKey = null
@@ -480,9 +485,10 @@ class CarNotificationListener : NotificationListenerService() {
          * update): ask for it again. Harmless when it's already connected.
          */
         fun rebind(context: Context) {
-            if (instance == null && accessGranted(context)) {
-                runCatching { requestRebind(ComponentName(context, CarNotificationListener::class.java)) }
-            }
+            if (instance != null) return
+            val granted = accessGranted(context)
+            net.prototux.aare.DiagLog.add("messages: notification access " + (if (granted) "given, but Android has not bound it - asked again" else "not given"), area = "PHONE")
+            if (granted) runCatching { requestRebind(ComponentName(context, CarNotificationListener::class.java)) }
         }
 
         /** Notification.EXTRA_CALL_TYPE (Android 12+: 1 incoming, 2 ongoing, 3 screening), 0 when not told. */
