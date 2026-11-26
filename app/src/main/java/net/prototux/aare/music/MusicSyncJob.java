@@ -30,6 +30,14 @@ public final class MusicSyncJob extends JobService {
 
     @Override
     public boolean onStartJob(JobParameters params) {
+        /* System I-142: the loading in a foreground service of its own (a job is stopped after some ten minutes, with the
+           screen off the tablet slept); the job is done at once. Refused by Android: as before, in the job */
+        if (!Offline.running()) try {
+            startForegroundService(new android.content.Intent(this, MusicDownload.class).putExtra("why", "every six hours"));
+            return false;
+        } catch (RuntimeException e) {
+            net.prototux.aare.DiagLog.INSTANCE.add("music offline: service refused (" + e.getClass().getSimpleName() + ") - loading in the job", null, "AUDIO");
+        }
         Thread work = new Thread(() -> {
             int r = Offline.sync(this, null);
             /* System L-105: what was played offline told to Plex, and the bass of new offline songs measured over their whole length */

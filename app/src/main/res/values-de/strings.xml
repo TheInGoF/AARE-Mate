@@ -1179,6 +1179,13 @@
     <string name="places_map_search">Ort oder Adresse suchen</string>
     <string name="places_map_go">Suchen</string>
     <string name="mate_navi_voice_brief">Kurz</string>
+    <string name="music_download_starting">Offline-Musik wird geladen …</string>
+    <string name="music_download_channel">Offline-Musik laden</string>
+    <string name="music_download_title">Offline-Musik wird geladen</string>
+    <plurals name="music_download_left">
+        <item quantity="one">%1$d Titel fehlt noch – wird beim nächsten Abgleich geladen.</item>
+        <item quantity="other">%1$d Titel fehlen noch – werden beim nächsten Abgleich geladen.</item>
+    </plurals>
     <string name="music_offline_title">Offline-Playlisten</string>
     <string name="music_offline_hint">Abonnierte Playlisten liegen auf dem Gerät und spielen ohne Netz. Mate hält sie alle sechs Stunden selbst aktuell: neue Titel werden geladen, entfernte gelöscht.</string>
     <string name="music_offline_loading">Frage den Server nach seinen Playlisten …</string>

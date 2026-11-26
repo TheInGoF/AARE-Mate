@@ -191,6 +191,24 @@ public final class Offline {
         }
     }
 
+    /**
+     * Why no (further) song can be loaded now, in words for the log (System I-142): no server, no network, only Wi-Fi
+     * allowed and the tablet on mobile data, or the network is fine (then the server did not answer).
+     */
+    public static String whyNot(Context c) {
+        if (PlexAccount.current(c) == null) return "no Plex server signed in";
+        try {
+            ConnectivityManager cm = c.getSystemService(ConnectivityManager.class);
+            NetworkCapabilities nc = cm.getNetworkCapabilities(cm.getActiveNetwork());
+            if (nc == null || !nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return "no network";
+            if (wifiOnly(c) && !nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED))
+                return "waits for Wi-Fi (\"Nur über WLAN laden\" is on, the tablet is on mobile data)";
+            return "network fine - the server did not answer or a song failed";
+        } catch (RuntimeException e) {
+            return "network unknown";
+        }
+    }
+
     /** Fortschritt eines Abgleichs: Text fuer die Einstellungen, null = fertig. */
     public interface Progress { void on(String text); }
 
@@ -226,7 +244,7 @@ public final class Offline {
         if (plex == null || !netOk(c)) return -1;
         Set<String> subs = lists(c);
         Set<String> keep = new HashSet<>(), keepArt = new HashSet<>();
-        int loaded = 0;
+        int loaded = 0, failedSongs = 0;
         boolean complete = true;
         int found = 0;
         try {
@@ -251,14 +269,21 @@ public final class Offline {
                     i++;
                     if (sCancel) return 0;
                     if (track(c, t.key) != null || t.part == null) continue;
-                    if (!netOk(c)) { complete = false; break; }
+                    if (!netOk(c)) {
+                        complete = false;
+                        net.prototux.aare.DiagLog.INSTANCE.add("music offline: paused at " + i + " of " + tracks.size() + " - " + whyNot(c), null, "AUDIO");
+                        break;
+                    }
                     if (p != null) p.on(pl.title + ": " + i + " / " + tracks.size());
                     try {
                         download(plex.media(t.part).toString(), new File(new File(dir(c), "t"), safe(t.key)));
                         loaded++;
                     } catch (IOException e) {
                         complete = false;
+                        failedSongs++;
                         Log.w(TAG, "track not loaded: " + e.getClass().getSimpleName());
+                        if (failedSongs <= 3) net.prototux.aare.DiagLog.INSTANCE.add("music offline: a song not loaded (" + e.getClass().getSimpleName()
+                                + (e.getMessage() != null ? ": " + e.getMessage() : "") + ")", null, "AUDIO");
                     }
                 }
                 for (String th : thumbs) {

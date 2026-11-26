@@ -1192,6 +1192,13 @@
     <string name="places_map_search">Search a place or address</string>
     <string name="places_map_go">Search</string>
     <string name="mate_navi_voice_brief">Brief</string>
+    <string name="music_download_starting">Loading offline music …</string>
+    <string name="music_download_channel">Loading offline music</string>
+    <string name="music_download_title">Loading offline music</string>
+    <plurals name="music_download_left">
+        <item quantity="one">%1$d song still missing – it loads at the next sync.</item>
+        <item quantity="other">%1$d songs still missing – they load at the next sync.</item>
+    </plurals>
     <string name="music_offline_title">Offline playlists</string>
     <string name="music_offline_hint">Subscribed playlists are kept on the device and play without a network. Mate keeps them up to date by itself every six hours: new titles are loaded, removed ones deleted.</string>
     <string name="music_offline_loading">Asking the server for its playlists…</string>

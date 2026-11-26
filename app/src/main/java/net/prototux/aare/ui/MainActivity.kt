@@ -2071,6 +2071,9 @@ private fun MusicOfflineCard(refresh: Int) {
             kotlinx.coroutines.delay(3000)
             val now = net.prototux.aare.music.Offline.running()
             if (now || was) tick++
+            // the loading runs in its service (System I-142): its progress, and what it left to say
+            if (now) net.prototux.aare.music.MusicDownload.progress?.let { progress = it }
+            else if (was) progress = net.prototux.aare.music.MusicDownload.lastResult
             was = now
         }
     }
@@ -2079,12 +2082,8 @@ private fun MusicOfflineCard(refresh: Int) {
     }.value
     val bytes = produceState(0L, tick) { value = withContext(Dispatchers.IO) { net.prototux.aare.music.Offline.bytes(ctx) } }.value
     fun sync() {
-        scope.launch(Dispatchers.IO) {
-            progress = null
-            val n = net.prototux.aare.music.Offline.sync(ctx) { t -> progress = t }
-            if (n < 0) progress = ctx.getString(R.string.music_offline_no_net)
-            tick++
-        }
+        progress = ctx.getString(R.string.music_download_starting)
+        net.prototux.aare.music.MusicDownload.start(ctx, "by hand")
     }
     Section(stringResource(R.string.music_offline_title)) {
         Text(stringResource(R.string.music_offline_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
