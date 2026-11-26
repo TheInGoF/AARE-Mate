@@ -259,7 +259,7 @@ class CarAudioOut(
         private const val PROMPT_SILENCE_MS = 1_200L
         /** A sample this loud on both sides of a run of silence makes the run a gap, not a pause between words. */
         private const val LOUD = 2_000
-        /** Was 6 s (18.11.2026, a trial when the music did not come back after a beep); the music is now asked back the way chosen then (RELEASE_FIRST). */
+        /** Was 6 s: a trial against crackle from the channels overlapping, which did not help (26.11.2026; prompts computed ahead did). */
         private const val MIN_PROMPT_MS = 2_500L
         /** About 1 s of 20 ms chunks kept while waiting for the car's focus grant. */
         private const val MAX_QUEUED = 50
