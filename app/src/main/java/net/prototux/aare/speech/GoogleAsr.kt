@@ -11,13 +11,14 @@ import android.speech.RecognitionService
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import net.prototux.aare.audio.MicInject
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
  * Android's own speech recognition (System O-036, Q-064, 25.11.2026: "dann baue Google in den Einstellungen ein"), as an
- * alternative to Whisper. In the car the car's microphone is handed through while the speaker talks, else - or where
- * Google does not take it - the recognizer listens from the tablet's microphone ([Live]). What it hears goes through the same matching as Whisper's text
+ * alternative to Whisper. In the car the car's microphone is injected as the tablet's while the speaker talks (MicInject);
+ * elsewhere the recognizer listens from the tablet's microphone ([Live]). What it hears goes through the same matching as Whisper's text
  * (VoiceMatch against the own music, VoiceCommands). Mate's own recognition service is never asked (it would ask Whisper).
  * Any failure: null - the caller falls back to Whisper.
  */
@@ -46,15 +47,19 @@ object GoogleAsr {
         runCatching { context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(c.packageName, 0)).toString() }.getOrNull() ?: c.packageName
     }
 
-    /** Whether Google took the car's microphone handed through: null untried, false refused (then the tablet's at once). */
-    @Volatile var carMicTaken: Boolean? = null
+    /**
+     * Whether Google hears the car's microphone injected as the tablet's (MicInject): null untried, false not (then Whisper
+     * listens in the car, until Mate restarts). The tablet's own microphone is never asked in the car: in the seat pocket
+     * it hears nobody (System I-134, log 26.11.2026 16:43-16:44: ten times "no speech heard").
+     */
+    @Volatile var carMicInjected: Boolean? = null
 
     /**
      * One listening of the system's recognizer. In the car ([mic], the car's microphone through the car session) its sound
-     * is handed through to the recognizer while the speaker talks, piece by piece as it comes (26.11.2026: "Erst den Versuch
-     * mit dem laufend durchgereichten Mikrofon, wie im Original" - 2.5.10 had handed over a whole recording afterwards and
-     * Google answered "nothing" at once). Refused - Google answers nothing while the car's microphone heard speech, or an
-     * error - the recognizer listens itself, from the tablet's microphone, and the car's is not tried again until Mate
+     * is injected as the tablet's microphone while the speaker talks, piece by piece as it comes, and the recognizer records
+     * as it always does (26.11.2026: "Erst den Versuch mit dem laufend durchgereichten Mikrofon, wie im Original" - handed
+     * through by a pipe, Google took nothing; Android Auto injects it the same way). Not possible, or Google answers nothing
+     * while the car's microphone heard speech: null, Whisper listens, and Google is not asked again in the car until Mate
      * restarts. [run] blocks; [stop] ends the listening now and gets what was said, [cancel] gives it up.
      */
     class Live(context: Context, private val pauseMs: Int = 1200,
@@ -73,16 +78,21 @@ object GoogleAsr {
          * Whisper). [onEnd]: the speaker has finished, the words are being worked out.
          */
         fun run(onEnd: () -> Unit = {}, maxMs: Long = 30_000L): List<String>? {
-            if (mic != null && carMicTaken != false && android.os.Build.VERSION.SDK_INT >= 33) {
+            if (mic != null) {
+                // in the car: the car's microphone injected as the tablet's (26.11.2026: handed through by a pipe Google
+                // took nothing, and the tablet's microphone in the seat pocket heard nobody) - not possible: Whisper
+                if (carMicInjected == false) return null
                 val (r, heardSpeech) = once(onEnd, maxMs, mic)
                 if (cancelled) return emptyList()
                 if (r != null && (r.isNotEmpty() || !heardSpeech)) {
-                    if (r.isNotEmpty() && carMicTaken != true) { carMicTaken = true; net.prototux.aare.DiagLog.add("speech: Google takes the car's microphone handed through") }
+                    if (r.isNotEmpty() && carMicInjected != true) { carMicInjected = true; net.prototux.aare.DiagLog.add("speech: Google hears the car's microphone (injected)") }
                     return r
                 }
-                carMicTaken = false
-                net.prototux.aare.DiagLog.add("speech: Google did not take the car's microphone (" + (if (r == null) "an error" else "nothing recognized while the car's microphone heard speech") +
-                    ") - from now on it listens through the tablet's microphone")
+                carMicInjected = false
+                net.prototux.aare.DiagLog.add("speech: Google did not hear the car's microphone injected (" +
+                    (MicInject.lastFailure ?: if (r == null) "an error" else "nothing recognized while the car's microphone heard speech") +
+                    ") - Whisper listens in the car until Mate restarts")
+                return null
             }
             return once(onEnd, maxMs, null).first
         }
@@ -105,26 +115,19 @@ object GoogleAsr {
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, pauseMs)
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, pauseMs)
             }
-            // the car's microphone: its 16 kHz chunks into a pipe the recognizer reads, by a thread of its own (a recognizer
-            // that does not read must not hold up the car's microphone)
+            // the car's microphone: its 16 kHz chunks injected as the tablet's microphone (MicInject), by a thread of its own
+            // (a recognizer that does not read must not hold up the car's microphone); the recognizer records as usual
             var handle: net.prototux.aare.host.MicHandle? = null
             var writer: Thread? = null
+            var inject: MicInject? = null
             var loud = false
-            if (car != null && android.os.Build.VERSION.SDK_INT >= 33) {
-                val pipe = android.os.ParcelFileDescriptor.createPipe()
+            if (car != null) {
+                inject = MicInject.open(app, Dictation.RATE) ?: return null to false
                 val q = java.util.concurrent.LinkedBlockingQueue<ByteArray>()
                 feed = q
-                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, pipe[0])
-                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
-                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
-                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, Dictation.RATE)
+                val into = inject
                 writer = Thread({
-                    runCatching {
-                        android.os.ParcelFileDescriptor.AutoCloseOutputStream(pipe[1]).use { out ->
-                            while (true) { val b = q.take(); if (b === END) break; out.write(b) }
-                        }
-                    }
-                    runCatching { pipe[0].close() }
+                    runCatching { while (true) { val b = q.take(); if (b === END) break; into.write(b, 0, b.size) } }
                 }, "mate-asr-carmic").apply { isDaemon = true; start() }
                 handle = runCatching { car({ b, off, len ->
                     var sum = 0.0; val n = len / 2
@@ -132,7 +135,7 @@ object GoogleAsr {
                     if (n > 0 && kotlin.math.sqrt(sum / n) > LOUD) loud = true
                     q.offer(b.copyOfRange(off, off + len))
                 }, { q.offer(END) }) }.getOrNull()
-                if (handle == null) { q.offer(END); feed = null; return null to false }
+                if (handle == null) { q.offer(END); feed = null; inject.close(); return null to false }
             }
             main.post {
                 if (cancelled) { done.countDown(); return@post }
@@ -157,6 +160,7 @@ object GoogleAsr {
             runCatching { handle?.close() }
             feed?.offer(END); feed = null
             runCatching { writer?.join(500) }
+            inject?.close()
             main.post { runCatching { if (!inTime) recognizer?.cancel(); recognizer?.destroy(); recognizer = null } }
             val now = android.os.SystemClock.elapsedRealtime()
             val r = result?.map { it.trim() }?.filter { it.isNotEmpty() }
@@ -168,7 +172,7 @@ object GoogleAsr {
                 else -> "${r.size} alternatives"
             }
             // what was said stays out of the log (dictated messages)
-            net.prototux.aare.DiagLog.add("speech: system recognition (${service.packageName}, " + (if (car != null) "car's microphone handed through" else "tablet's microphone") +
+            net.prototux.aare.DiagLog.add("speech: system recognition (${service.packageName}, " + (if (car != null) "car's microphone injected" else "tablet's microphone") +
                 ") $how after ${(now - t0) / 1000.0} s" + (if (endAt > 0) ", ${now - endAt} ms after the speaker stopped" else "") +
                 (if (spoke) "" else ", no speech heard") + (if (car != null) (if (loud) ", the car's microphone heard speech" else ", the car's microphone quiet") else ""))
             if (cancelled) return emptyList<String>() to loud
