@@ -147,14 +147,18 @@ final class StickLink {
      * for the driver ("Stick suchen" again, after "Geraet koppeln" on the stick) instead of trying on its own - outside the
      * stick's window every try would only ask for a code nobody knows.
      */
-    private static long sPairAskedAt;
+    /* never asked: not 0, which counted as "asked at boot" - for the first 5 min after the tablet started every stick
+       that was slow to send lost its pairing (System I-132, log 26.11.2026 16:23:53) */
+    private static long sPairAskedAt = Long.MIN_VALUE;
     private boolean mBonding;
     private android.content.BroadcastReceiver mBondWatch;
 
     /** The driver asked for the stick ("Stick suchen"): pairing may be started for the next few minutes. */
     static void pairNow() { sPairAskedAt = android.os.SystemClock.elapsedRealtime(); }
 
-    private static boolean pairAllowed() { return android.os.SystemClock.elapsedRealtime() - sPairAskedAt < 5 * 60_000L; }
+    static boolean pairAllowed() {
+        return sPairAskedAt != Long.MIN_VALUE && android.os.SystemClock.elapsedRealtime() - sPairAskedAt < 5 * 60_000L;
+    }
 
     private void watchBond(BluetoothGatt g) {
         unwatchBond();
@@ -173,7 +177,7 @@ final class StickLink {
                         && i.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, -1) == BluetoothDevice.BOND_BONDING) {
                     /* only a pairing that was under way and ended without a key (an old one dropped is no failure) */
                     mBonding = false; unwatchBond();
-                    sPairAskedAt = 0;
+                    sPairAskedAt = Long.MIN_VALUE;
                     fail(R.string.stick_pair_failed);
                     close();                                    /* no try of its own: the driver starts it again */
                 }
@@ -222,7 +226,8 @@ final class StickLink {
         BluetoothGatt g = mGatt;
         if (g == null || mSubscribed || mBonding || !mRunning) return;
         log("connected 25 s ago, still not subscribed (bond " + english(bond(g.getDevice().getBondState())) + ")");
-        if (!pairAllowed()) { fail(R.string.stick_no_data); close(); mRunning = false; return; }
+        /* a stick just woken up (car switched on) may be slow: connected anew, the pairing kept (System I-132) */
+        if (!pairAllowed()) { again(R.string.stick_no_data); return; }
         mGotData = false;
         noData();
     }
@@ -234,7 +239,8 @@ final class StickLink {
     private void noData() {
         BluetoothGatt g = mGatt;
         if (g == null || mGotData || !mRunning) return;
-        if (!pairAllowed()) { fail(R.string.stick_no_data); return; }
+        /* without the driver's "Stick suchen" the pairing is never dropped: the stick may still be waking up and send later */
+        if (!pairAllowed()) { log("subscribed, but no data in 20 s - waiting, the pairing kept"); return; }
         log("subscribed, but no data in 20 s - the old pairing is dropped and made anew");
         BluetoothDevice dev = g.getDevice();
         if (!removeBond(dev)) { fail(R.string.stick_unpair_by_hand); return; }
