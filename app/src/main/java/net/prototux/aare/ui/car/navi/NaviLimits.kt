@@ -45,8 +45,29 @@ internal class NaviLimits internal constructor(private val points: List<Position
         return limit[lo].takeIf { it != 0 }
     }
 
+    /**
+     * The limit near places taken in their order along a similar line (Navi L-056: the plan's own route over its stops
+     * runs a little apart from the one the limits were asked for): each looked up from where the last one was found,
+     * a little back and on - in one pass over the line, not a search of all of it at each place.
+     */
+    fun walker(): (Position) -> Int? {
+        var at = 0
+        return walk@{ p ->
+            if (points.size < 2) return@walk null
+            var best = at; var bd = Double.MAX_VALUE
+            val from = maxOf(0, at - WALK_BACK); val to = minOf(points.lastIndex, at + WALK_ON)
+            for (i in from..to) { val d = ChargerIndex.distanceM(points[i], p); if (d < bd) { bd = d; best = i } }
+            at = best
+            if (bd > WALK_OFF_M) null else limit[best].takeIf { it != 0 }
+        }
+    }
+
     companion object {
         const val UNLIMITED = -1
+        private const val WALK_BACK = 20
+        private const val WALK_ON = 400
+        /** Further than this from the line the limits were asked for: not known there. */
+        private const val WALK_OFF_M = 300.0
 
         /**
          * The limits along [points] (the route's line); null when Valhalla cannot be asked. Long routes are asked in pieces

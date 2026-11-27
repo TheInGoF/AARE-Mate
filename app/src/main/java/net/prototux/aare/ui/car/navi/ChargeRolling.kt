@@ -51,6 +51,11 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
     private var refM = 0.0
     // what the car took and what the model said on the stretches before the last charging (the car stays the car)
     private var takenEarlier = 0.0; private var modelEarlier = 0.0; private var kmEarlier = 0.0
+    // Navi I-071 (27.11.2026: "nicht einfach über die aktuelle Fahrweise angepasst werden, sondern anhand der
+    // Straßenverhältnisse"): what the model says the stretches driven took at the speed they were really driven at, against
+    // what it said at the planned speed - the speed is the driver's choice, not the car's error; kept out of [scale]
+    private var paceSinceRef = 0.0
+    private var paceM = -1.0; private var paceMs = 0L
     // chargers given up as the next stop: going back to one takes [BACK_MIN]
     private val left = HashSet<Charger>()
     // chargers whose way led far round the route (Navi I-067): not offered again on this trip
@@ -98,7 +103,7 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
      * has gone - quicker when it takes more (to be safe), slower when it takes less.
      */
     fun scale(drivenM: Double, soc: Double): Double = synchronized(scaleLock) {
-        val model = modelEarlier + usedBefore + used(refM, drivenM)
+        val model = modelEarlier + usedBefore + used(refM, drivenM) + paceSinceRef
         val km = kmEarlier + kmBefore + (drivenM - refM) / 1000
         if (model < MIN_USED) return@synchronized 1.0
         val seen = ((takenEarlier + refSoc - soc) / model).coerceIn(LOW_SCALE, HIGH_SCALE)
@@ -109,6 +114,7 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
     /** The route changed (the stops moved, a new route from here): the plan goes on on [newTrack] from its start. */
     @Synchronized fun retrack(newTrack: ChargePlanner.Track, drivenM: Double, newChain: List<Charger> = chain) {
         planUsedBefore += used(planM, drivenM); planM = 0.0
+        paceM = -1.0
         // the new track and the start of its stretch together, so a reader never sees one without the other
         synchronized(scaleLock) { usedBefore += used(refM, drivenM); kmBefore += (drivenM - refM) / 1000; refM = 0.0; track = newTrack }
         chain = newChain; lastCheckM = -1e9
@@ -153,20 +159,44 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
 
     private fun noteStretch(drivenM: Double, soc: Double) {
         val (taken, model, km) = synchronized(scaleLock) {
-            Triple(refSoc - soc, usedBefore + used(refM, drivenM), kmBefore + (drivenM - refM) / 1000) }
+            Triple(refSoc - soc, usedBefore + used(refM, drivenM) + paceSinceRef, kmBefore + (drivenM - refM) / 1000) }
         stretch(taken - model, km)
+    }
+
+    /**
+     * The same route with a better track (its limits or works came in, Navi I-071): the metres are the same, only what the
+     * model expects ahead changes.
+     */
+    fun replaceTrack(newTrack: ChargePlanner.Track) { synchronized(scaleLock) { track = newTrack } }
+
+    /**
+     * I-071: the stretch from the last pace mark to [drivenM], driven in the time since [atMs] - what the model would have
+     * said at that speed against what it said at the planned one, added to the model (so [scale] keeps only its own error).
+     */
+    private fun pace(drivenM: Double, atMs: Long) {
+        val fromM = paceM; val fromMs = paceMs
+        paceM = drivenM; paceMs = atMs
+        if (fromM < 0 || drivenM - fromM < PACE_MIN_M || atMs <= fromMs) return
+        val realKmh = (drivenM - fromM) / ((atMs - fromMs) / 1000.0) * 3.6
+        val planS = secondsBetween(fromM, drivenM)
+        if (planS <= 0 || realKmh !in PACE_KMH) return
+        val planKmh = (drivenM - fromM) / planS * 3.6
+        if (planKmh !in PACE_KMH) return
+        val ratio = (EnergyModel.tripW(realKmh, car) / realKmh) / (EnergyModel.tripW(planKmh, car) / planKmh)
+        synchronized(scaleLock) { paceSinceRef += used(fromM, drivenM) * (ratio - 1) }
     }
 
     /**
      * The check at [drivenM] along the track with the car's [soc]; null between checks ([force]: now). A level that rose
      * since the last one is a charging: the stretch before it is noted and a new one starts.
      */
-    @Synchronized fun check(drivenM: Double, soc: Double, force: Boolean = false): Decision? {
+    @Synchronized fun check(drivenM: Double, soc: Double, force: Boolean = false, atMs: Long? = null): Decision? {
+        if (atMs != null) pace(drivenM, atMs)
         if (soc > lastSoc + CHARGED_PERCENT) {
             noteStretch(drivenM, lastSoc)
             synchronized(scaleLock) {
-                takenEarlier += refSoc - lastSoc; modelEarlier += usedBefore + used(refM, drivenM); kmEarlier += kmBefore + (drivenM - refM) / 1000
-                refSoc = soc; refM = drivenM; usedBefore = 0.0; kmBefore = 0.0
+                takenEarlier += refSoc - lastSoc; modelEarlier += usedBefore + used(refM, drivenM) + paceSinceRef; kmEarlier += kmBefore + (drivenM - refM) / 1000
+                refSoc = soc; refM = drivenM; usedBefore = 0.0; kmBefore = 0.0; paceSinceRef = 0.0
             }
             planSoc = soc; planM = drivenM; planUsedBefore = 0.0
         }
@@ -282,5 +312,8 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
         const val REL_LEARNED = 0.04
         private const val LOW_SCALE = 0.7
         private const val HIGH_SCALE = 1.5
+        /** I-071: stretches shorter than this are no measure of the speed; speeds outside these are no driving (a stop, a jump). */
+        private const val PACE_MIN_M = 500.0
+        private val PACE_KMH = 15.0..230.0
     }
 }

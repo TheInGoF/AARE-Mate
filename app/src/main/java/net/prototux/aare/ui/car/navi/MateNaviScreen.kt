@@ -225,6 +225,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         // the plan goes on without it, as it does without the server's heights or the weather
         // started apart from this plan (the screen's scope): a call that does not answer in time is left to finish on its
         // own and does not hold the plan up (the heights it brings are kept for the next plan of the same route)
+        // Navi I-071: the map's speed limits along the route, beside the heights and the weather (no waiting longer than for them)
+        val limitsAsked = scope.async(kotlinx.coroutines.Dispatchers.IO) { runCatching { NaviLimits.load(context, raw(c.route), c.route) }.getOrNull() }
         val (index, heights, weather) = run {
             val idx = scope.async(kotlinx.coroutines.Dispatchers.IO) { runCatching { ChargerIndex.get(context) } }
             val rain = scope.async(kotlinx.coroutines.Dispatchers.IO) { runCatching { NaviRain.refresh(context) } }
@@ -244,7 +246,11 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val weatherNote = weather?.describe() ?: "no weather (planned as before)"
         if (heights != null) NaviKeep.heights = heights
         NaviKeep.weather = weather
-        fun tr(r: uniffi.ferrostar.Route) = ChargePlanner.track(r, car, heights = heights, weather = weather)
+        val planLimits = kotlinx.coroutines.withTimeoutOrNull(LIMITS_WAIT_MS) { limitsAsked.await() }
+        chargeLog("charging: ${c.kind} speeds: " + (if (planLimits != null) "the map's limits along the route" else "the route's own (limits not in time)") +
+            ", open motorway at " + (NaviPace.cruise(context)?.let { "%.0f km/h (learned)".format(java.util.Locale.ROOT, it) } ?: "the route's speed (not learned yet)"))
+        fun tr(r: uniffi.ferrostar.Route) = ChargePlanner.track(r, car, heights = heights, weather = weather,
+            speed = NaviPace.along(planLimits?.walker(), NaviPace.cruise(context), emptyList()))
         val settings = net.prototux.aare.Settings(context)
         // home with a wallbox: the car may arrive with the driver's value for home (O205), it charges there anyway
         val home = net.prototux.aare.places.Places.isHomeWithWallbox(net.prototux.aare.places.Places.load(context), to.latitude, to.longitude)
@@ -297,8 +303,18 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
      * Navi L-029 step F: the charging plan of [route] kept up to date while driving - its stops (the driver's own at a
      * charger among them, never left out) checked every few km against the real level.
      */
+    /**
+     * Navi I-071: the speeds the plan on [r] counts with - the map's limits on it (once loaded for this route), the driver's
+     * own speed where there is none, 80 through the road works ahead (TomTom, on this route).
+     */
+    fun paceOf(r: uniffi.ferrostar.Route): (Double, Position, Double) -> Double {
+        val lim = NaviKeep.limits.value?.takeIf { it.of(r) }?.walker()
+        val works = if (session.route.value === r) NaviKeep.trafficAhead.value.filter { NaviTraffic.onOurWay(it) && NaviTraffic.shownKind(it) == 9 }
+            .map { it.alongM to maxOf(it.endM, it.alongM + 100) } else emptyList()
+        return NaviPace.along(lim, NaviPace.cruise(context), works)
+    }
     fun guidedTrack(r: uniffi.ferrostar.Route, car: net.prototux.aare.host.EnergyModel.Car) =
-        ChargePlanner.track(r, car, heights = NaviKeep.heights, weather = NaviKeep.weather)
+        ChargePlanner.track(r, car, heights = NaviKeep.heights, weather = NaviKeep.weather, speed = paceOf(r))
     fun startRolling(route: uniffi.ferrostar.Route) {
         val car = net.prototux.aare.host.CarDataService.car(context) ?: run { NaviKeep.rolling = null; return }
         val index = ChargerIndex.get(context)
@@ -899,6 +915,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val r = guided ?: return@LaunchedEffect
         if (!guiding) return@LaunchedEffect
         var simSoc: Double? = null; var simM = 0.0
+        var paceMark = 0.0 to 0L
         while (true) {
             kotlinx.coroutines.delay(CHARGE_CHECK_MS)
             val car = net.prototux.aare.host.CarDataService.car(context) ?: continue
@@ -918,7 +935,18 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 simM = driven; simSoc = lv; lv
             } else car.socPercent
             val before = roll.chain
-            val d = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { roll.check(driven, soc) } ?: continue
+            // I-071: the speed really driven goes in with the time (not in a test drive: its clock runs faster), and on open
+            // motorway without a limit it teaches the driver's own speed
+            val nowMs = System.currentTimeMillis()
+            if (!testDrive) {
+                val (pm, pms) = paceMark
+                if (pms > 0 && driven - pm >= 1_000 && nowMs > pms) {
+                    val kmh = (driven - pm) / ((nowMs - pms) / 1000.0) * 3.6
+                    if (limits?.takeIf { it.of(r) }?.along(driven) == NaviLimits.UNLIMITED) NaviPace.note(context, kmh, (driven - pm) / 1000)
+                }
+                paceMark = driven to nowMs
+            }
+            val d = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { roll.check(driven, soc, atMs = if (testDrive) null else nowMs) } ?: continue
             if (d.kind != ChargeRolling.Kind.KEEP || d.why.contains("waiting")) chargeLog("charging on the way: ${d.kind}, ${d.why}")
             // System I-094 (23.11.2026: "er braucht aber nicht beim Navi starten … sagen, dass der Ladestopp sich ändert"): right
             // after a route set on purpose (the start, the plan put in, a stop changed) the plan has only just been made -
@@ -1096,6 +1124,22 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             kotlinx.coroutines.delay(30_000)
         }
     } }
+    // Navi I-071: the guided route's limits came in, or the works ahead changed - the plan on the way counts with them
+    val worksKey = remember(NaviKeep.trafficAhead.value) { NaviKeep.trafficAhead.value.filter { NaviTraffic.shownKind(it) == 9 }.map { it.alongM.toInt() } }
+    LaunchedEffect(limits, worksKey, guided) {
+        val g = guided ?: return@LaunchedEffect
+        val roll = NaviKeep.rolling ?: return@LaunchedEffect
+        if (NaviKeep.rollingRoute !== g || testDrive) return@LaunchedEffect
+        if (limits?.of(g) != true && worksKey.isEmpty()) return@LaunchedEffect
+        val car = net.prototux.aare.host.CarDataService.car(context) ?: return@LaunchedEffect
+        val t = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { guidedTrack(g, car) }
+        if (NaviKeep.rollingRoute === g) {
+            roll.replaceTrack(t)
+            chargeLog("charging on the way: the plan counts with the map's limits%s and %d road works ahead (I-071); your speed on open motorway %s".format(
+                java.util.Locale.ROOT, if (limits?.of(g) == true) "" else " (not loaded)", worksKey.size,
+                NaviPace.cruise(context)?.let { "%.0f km/h".format(java.util.Locale.ROOT, it) } ?: "not learned yet"))
+        }
+    }
     // Navi T-073, L-052: what came of a hint, for looking at it later - the battery at the charger against the plan
     val atChargerNow by NaviKeep.atCharger
     LaunchedEffect(atChargerNow) {
@@ -2223,6 +2267,8 @@ private const val OWN_CHARGER_M = 120.0
 private const val CHARGE_CHECK_MS = 30_000L
 /** A trip lost with the connection this recently goes on by itself (a charging stop, a break). */
 private const val AUTO_RESUME_MS = 3 * 60 * 60_000L
+/** Navi I-071: how long a charging plan waits for the route's speed limits (asked beside the heights). */
+private const val LIMITS_WAIT_MS = 6_000L
 private const val STOP_PX = 64
 private const val ARRIVAL_DELAY_MS = 3000L
 private const val BEARING_DAMPING_MS = 700.0

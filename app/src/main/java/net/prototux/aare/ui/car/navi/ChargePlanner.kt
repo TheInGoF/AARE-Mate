@@ -161,7 +161,9 @@ internal object ChargePlanner {
      */
     fun track(route: uniffi.ferrostar.Route, car: EnergyModel.Car,
               rainKwh100: ((Position, Double) -> Double)? = if (NaviRain.active) NaviRain::kwh100At else null,
-              heights: ChargeEnergy.Heights? = null, weather: ChargeEnergy.Weather? = null): Track {
+              heights: ChargeEnergy.Heights? = null, weather: ChargeEnergy.Weather? = null,
+              /** Navi L-056: the speed driven at a point instead of the route's (metres along, its place, the route's speed there). */
+              speed: ((Double, Position, Double) -> Double)? = null): Track {
         val pts = route.geometry.map { Position(longitude = it.lng, latitude = it.lat) }
         val kmh = DoubleArray(pts.size)
         // the steps' ends along the route, for each piece's speed
@@ -175,6 +177,7 @@ internal object ChargePlanner {
             while (k < route.steps.lastIndex && m > stepEnd[k]) k++
             val st = route.steps[k]
             kmh[i] = if (st.duration > 0) (st.distance / st.duration * 3.6).coerceIn(5.0, 200.0) else 50.0
+            if (speed != null) kmh[i] = speed(m, pts[i], kmh[i])
             if (ferry != null) ferry[i] = ferrySteps[k]
         }
         return ChargeEnergy.track(pts, kmh, car, heights, weather, rainKwh100, ferry = ferry)
