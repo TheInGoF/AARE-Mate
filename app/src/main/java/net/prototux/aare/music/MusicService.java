@@ -51,6 +51,8 @@ public final class MusicService extends MediaLibraryService {
     private final ListeningExecutorService mIo = MoreExecutors.listeningDecorator(Executors.newSingleThreadExecutor());
     private List<Plex.Item> mFound = new ArrayList<>();
     private ExoPlayer mPlayer;
+    /** The queue the round's order was set for (System I-145): its size and first and last title; set once per queue. */
+    @Nullable private String mBagFor;
     private MediaLibrarySession mSession;
     private Callback mCallback;
     /** Wortschatz fuer Sprachwuensche: Kuenstler und Alben der Sammlung, einige Stunden gemerkt. */
@@ -206,6 +208,9 @@ public final class MusicService extends MediaLibraryService {
                     @NonNull androidx.media3.common.Player.PositionInfo now, int reason) {
                 String key = keyOf(old.mediaItem);
                 if (key == null) return;
+                /* System I-145: a song that came (played or skipped) is out of its round until all have come */
+                if (reason == androidx.media3.common.Player.DISCONTINUITY_REASON_AUTO_TRANSITION
+                        || (now.mediaItem != null && !now.mediaItem.equals(old.mediaItem))) ShuffleBag.INSTANCE.heard(MusicService.this, key);
                 long dur = durationOf(old.mediaItem);
                 boolean silentEnd = mSilentSkip;
                 mSilentSkip = false;
@@ -224,7 +229,14 @@ public final class MusicService extends MediaLibraryService {
             }
 
             @Override
-            public void onShuffleModeEnabledChanged(boolean on) { mSession.setMediaButtonPreferences(buttons()); }
+            public void onShuffleModeEnabledChanged(boolean on) { mSession.setMediaButtonPreferences(buttons()); mBagFor = null; if (on) bagShuffle(); }
+
+            /* a new queue with the shuffle button on: the list's round instead of ExoPlayer's fresh random order (I-145);
+               once per queue - setting the order changes the timeline too */
+            @Override
+            public void onTimelineChanged(@NonNull androidx.media3.common.Timeline timeline, int reason) {
+                if (reason == androidx.media3.common.Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) bagShuffle();
+            }
 
             @Override
             public void onRepeatModeChanged(int mode) { mSession.setMediaButtonPreferences(buttons()); }
@@ -479,6 +491,56 @@ public final class MusicService extends MediaLibraryService {
         }
         front.addAll(back);
         return front;
+    }
+
+    /** [items] of list [list] in the order of its round (ShuffleBag, System I-145). */
+    private List<MediaItem> inRound(String list, List<MediaItem> items) {
+        List<String> keys = new ArrayList<>();
+        for (MediaItem m : items) { String k = keyOf(m); if (k != null) keys.add(k); }
+        return inRound(list, items, keys);
+    }
+
+    /** [items] in the order of the round over [all] the list's songs (keys); items without a key at the end. */
+    private List<MediaItem> inRound(String list, List<MediaItem> items, List<String> all) {
+        java.util.Map<String, MediaItem> byKey = new java.util.LinkedHashMap<>();
+        List<MediaItem> rest = new ArrayList<>();
+        for (MediaItem m : items) { String k = keyOf(m); if (k == null || byKey.containsKey(k)) rest.add(m); else byKey.put(k, m); }
+        List<MediaItem> out = new ArrayList<>();
+        for (String k : ShuffleBag.INSTANCE.queue(this, list, all.isEmpty() ? new ArrayList<>(byKey.keySet()) : all, new java.security.SecureRandom())) {
+            MediaItem m = byKey.remove(k);
+            if (m != null) out.add(m);
+        }
+        out.addAll(byKey.values());
+        out.addAll(rest);
+        return out;
+    }
+
+    /**
+     * The shuffle button on a list played in its order ("tr:list:i"): ExoPlayer's random order replaced by the list's round,
+     * the title playing first (System I-145). On the main thread.
+     */
+    private void bagShuffle() {
+        if (mPlayer == null || !mPlayer.getShuffleModeEnabled() || mPlayer.getMediaItemCount() < 3) return;
+        MediaItem cur = mPlayer.getCurrentMediaItem();
+        String[] p = cur == null ? null : cur.mediaId.split(":");
+        if (p == null || p.length < 3 || !"tr".equals(p[0])) return;
+        int n = mPlayer.getMediaItemCount(), now = mPlayer.getCurrentMediaItemIndex();
+        String queue = n + "|" + mPlayer.getMediaItemAt(0).mediaId + "|" + mPlayer.getMediaItemAt(n - 1).mediaId;
+        if (queue.equals(mBagFor)) return;
+        mBagFor = queue;
+        List<String> keys = new ArrayList<>();
+        java.util.Map<String, Integer> at = new java.util.HashMap<>();
+        for (int i = 0; i < n; i++) { String k = keyOf(mPlayer.getMediaItemAt(i)); if (k != null && !at.containsKey(k)) { at.put(k, i); keys.add(k); } }
+        int[] order = new int[n];
+        boolean[] used = new boolean[n];
+        int j = 0;
+        order[j++] = now; used[now] = true;
+        for (String k : ShuffleBag.INSTANCE.queue(this, p[1], keys, new java.security.SecureRandom())) {
+            Integer i = at.get(k);
+            if (i != null && !used[i]) { order[j++] = i; used[i] = true; }
+        }
+        for (int i = 0; i < n; i++) if (!used[i]) order[j++] = i;
+        mPlayer.setShuffleOrder(new androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(order, System.nanoTime()));
     }
 
     /** Die zuletzt geholte Statistik-Liste je Art: die Eintraege einer Seite und die Warteschlange zeigen dieselbe Folge. */
@@ -758,11 +820,15 @@ public final class MusicService extends MediaLibraryService {
         List<MediaItem> out = new ArrayList<>();
         int start = 0;
         if (id.startsWith("sh:")) {
-            java.util.Collections.shuffle(l, new java.security.SecureRandom());
+            /* System I-145: the list's round over all its songs - without a net only those on the tablet are played of it,
+               the others stay in the round for later (before, a mix made before the net was up held the loaded ones only) */
             List<MediaItem> picked = new ArrayList<>();
-            for (int i = 0; i < Math.min(l.size(), QUEUE_MAX); i++)
-                picked.add(track("tr:" + p[1] + ":" + l.get(i)[0], (Plex.Item) l.get(i)[1], plex, true));
-            out.addAll(lessSkipped(picked));
+            for (Object[] o : l) picked.add(track("tr:" + p[1] + ":" + o[0], (Plex.Item) o[1], plex, true));
+            List<Plex.Item> whole = Offline.list(this, p[1]);
+            List<String> all = new ArrayList<>();
+            if (whole != null) for (Plex.Item t : whole) all.add(t.key);
+            picked = inRound(p[1], picked, all);
+            out.addAll(lessSkipped(picked.subList(0, Math.min(picked.size(), QUEUE_MAX))));
         } else {
             int at = id.startsWith("tr:") && p.length > 2 ? Integer.parseInt(p[2]) : 0;
             /* ganz hinein, wenn sie passt; sonst ab dem angetippten Titel */
@@ -1149,7 +1215,10 @@ public final class MusicService extends MediaLibraryService {
                             for (int i = 0; i < tracks.size(); i++) picked.add(track("tr:" + key + ":" + (at + i), tracks.get(i), plex, true));
                         }
                     }
-                    java.util.Collections.shuffle(picked, rnd);
+                    /* System I-145: a whole list in the order of its round (each song once before any again, kept over
+                       trips); a list too long to load whole stays a random sample as before */
+                    if (n <= SHUFFLE_ALL) picked = inRound(key, picked);
+                    else java.util.Collections.shuffle(picked, rnd);
                     out.addAll(lessSkipped(picked));
                 } else if (id.startsWith("sk:")) {
                     /* eine Statistik-Liste ab dem angetippten Titel */
