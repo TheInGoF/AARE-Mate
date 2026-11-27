@@ -33,8 +33,11 @@ class NaviPreheatTargetTest {
         assertNull(NaviPreheat.advice(14.0, 10.0, 150, 10.0, NaviPreheat.Rates(), NaviPreheat.Stop(car, 45.0, 52.0, 5.0)))
     }
 
-    @Test fun aWarmBatteryIsLeftAlone() =
+    @Test fun aWarmBatteryIsLeftAlone() {
         assertNull(NaviPreheat.advice(23.0, 10.0, 300, 20.0, NaviPreheat.Rates(), NaviPreheat.Stop(car, 10.0, 80.0, 5.0)))
+        // Navi I-074: at 20 °C the car charges at full power ("keine Batterieheizung nötig")
+        assertNull(NaviPreheat.advice(20.0, 5.0, 300, 15.0, NaviPreheat.Rates(), NaviPreheat.Stop(car, 10.0, 80.0, 5.0)))
+    }
 
     @Test fun neverBelowTheLeastLevelAtTheCharger() {
         // there with 6 %, least 5 %: no warming costs more than 1 %
@@ -48,20 +51,49 @@ class NaviPreheatTargetTest {
         assertNull(NaviPreheat.advice(8.0, 8.0, 300, pick.minutes + NaviPreheat.MARGIN_MIN + 5, NaviPreheat.Rates(), stop))
     }
 
-    /** Navi L-053: one degree up within the window is a heating seen; the same at once on another source or after charging is not. */
-    @Test fun heatingSeenQuickly() {
-        val s = NaviPreheat.Seen()
+    /**
+     * Navi L-053, I-074: a quick rise of two degrees is a heating seen; a degree in a while is the drive (27.11.2026: "erkennt
+     * eine Batterieheizung, obwohl sie gar nicht aktiviert ist … nur wenn er wirklich einen signifikanten Anstieg erkennt");
+     * warm already the car does not heat; another source starts anew.
+     */
+    @Test fun heatingSeenOnlyOnAQuickRise() {
         val t0 = 1_800_000_000_000L
+        val s = NaviPreheat.Seen()
+        // the heater at about 0.33 K/min, whole degrees read: seen after 9 min
         assertTrue(!s.reading(8.0, t0, "stick"))
-        assertTrue(!s.reading(8.5, t0 + 3 * 60_000, "stick"))
-        assertTrue(s.reading(9.0, t0 + 6 * 60_000, "stick"))
+        assertTrue(!s.reading(9.0, t0 + 3 * 60_000, "stick"))
+        assertTrue(!s.reading(10.0, t0 + 6 * 60_000, "stick"))
+        assertTrue(s.reading(11.0, t0 + 9 * 60_000, "stick"))
         assertEquals(8.0, s.fromC, 1e-9)
+        // read finer (0.3 K a minute): seen within 7 min
+        val fine = NaviPreheat.Seen()
+        val seenAt = (0..10).firstOrNull { m -> fine.reading(8.0 + 0.3 * m, t0 + m * 60_000L, "stick") }
+        assertTrue("$seenAt", seenAt != null && seenAt <= 7)
         val o = NaviPreheat.Seen()
         o.reading(8.0, t0, "backend")
-        assertTrue("another source starts anew", !o.reading(9.5, t0 + 60_000, "stick"))
-        val slow = NaviPreheat.Seen()
-        slow.reading(8.0, t0, "stick")
-        assertTrue("a degree in half an hour is the drive, not the heater", !slow.reading(9.0, t0 + 30 * 60_000, "stick"))
+        assertTrue("another source starts anew", !o.reading(10.5, t0 + 60_000, "stick"))
+        // the drive on the motorway: whole degrees read, about 0.13 K/min
+        val drive = NaviPreheat.Seen()
+        listOf(19.0, 19.0, 20.0, 20.0, 21.0, 21.0, 22.0).forEachIndexed { i, c ->
+            assertTrue("drive warming at ${i * 3} min", !drive.reading(c, t0 + i * 3 * 60_000L, "stick")) }
+        // the case of 27.11.: 19 -> 20 °C shortly before the charger
+        val warm = NaviPreheat.Seen()
+        warm.reading(19.0, t0, "stick")
+        assertTrue(!warm.reading(20.0, t0 + 5 * 60_000, "stick"))
+        // warm already: the car does not heat, a rise is the drive
+        val full = NaviPreheat.Seen()
+        full.reading(21.0, t0, "stick")
+        assertTrue(!full.reading(23.0, t0 + 5 * 60_000, "stick"))
+    }
+
+    /** I-074: a heating seen that does not go on is dropped. */
+    @Test fun aRiseThatStopsIsNoHeating() {
+        val t0 = 1_800_000_000_000L
+        val h = NaviPreheat.Heating(Charger(org.maplibre.spatialk.geojson.Position(longitude = 13.0, latitude = 52.0), 300, 4, "x"), 8.0, t0, 4.0, 20.0)
+        assertTrue(NaviPreheat.stillHeating(h, 10.0, t0 + 6 * 60_000))
+        assertTrue(NaviPreheat.stillHeating(h, 12.0, t0 + 15 * 60_000))
+        assertTrue("stuck at 10 °C for 25 min", !NaviPreheat.stillHeating(h, 10.0, t0 + 25 * 60_000))
+        assertTrue("cooler than at the start", !NaviPreheat.stillHeating(h, 7.5, t0 + 3 * 60_000))
     }
 
     /** L-053: while it heats, the kWh of the whole heating stay; at the charger as warm as the rate seen gives, 25 °C at most. */

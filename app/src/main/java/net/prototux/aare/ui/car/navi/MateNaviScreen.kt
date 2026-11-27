@@ -1127,7 +1127,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             else if (bt != null && at > lastAt) {
                 lastAt = at
                 heats = seen.reading(bt, at, net.prototux.aare.dash.DashData.sourceOf(context, "t_batt"))
-                watch.reading(bt, at, net.prototux.aare.dash.DashData.sourceOf(context, "t_batt"))?.let { rate -> if (out != null) {
+                // Navi I-074: a rate learned only while a heating is seen - the drive's own warming is no heater's rate
+                watch.reading(bt, at, net.prototux.aare.dash.DashData.sourceOf(context, "t_batt"))?.takeIf { heats || heating != null }?.let { rate -> if (out != null) {
                     val r = NaviPreheat.Rates.of(context).learn(out, rate)
                     NaviPreheat.Rates.save(context, r)
                     net.prototux.aare.DiagLog.add("battery warm: %.2f K/min seen at %.0f °C outside - %s".format(java.util.Locale.ROOT, rate, out, r), area = "CHARGE")
@@ -1151,6 +1152,12 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             // Navi L-053: the battery being heated for the next fast charger - seen once, then shown until the charger
             val c = ahead; val toMin = minutesTo
             if (heating != null && heating.charger !== c) heating = null
+            // Navi I-074: the rise did not go on - no heating (any more)
+            heating?.let { h -> if (bt != null && !NaviPreheat.stillHeating(h, bt, at)) {
+                net.prototux.aare.DiagLog.add("battery warm: no heating any more - %.1f -> %.1f °C in %.0f min".format(java.util.Locale.ROOT,
+                    h.fromC, bt, (at - h.sinceMs) / 60_000.0), area = "CHARGE")
+                heating = null
+            } }
             if (heats && c != null && heating == null && bt != null && toMin != null) {
                 val rate = NaviPreheat.Rates.of(context).at(out)
                 val hinted = (preheat?.takeIf { it.first === c } ?: next?.takeIf { it.first === c })?.second

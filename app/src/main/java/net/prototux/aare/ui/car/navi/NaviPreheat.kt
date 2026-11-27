@@ -69,7 +69,8 @@ internal object NaviPreheat {
         val (x0, y0) = t[i]; val (x1, y1) = t[i + 1]
         return y0 + (y1 - y0) * (c - x0) / (x1 - x0)
     }
-    private val SHARE = listOf(-5.0 to 0.22, 0.0 to 0.3, 5.0 to 0.42, 10.0 to 0.55, 15.0 to 0.7, 20.0 to 0.88, 25.0 to 1.0)
+    // Navi I-074: at 20 °C the car itself said "volle Ladeleistung verfügbar" (27.11.2026) - full power from there
+    private val SHARE = listOf(-5.0 to 0.22, 0.0 to 0.3, 5.0 to 0.42, 10.0 to 0.6, 15.0 to 0.8, FULL_POWER_C to 1.0)
 
     /** Minutes to charge [car] from [fromPct] to [toPct] at a charger of [kw], the battery at [startC] and warming as it charges. */
     fun chargeMinutes(car: net.prototux.aare.host.EnergyModel.Car, kw: Int, fromPct: Double, toPct: Double, startC: Double): Double {
@@ -213,19 +214,50 @@ internal object NaviPreheat {
         var fromC = Double.NaN; private set
         var sinceMs = 0L; private set
         private var source: String? = null
+        private val readings = ArrayDeque<Pair<Long, Double>>()
+        /** The smallest step between two readings seen: what one reading may be off (whole degrees: 1). */
+        private var step = 1.0
 
-        fun reset() { fromC = Double.NaN; sinceMs = 0L; source = null }
+        fun reset() { fromC = Double.NaN; sinceMs = 0L; source = null; readings.clear() }
 
-        /** A reading; true when it shows the battery being heated (from [fromC] at [sinceMs]). */
+        /**
+         * A reading; true when it shows the battery being heated (from [fromC] at [sinceMs]). Navi I-074 (27.11.2026: "Er
+         * erkennt eine Batterieheizung, obwohl sie gar nicht aktiviert ist … nur wenn er wirklich einen signifikanten
+         * Anstieg erkennt, aber nicht einfach nur, weil die Batterie warm ist, kurz vorm Lader"): a degree in 20 minutes was
+         * enough - the drive itself warms the battery so on the motorway. Now [RISE_SEEN_C] up at [SEEN_RATE_K_MIN] at
+         * least within [SEEN_WINDOW_MIN] minutes, counted from the earliest of the coolest readings there less one step of
+         * the readings (whole degrees read do not make a quick rise of a slow one), and only below [FULL_POWER_C] - warmer the car does not heat for
+         * a charge ("keine Batterieheizung nötig, volle Ladeleistung verfügbar").
+         */
         fun reading(c: Double, atMs: Long, src: String?): Boolean {
-            if (fromC.isNaN() || src != source || c < fromC - 0.3 || atMs - sinceMs > SEEN_WINDOW_MIN * 60_000L) {
-                fromC = c; sinceMs = atMs; source = src; return false
-            }
-            return c - fromC >= RISE_SEEN_C
+            if (src != source) { readings.clear(); source = src }
+            readings.lastOrNull()?.let { (_, prev) -> val d = Math.abs(c - prev); if (d > 0.01) step = minOf(step, d) }
+            readings.addLast(atMs to c)
+            while (readings.first().first < atMs - SEEN_WINDOW_MIN * 60_000L) readings.removeFirst()
+            val low = readings.minOf { it.second }
+            val (t0, c0) = readings.first { it.second == low }
+            val min = (atMs - t0) / 60_000.0
+            // the rate as low as the readings allow: one step of them taken off (19 read may be 19.9)
+            val heats = c0 < FULL_POWER_C && c - c0 >= RISE_SEEN_C && min > 0 && (c - c0 - step) / min >= SEEN_RATE_K_MIN
+            if (heats) { fromC = c0; sinceMs = t0 }
+            return heats
         }
     }
-    const val RISE_SEEN_C = 1.0
-    const val SEEN_WINDOW_MIN = 20
+    const val RISE_SEEN_C = 2.0
+    const val SEEN_RATE_K_MIN = 0.2
+    const val SEEN_WINDOW_MIN = 15
+    /** From here the car charges at full power and does not heat for a charge (the car's own words, 27.11.2026, at 20 °C). */
+    const val FULL_POWER_C = 20.0
+
+    /**
+     * Navi I-074: a heating seen that does not go on - after [RATE_SEEN_MIN] minutes less than half [SEEN_RATE_K_MIN] since
+     * its start, or the battery cooler than at the start - was none (or is over): no more "wird geheizt".
+     */
+    fun stillHeating(h: Heating, nowC: Double, nowMs: Long): Boolean {
+        val min = (nowMs - h.sinceMs) / 60_000.0
+        if (nowC < h.fromC) return false
+        return min < RATE_SEEN_MIN || (nowC - h.fromC) / min >= SEEN_RATE_K_MIN / 2
+    }
 
     /**
      * A heating going on for [charger]'s stop: begun at [fromC] at [sinceMs], [kwh] the whole heating as said first (it
