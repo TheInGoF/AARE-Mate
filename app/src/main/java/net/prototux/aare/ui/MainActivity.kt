@@ -378,12 +378,9 @@ private fun Home() {
                         Page.MAP_SERVER -> item { MapServerPage(settings) }
                         Page.REGIONS -> item { RegionsPage() }
                         Page.TRANSFER -> item { TransferPage() }
-                        Page.LOGBOOK -> {
-                            // O226, N-039: the chargers charged at, to rate - on top, where the count on the panel led
-                            // (the planner prefers the well rated among the allowed ones)
-                            item { VisitedChargers() }
-                            item { LogbookPage() }
-                        }
+                        // System L-113: trips, charges (with the chargers to rate, where the count on the panel leads, N-039)
+                        // and the chargers rated, as tabs of the page
+                        Page.LOGBOOK -> item { LogbookPage() }
                         Page.DASHBOARD -> {
                             item { DashboardCard(settings, refresh) }
                             item { VehicleKindCard(settings) }
@@ -2425,7 +2422,7 @@ private fun methodLabel(m: CaptureMethod): String = stringResource(when (m) {
 
 /** A labelled row of mutually exclusive options. */
 @Composable
-private fun Choices(title: String, options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
+internal fun Choices(title: String, options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
     // without a title: a second row of the choice above
     if (title.isNotEmpty()) {
         Text(title, style = MaterialTheme.typography.bodyLarge)
@@ -3220,88 +3217,6 @@ private fun carCategory(raw: String): String {
         "navigation" -> stringResource(R.string.setup_app_kind_navigation)
         "media", "audio" -> stringResource(R.string.car_category_media)
         else -> c.replace('_', ' ').replaceFirstChar { it.uppercase() }
-    }
-}
-
-/**
- * O226, Navi L-004, L-005: the chargers charged at - stars, the details at leisure, "neu" for charges not looked at yet.
- */
-@Composable
-private fun VisitedChargers() = Section(stringResource(R.string.routing_visits_title)) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    var visits by remember { mutableStateOf(net.prototux.aare.ui.car.navi.ChargerVisits.all(ctx)) }
-    // Navi L-005: what was new when the page opened stays marked while it is open; the badge goes
-    val fresh = remember { visits.filter { it.fresh }.map { it.at }.toSet() }
-    LaunchedEffect(Unit) { net.prototux.aare.ui.car.navi.ChargerVisits.allSeen(ctx) }
-    var open by remember { mutableStateOf<org.maplibre.spatialk.geojson.Position?>(null) }
-    Text(stringResource(R.string.routing_visits_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    // Navi L-003: the ratings to the map server, anonymous; what waited goes when the page opens
-    val settings = remember { net.prototux.aare.Settings(ctx) }
-    var share by remember { mutableStateOf(settings.shareRatings) }
-    LaunchedEffect(Unit) { net.prototux.aare.ui.car.navi.RatingShare.flush(ctx) }
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.routing_visits_share), style = MaterialTheme.typography.bodyLarge)
-            Text(stringResource(R.string.routing_visits_share_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        androidx.compose.material3.Switch(share, { share = it; settings.shareRatings = it; if (it) net.prototux.aare.ui.car.navi.RatingShare.flush(ctx) })
-    }
-    if (visits.isEmpty()) Text(stringResource(R.string.routing_visits_none), style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.padding(top = 10.dp))
-    visits.forEach { v ->
-        Row(Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(8.dp))
-            .clickable { open = if (open == v.at) null else v.at }, verticalAlignment = Alignment.CenterVertically) {
-            net.prototux.aare.ui.car.navi.NetworkLogos.of(v.network)?.let { logo ->
-                androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(logo), null,
-                    Modifier.height(24.dp).width(40.dp).clip(RoundedCornerShape(4.dp))
-                        .background(androidx.compose.ui.res.colorResource(R.color.mate_logo_plate)).padding(2.dp))
-                Spacer(Modifier.width(10.dp))
-            }
-            androidx.compose.foundation.layout.Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(v.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                    if (v.at in fresh) Text(stringResource(R.string.routing_visits_new), style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(start = 8.dp)
-                            .clip(RoundedCornerShape(50)).background(MaterialTheme.colorScheme.primary).padding(horizontal = 8.dp, vertical = 2.dp))
-                }
-                Text(stringResource(R.string.routing_visits_line, v.visits,
-                    java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(v.lastMillis))),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            // five stars; the same star again takes the rating off
-            (1..5).forEach { n ->
-                androidx.compose.material3.Icon(if (n <= v.rating) androidx.compose.material.icons.Icons.Rounded.Star else androidx.compose.material.icons.Icons.Rounded.StarBorder,
-                    null, tint = if (n <= v.rating) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(36.dp).clip(androidx.compose.foundation.shape.CircleShape).clickable {
-                        net.prototux.aare.ui.car.navi.ChargerVisits.rate(ctx, v.at, if (v.rating == n) 0 else n)
-                        visits = net.prototux.aare.ui.car.navi.ChargerVisits.all(ctx) }.padding(4.dp))
-            }
-        }
-        // Navi L-004, E-003: the details, at leisure - power, price, whether all worked; none is a must
-        if (open == v.at) androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().padding(start = 8.dp, top = 8.dp, bottom = 4.dp)) {
-            fun put(power: Int = v.power, price: Int = v.price, worked: Int = v.worked) {
-                net.prototux.aare.ui.car.navi.ChargerVisits.details(ctx, v.at, power, price, worked)
-                visits = net.prototux.aare.ui.car.navi.ChargerVisits.all(ctx)
-            }
-            Choices(stringResource(R.string.routing_visit_power), listOf("1" to stringResource(R.string.routing_visit_power_good),
-                "2" to stringResource(R.string.routing_visit_power_mid), "3" to stringResource(R.string.routing_visit_power_poor)),
-                v.power.toString()) { put(power = if (it == v.power.toString()) 0 else it.toInt()) }
-            Spacer(Modifier.height(10.dp))
-            Choices(stringResource(R.string.routing_visit_price), listOf("1" to stringResource(R.string.routing_visit_price_good),
-                "2" to stringResource(R.string.routing_visit_price_mid), "3" to stringResource(R.string.routing_visit_price_poor)),
-                v.price.toString()) { put(price = if (it == v.price.toString()) 0 else it.toInt()) }
-            Spacer(Modifier.height(10.dp))
-            Choices(stringResource(R.string.routing_visit_worked), listOf("1" to stringResource(R.string.routing_visit_worked_yes),
-                "2" to stringResource(R.string.routing_visit_worked_no)),
-                v.worked.toString()) { put(worked = if (it == v.worked.toString()) 0 else it.toInt()) }
-            // not charged there after all (19.11.2026: "bei dem anderen Lader habe ich halt nicht geladen und den möchte
-            // ich dann auch in dem Menü, wo es um die Bewertung gibt, in der App dann auch löschen können")
-            TextButton(onClick = {
-                net.prototux.aare.ui.car.navi.ChargerVisits.remove(ctx, v.at)
-                net.prototux.aare.DiagLog.add("charge visit removed by the driver: ${v.name}", area = "CHARGE")
-                open = null; visits = net.prototux.aare.ui.car.navi.ChargerVisits.all(ctx)
-            }, modifier = Modifier.padding(top = 6.dp)) { Text(stringResource(R.string.routing_visit_remove), color = MaterialTheme.colorScheme.error) }
-        }
     }
 }
 

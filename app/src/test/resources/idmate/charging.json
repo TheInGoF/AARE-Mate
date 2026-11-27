@@ -1,0 +1,55 @@
+{
+ "data": {
+  "items": [
+   {
+    "at": "Zuhause",
+    "dc": false,
+    "end": "2026-11-24T22:10:00Z",
+    "energy": 30.4,
+    "energy_battery": 27.36,
+    "home": true,
+    "id": 1,
+    "power_avg": 6.1,
+    "soc_end": 80.0,
+    "soc_start": 41.0,
+    "start": "2026-11-24T17:00:00Z"
+   },
+   {
+    "at": "Schnelllader Kreuzberg",
+    "cost": 23.48,
+    "dc": true,
+    "end": "2026-11-22T12:41:00Z",
+    "energy": 39.8,
+    "energy_battery": 35.82,
+    "id": 2,
+    "lat": 52.48061,
+    "lon": 13.38555,
+    "operator": "EnBW",
+    "power_avg": 66.3,
+    "soc_end": 74.0,
+    "soc_start": 23.0,
+    "start": "2026-11-22T12:05:00Z"
+   },
+   {
+    "at": "Schnelllader Mitte",
+    "cost": 17.25,
+    "dc": true,
+    "end": "2026-10-30T08:40:00Z",
+    "energy": 35.2,
+    "energy_battery": 31.68,
+    "id": 3,
+    "lat": 52.51938,
+    "lon": 13.4164,
+    "power_avg": 75.4,
+    "soc_end": 66.0,
+    "soc_start": 18.0,
+    "start": "2026-10-30T08:12:00Z"
+   }
+  ]
+ },
+ "seq": 1,
+ "src": "backend",
+ "ts": "2026-11-27T00:07:10Z",
+ "type": "charge",
+ "v": 1
+}

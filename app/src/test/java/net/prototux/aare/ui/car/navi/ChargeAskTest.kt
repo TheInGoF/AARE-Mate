@@ -86,6 +86,17 @@ class ChargeAskTest {
         assertEquals(listOf(a, b, d), got)
     }
 
+    /** System I-143: the planned stop reached is not a visit, but its charger comes first when a charge is noticed there. */
+    @Test fun thePlannedChargerComesFirst() {
+        val a = Charger(north(20.0), 300, 8, "IONITY")
+        val b = Charger(north(60.0), 250, 12, "Tesla")
+        assertEquals(listOf(b, a), ChargeAsk.candidates(listOf(a, b), charger, planned = b.at))
+        // an answer given there weighs more than the plan
+        assertEquals(listOf(a, b), ChargeAsk.candidates(listOf(a, b), charger, listOf(ChargeAsk.Learned(north(5.0), a.at)), planned = b.at))
+        // planned elsewhere: as before
+        assertEquals(listOf(a, b), ChargeAsk.candidates(listOf(a, b), charger, planned = north(900.0)))
+    }
+
     @Test fun anAnswerPutsItsChargerFirst() {
         val a = Charger(north(20.0), 300, 8, "IONITY")
         val b = Charger(north(60.0), 250, 12, "Tesla")

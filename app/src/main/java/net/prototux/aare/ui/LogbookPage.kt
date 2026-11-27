@@ -40,11 +40,43 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * The trip log and the charge log on the tablet (System L-076/L-077): when a trip ends, the stick's place in the setup,
- * the trips and the charges, newest first.
+ * The logbook in three tabs (System L-113, 26.11.2026: "entweder irgendwie ein extra Reiter im Tab Fahrtenbuch"): the trips
+ * (IDmate's logbook, or the tablet's own), the charges with the charger and its stars, the chargers rated. With charges
+ * waiting to be looked at (the count on the home panel) it opens on the charges.
  */
 @Composable
 internal fun LogbookPage() {
+    val ctx = LocalContext.current
+    val server = remember { net.prototux.aare.dash.ServerLogbook.available(ctx) }
+    var top by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableIntStateOf(if (runCatching { net.prototux.aare.ui.car.navi.ChargerVisits.freshCount(ctx) }.getOrDefault(0) > 0) 1 else 0) }
+    val fresh = remember(net.prototux.aare.ui.car.navi.ChargerVisits.changes.intValue) {
+        runCatching { net.prototux.aare.ui.car.navi.ChargerVisits.freshCount(ctx) }.getOrDefault(0) }
+    // once (System I-143): the chargers counted without a real charge go
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { runCatching { net.prototux.aare.ui.car.navi.ChargerVisits.tidy(ctx) } } }
+    Column {
+        androidx.compose.material3.PrimaryTabRow(selectedTabIndex = top, containerColor = androidx.compose.ui.graphics.Color.Transparent) {
+            androidx.compose.material3.Tab(top == 0, { top = 0 }, text = { Text(stringResource(R.string.logbook_tab_trips)) })
+            androidx.compose.material3.Tab(top == 1, { top = 1 }, text = {
+                androidx.compose.material3.BadgedBox(badge = { if (fresh > 0 && top != 1) androidx.compose.material3.Badge { Text("$fresh") } }) {
+                    Text(stringResource(R.string.logbook_tab_charges)) }
+            })
+            androidx.compose.material3.Tab(top == 2, { top = 2 }, text = { Text(stringResource(R.string.logbook_tab_chargers)) })
+        }
+        when (top) {
+            1 -> Column(Modifier.padding(16.dp)) { ChargesView(server) }
+            2 -> Column(Modifier.padding(16.dp)) { ChargersView() }
+            else -> TripsTab(server)
+        }
+    }
+}
+
+/**
+ * The trip log and the charge log on the tablet (System L-076/L-077): when a trip ends, the stick's place in the setup,
+ * the trips and the charges, newest first; with an IDmate server its logbook first.
+ */
+@Composable
+private fun TripsTab(server: Boolean) {
     val ctx = LocalContext.current
     val settings = remember { Settings(ctx) }
     var grace by remember { mutableIntStateOf(settings.tripGraceMin) }
@@ -65,7 +97,6 @@ internal fun LogbookPage() {
             dismissButton = { TextButton(onClick = { ask = null }) { Text(stringResource(android.R.string.cancel)) } })
     }
     // System L-102: with an IDmate server the logbook comes from there (first); the tablet's own log stays beside it
-    val server = remember { net.prototux.aare.dash.ServerLogbook.available(ctx) }
     var fromServer by remember { mutableStateOf(server) }
     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (server) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

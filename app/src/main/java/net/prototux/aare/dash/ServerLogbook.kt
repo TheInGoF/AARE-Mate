@@ -59,6 +59,17 @@ object ServerLogbook {
         private fun pointJson(e: End?) = e?.let { """{"type":"Feature","properties":{},"geometry":{"type":"Point","coordinates":[${it.lon},${it.lat}]}}""" } ?: EMPTY_JSON
     }
 
+    /**
+     * One charge of IDmate's charge book (System L-113, `GET /charging`), as its charge overview lists it: [energy] the grid side
+     * (meter or receipt), [home] a wallbox charge; [lat]/[lon] where the car stood, [operator], [cost] the receipt's total -
+     * an older server sends none of these three.
+     */
+    data class Charge(
+        val id: Long, val startMs: Long?, val endMs: Long?, val at: String?, val dc: Boolean?, val socStart: Double?, val socEnd: Double?,
+        val energy: Double?, val energyBattery: Double?, val powerAvg: Double?, val home: Boolean, val lat: Double?, val lon: Double?,
+        val operator: String?, val cost: Double?,
+    )
+
     const val EMPTY_JSON = """{"type":"FeatureCollection","features":[]}"""
 
     data class Totals(
@@ -130,6 +141,10 @@ object ServerLogbook {
     @Throws(IOException::class)
     fun route(context: Context, id: Long): Route =
         parseRoute(JSONObject(request(context, "/trips/$id/route", null, notFound = R.string.logbook_route_404)))
+
+    /** The last [limit] charges of the charge book (the server gives 100 at most), newest first. */
+    @Throws(IOException::class)
+    fun charges(context: Context, limit: Int = 100): List<Charge> = parseCharges(JSONObject(request(context, "/charging?limit=$limit", null)))
 
     @Throws(IOException::class)
     fun options(context: Context): Options = parseOptions(JSONObject(request(context, "/logbook/options", null)))
@@ -214,6 +229,15 @@ object ServerLogbook {
         o.str("visit_reason").orEmpty(), o.str("note").orEmpty(), o.optBoolean("private"),
         o.num("energy"), o.num("consumption"), o.num("t_ext"),
     )
+
+    internal fun parseCharges(telegram: JSONObject): List<Charge> {
+        val a = telegram.getJSONObject("data").optJSONArray("items") ?: return emptyList()
+        return (0 until a.length()).map { a.getJSONObject(it) }.map { o ->
+            Charge(o.optLong("id"), o.time("start"), o.time("end"), o.str("at"), if (o.has("dc") && !o.isNull("dc")) o.optBoolean("dc") else null,
+                o.num("soc_start"), o.num("soc_end"), o.num("energy"), o.num("energy_battery"), o.num("power_avg"), o.optBoolean("home"),
+                o.num("lat"), o.num("lon"), o.str("operator"), o.num("cost"))
+        }
+    }
 
     internal fun parseRoute(telegram: JSONObject): Route {
         val d = telegram.getJSONObject("data")

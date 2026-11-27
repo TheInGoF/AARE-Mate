@@ -56,7 +56,10 @@ internal object ChargeAsk {
     /** A level found higher this long after driving off still belongs to that stop (IDmate's level comes late). */
     const val AFTER_STOP_MS = 30 * 60_000L
     private const val SAME_PLACE_M = 300.0
-    private const val MIN_KW = 20
+    /** The smallest charger a charge is put to. */
+    const val MIN_KW = 20
+    /** A planned stop reached this long before a charge noticed near it comes first among the chargers asked about. */
+    private const val PLANNED_MS = 4 * 3600_000L
 
     class Charged(val at: Position?, val from: Double, val to: Double)
 
@@ -129,31 +132,48 @@ internal object ChargeAsk {
         if (found == null) return
         val place = found.at
         val learned = if (place == null) emptyList() else learned(context)
-        val near = if (place == null) emptyList() else candidates(ChargerIndex.get(context).near(place, NEAR_M, MIN_KW), place, learned)
+        val near = if (place == null) emptyList() else candidates(ChargerIndex.get(context).near(place, NEAR_M, MIN_KW), place, learned,
+            planned(context, nowMs))
         val known = place?.let { learnedFor(learned, it) }
         net.prototux.aare.DiagLog.add("charge noticed: %.0f -> %.0f %%, %s".format(found.from, found.to,
             if (place == null) "where is not known - not asked" else if (near.isEmpty()) "no charger known within ${NEAR_M.toInt()} m - not asked"
             else "asked about " + near.joinToString { NaviTripPlan.chargerName(it) } +
                 (known?.let { " (learned here from ${it.second} answer(s) more than any other)" } ?: "")))
         if (near.isEmpty()) return
-        // the visit is in the list of the chargers been at, so the rating has its place (a planned stop is there already)
-        ChargerVisits.seen(context, near.first())
+        // only one there: it is the visit; with several the driver's answer says which (System I-143: before, the nearest was
+        // noted at once, also where another was charged at) - or the charge list in the phone app does later (L-113)
+        if (near.size == 1) ChargerVisits.seen(context, near.first(), nowMs)
+        ChargerVisits.noticed(context)
         pending.value = Ask(near, found.from, found.to, place)
+    }
+
+    /** Mate Navi reached the planned charging stop [ch]: a charge noticed near it soon after puts it first. */
+    fun plannedReached(context: Context, ch: Charger, nowMs: Long = System.currentTimeMillis()) {
+        prefs(context).edit().putString("planned", "%.6f,%.6f,%d".format(java.util.Locale.ROOT, ch.at.latitude, ch.at.longitude, nowMs)).apply()
+    }
+
+    private fun planned(context: Context, nowMs: Long): Position? {
+        val v = prefs(context).getString("planned", null)?.split(',') ?: return null
+        val at = v.getOrNull(2)?.toLongOrNull() ?: return null
+        if (nowMs - at > PLANNED_MS || nowMs < at) return null
+        val la = v[0].toDoubleOrNull() ?: return null; val lo = v[1].toDoubleOrNull() ?: return null
+        return Position(longitude = lo, latitude = la)
     }
 
     /**
      * The chargers it may have been: the nearest, and the nearest of each other network beside it (three at most). Where
      * answers were given at this place before ([learned], L-002) their charger comes first, and once [SURE_AFTER] more
-     * answers name it than any other, it stands alone - the tile asks only for the stars.
+     * answers name it than any other, it stands alone - the tile asks only for the stars. Without answers the charger of a
+     * [planned] stop reached comes first, where it is one of them.
      */
-    fun candidates(near: List<Charger>, place: Position, learned: List<Learned> = emptyList()): List<Charger> {
+    fun candidates(near: List<Charger>, place: Position, learned: List<Learned> = emptyList(), planned: Position? = null): List<Charger> {
         val sorted = near.sortedBy { ChargerIndex.distanceM(it.at, place) }
         val first = sorted.firstOrNull() ?: return emptyList()
         fun net(c: Charger) = c.network ?: c.operator
         val known = learnedFor(learned, place)
         val hit = known?.let { (at, _) -> sorted.firstOrNull { ChargerIndex.distanceM(it.at, at) < 5.0 } }
         if (hit != null && known.second >= SURE_AFTER) return listOf(hit)
-        val head = hit ?: first
+        val head = hit ?: planned?.let { p -> sorted.firstOrNull { ChargerIndex.distanceM(it.at, p) < 5.0 } } ?: first
         val others = sorted.filter { it !== head && net(it) != net(head) }.distinctBy { net(it) }
         return (listOf(head) + others).take(3)
     }
@@ -165,7 +185,9 @@ internal object ChargeAsk {
     }
 
     /** The driver said which charger it was where the car stood (only asked where several stood side by side). */
-    @Synchronized fun chose(context: Context, ask: Ask, ch: Charger) {
+    @Synchronized fun chose(context: Context, ask: Ask, ch: Charger, whenMs: Long = System.currentTimeMillis()) {
+        // the driver said it: a visit there (System I-143)
+        ChargerVisits.seen(context, ch, whenMs)
         val place = ask.place ?: return
         if (ask.candidates.size < 2) return
         val all = (learned(context) + Learned(place, ch.at)).takeLast(MAX_LEARNED)

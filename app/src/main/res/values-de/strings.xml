@@ -1083,7 +1083,6 @@
     <string name="routing_stop_extra">Zeit je Ladestopp zusätzlich</string>
     <string name="routing_stop_extra_hint">Anhalten, Einparken, Anstecken und bis die Ladeleistung steht – kommt zur Ladezeit in die Ankunftszeit.</string>
     <string name="routing_networks_title">Ladenetze</string>
-    <string name="routing_visits_title">Besuchte Ladepunkte</string>
     <string name="transfer_title">Einstellungen übertragen</string>
     <string name="transfer_sub">Sichern und wiederherstellen, z. B. für eine neue Mate-Installation</string>
     <string name="transfer_intro">Sichert alle Einstellungen von Mate in eine Datei: Ziele, Routenoptionen, besuchte Ladepunkte, Klang, Ansichten, Plex, Kartenserver, das Fahrzeug-Zertifikat und selbst umgewandelte Stimmen (z. B. Martin). In der neuen Mate-Installation hier „Wiederherstellen“ wählen. Offline-Karten auf Wunsch mit (dauert länger, braucht so viel freien Platz).</string>
@@ -1097,10 +1096,8 @@
     <string name="transfer_loaded">Wiederhergestellt: %1$d Einträge. Mate jetzt neu starten.</string>
     <string name="transfer_failed">Fehler: %1$s</string>
     <string name="transfer_restart">Mate neu starten</string>
-    <string name="routing_visits_hint">Hier landet jeder Lader, an dem du geladen hast (geplanter Ladestopp oder erkannte Ladung). Tippe einen an, um in Ruhe Ladeleistung, Preis und ob alles funktioniert hat nachzutragen – freiwillig. Gut bewertete wählt die Routenplanung bevorzugt, aber nur innerhalb deiner gewählten Ladenetze.</string>
     <string name="routing_visits_share">Bewertungen teilen</string>
     <string name="routing_visits_share_hint">Anonym an deinen Kartenserver: der Lader, seine Leistung und sein Netz, deine Sterne und Angaben – nichts über dich, dein Auto oder deine Fahrten.</string>
-    <string name="routing_visits_none">Noch keine – nach dem ersten Ladestopp mit Mate Navi.</string>
     <string name="routing_visits_line">%1$d× geladen · zuletzt %2$s</string>
     <string name="routing_visits_new">neu</string>
     <string name="routing_visit_power">Ladeleistung</string>
@@ -1372,6 +1369,27 @@
     <string name="logbook_charges">Ladungen (%d)</string>
     <string name="logbook_no_trips">Noch keine Fahrt. Sie erscheinen nach der ersten Fahrt mit verbundenem Auto.</string>
     <string name="logbook_no_charges">Noch keine Ladung.</string>
+    <string name="logbook_tab_trips">Fahrten</string>
+    <string name="logbook_tab_charges">Ladungen</string>
+    <string name="logbook_tab_chargers">Ladestationen</string>
+    <string name="charges_hint">Die neuesten oben. Mit den Sternen bewertest du die Ladestation. Ladung antippen: Ladeleistung, Preis, ob alles ging – oder eine andere Station wählen.</string>
+    <string name="charges_loading">Ladungen werden geladen …</string>
+    <string name="charges_none">Noch keine Ladungen.</string>
+    <string name="charges_server_failed">Ladungen nicht aus IDmate geladen: %1$s – die des Tablets stehen hier.</string>
+    <string name="charges_server_old">Dieses IDmate sagt noch nicht, wo das Auto stand (ab Version 1.2.361). Bis dahin stehen hier nur Ladestationen, die du im Auto genannt hast.</string>
+    <string name="charges_home">Zuhause (Wallbox)</string>
+    <string name="charges_charger">Ladestation</string>
+    <string name="charges_guess">vermutlich</string>
+    <string name="charges_which">Welche Ladestation war es?</string>
+    <string name="charges_none_of_them">Keine davon</string>
+    <string name="charges_no_charger">Kein Schnelllader in der Nähe bekannt.</string>
+    <string name="charges_kw_max">bis %1$s kW</string>
+    <plurals name="charges_count">
+        <item quantity="one">%d Ladung</item>
+        <item quantity="other">%d Ladungen</item>
+    </plurals>
+    <string name="chargers_hint">Die Ladestationen, die du bewertet hast, die besten oben. Gut bewertete wählt die Routenplanung bevorzugt, nur innerhalb deiner Ladenetze. Bewerten kannst du unter „Ladungen“, Ladung für Ladung.</string>
+    <string name="chargers_none">Noch keine bewertet – unter „Ladungen“ hat jede Ladung ihre Sterne.</string>
     <string name="logbook_place_unknown">Ort noch ohne Namen</string>
     <string name="logbook_trip_line">%1$s km · %2$d min · %3$s kWh/100 km · Akku %4$s → %5$s %%</string>
     <string name="logbook_charge_line">Akku %1$s → %2$s %% · %3$s kWh · bis %4$s kW</string>

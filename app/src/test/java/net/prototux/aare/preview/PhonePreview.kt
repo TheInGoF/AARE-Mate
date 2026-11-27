@@ -6,6 +6,8 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import org.junit.Rule
@@ -69,24 +71,44 @@ class PhonePreview {
         shot("9-testen")
     }
 
-    /** Navi L-004, L-005, N-039: the badge on "Fahrtenbuch", the visited chargers on top with "neu", one opened for its details. */
+    /**
+     * System L-113, Navi L-004, L-005, N-039: the badge on "Fahrtenbuch", the page opening on "Ladungen" - charges by month with
+     * the charger and its stars, a guess where two stand side by side -, one opened to pick the charger and give details, and
+     * "Ladestationen" with only the rated ones. Places at public chargers in Berlin of the shipped list.
+     */
     @Test fun visitedChargers() {
         if (System.getProperty("preview") == null) return
         val ctx = rule.activity
         val now = System.currentTimeMillis()
+        val day = 86_400_000L
         val list = org.json.JSONArray()
-            .put(org.json.JSONObject().put("lat", 50.0).put("lon", 12.0).put("name", "Schnelllader Musterstadt").put("network", "ionity")
-                .put("kw", 300).put("visits", 2).put("last", now).put("rating", 4).put("power", 2).put("price", 3).put("worked", 1).put("fresh", true))
-            .put(org.json.JSONObject().put("lat", 50.1).put("lon", 12.1).put("name", "Autohof Beispielfeld").put("network", "enbw")
-                .put("kw", 150).put("visits", 1).put("last", now - 86_400_000L).put("rating", 0).put("fresh", false))
-        ctx.getSharedPreferences("charger_visits", android.content.Context.MODE_PRIVATE).edit().putString("list", list.toString()).commit()
+            .put(org.json.JSONObject().put("lat", 52.51933).put("lon", 13.41646).put("name", "Tesla · 250 kW").put("network", "tesla")
+                .put("kw", 250).put("visits", 2).put("last", now - 3 * day).put("rating", 4).put("power", 1).put("price", 2).put("worked", 1))
+            // counted once for a planned stop passed, never rated: goes when the page first opens (System I-143)
+            .put(org.json.JSONObject().put("lat", 52.56229).put("lon", 13.45673).put("name", "EnBW · 300 kW").put("network", "enbw")
+                .put("kw", 300).put("visits", 1).put("last", now - 9 * day).put("rating", 0))
+        // looked at half a day ago: the charge since then is "neu"
+        ctx.getSharedPreferences("charger_visits", android.content.Context.MODE_PRIVATE).edit().putString("list", list.toString())
+            .putLong("seen_at", now - day / 2).commit()
         net.prototux.aare.ui.car.navi.ChargerVisits.forget()
+        val store = net.prototux.aare.trips.TripStore.get(ctx)
+        fun charge(ago: Long, min: Int, lat: Double?, lon: Double?, dc: Boolean, from: Double, to: Double, kwh: Double, kw: Double) =
+            store.add(net.prototux.aare.trips.TripDetector.Charge(now - ago, now - ago + min * 60_000L, lat, lon, dc, from, to, kwh, kw,
+                net.prototux.aare.trips.TripDetector.ChargeSource.STICK))
+        charge(40 * day, 31, 52.51938, 13.41640, true, 18.0, 66.0, 35.2, 140.0)
+        charge(3 * day, 28, 52.51938, 13.41640, true, 22.0, 71.0, 36.1, 150.0)
+        charge(day, 300, null, null, false, 41.0, 80.0, 30.4, 11.0)
+        charge(2 * 3600_000L, 36, 52.48061, 13.38555, true, 23.0, 74.0, 39.8, 180.0)
         rule.onNodeWithText("Neu einrichten").performClick()
         rule.onNodeWithText("Spaceship", substring = true).performClick()
         rule.onNodeWithText("Verstanden").performClick(); rule.waitForIdle()
+        net.prototux.aare.ui.car.navi.ChargerVisits.noticed(ctx)
         rule.onNode(androidx.compose.ui.test.hasScrollAction()).performScrollToNode(androidx.compose.ui.test.hasText("Fahrtenbuch"))
         shot("6-start-badge")
-        rule.onNodeWithText("Fahrtenbuch").performClick(); shot("7-ladepunkte")
-        rule.onNodeWithText("Schnelllader Musterstadt").performClick(); shot("7b-ladepunkt-details")
+        rule.onNodeWithText("Fahrtenbuch").performClick(); rule.waitForIdle()
+        repeat(40) { if (rule.onAllNodesWithText("Shell", substring = true).fetchSemanticsNodes().isEmpty()) { Thread.sleep(250); rule.waitForIdle() } }
+        shot("7-ladungen")
+        rule.onAllNodesWithText("Shell", substring = true).onFirst().performClick(); shot("7b-ladung-details")
+        rule.onNodeWithText("Ladestationen").performClick(); shot("7c-ladestationen")
     }
 }

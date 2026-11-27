@@ -1096,7 +1096,6 @@
     <string name="routing_stop_extra">Extra time per charging stop</string>
     <string name="routing_stop_extra_hint">Pulling in, parking, plugging in and until the power is up – added to the charging time in the arrival time.</string>
     <string name="routing_networks_title">Charging networks</string>
-    <string name="routing_visits_title">Chargers visited</string>
     <string name="transfer_title">Transfer settings</string>
     <string name="transfer_sub">Save and restore, e.g. for a new Mate installation</string>
     <string name="transfer_intro">Saves all of Mate\'s settings to one file: places, route options, chargers visited, sound, views, Plex, map server and the car certificate. In the new Mate installation choose “Restore” here. Offline maps optionally too (takes longer, needs that much free space).</string>
@@ -1110,10 +1109,8 @@
     <string name="transfer_loaded">Restored: %1$d entries. Restart Mate now.</string>
     <string name="transfer_failed">Error: %1$s</string>
     <string name="transfer_restart">Restart Mate</string>
-    <string name="routing_visits_hint">Every charger you charged at (a planned stop or a charge noticed). Tap one to add power, price and whether all worked, at leisure - if you like. Well rated ones are preferred by the route planning - within your chosen networks only.</string>
     <string name="routing_visits_share">Share ratings</string>
     <string name="routing_visits_share_hint">Anonymous to your map server: the charger, its power and network, your stars and details – nothing about you, your car or your trips.</string>
-    <string name="routing_visits_none">None yet - after the first charging stop with Mate Navi.</string>
     <string name="routing_visits_line">charged %1$d× · last %2$s</string>
     <string name="routing_visits_new">new</string>
     <string name="routing_visit_power">Charging power</string>
@@ -1385,6 +1382,27 @@
     <string name="logbook_charges">Charges (%d)</string>
     <string name="logbook_no_trips">No trip yet. They appear after the first trip with the car connected.</string>
     <string name="logbook_no_charges">No charge yet.</string>
+    <string name="logbook_tab_trips">Trips</string>
+    <string name="logbook_tab_charges">Charges</string>
+    <string name="logbook_tab_chargers">Chargers</string>
+    <string name="charges_hint">Newest first. The stars rate the charger. Tap a charge for power, price and whether all worked – or to pick another charger.</string>
+    <string name="charges_loading">Loading charges …</string>
+    <string name="charges_none">No charges yet.</string>
+    <string name="charges_server_failed">Charges not loaded from IDmate: %1$s – the tablet\'s own shown.</string>
+    <string name="charges_server_old">This IDmate does not say where the car stood yet (from version 1.2.361 it does). Until then only chargers named in the car show up here.</string>
+    <string name="charges_home">Home (wallbox)</string>
+    <string name="charges_charger">Charger</string>
+    <string name="charges_guess">likely</string>
+    <string name="charges_which">Which charger was it?</string>
+    <string name="charges_none_of_them">None of these</string>
+    <string name="charges_no_charger">No fast charger known near here.</string>
+    <string name="charges_kw_max">up to %1$s kW</string>
+    <plurals name="charges_count">
+        <item quantity="one">%d charge</item>
+        <item quantity="other">%d charges</item>
+    </plurals>
+    <string name="chargers_hint">The chargers you rated, the best first. The route planning prefers well rated ones – within your chosen networks only. Rate them under “Charges”, charge by charge.</string>
+    <string name="chargers_none">None rated yet – under “Charges” each charge has its stars.</string>
     <string name="logbook_place_unknown">Place not named yet</string>
     <string name="logbook_trip_line">%1$s km · %2$d min · %3$s kWh/100 km · battery %4$s → %5$s %%</string>
     <string name="logbook_charge_line">Battery %1$s → %2$s %% · %3$s kWh · up to %4$s kW</string>

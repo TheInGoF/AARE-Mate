@@ -659,8 +659,9 @@ internal object NaviKeep {
                         if (there) {
                             approaching = null
                             atCharger.value = stop
-                            // O226: a charger charged at, for the driver to rate (not in test drives)
-                            if (testDrive.value != true) ChargerVisits.noteVisit(app, stop.charger)
+                            // the charger planned, put first when a charge is noticed here (not in test drives); no visit yet -
+                            // the car may drive on without charging (System I-143)
+                            if (testDrive.value != true) ChargeAsk.plannedReached(app, stop.charger)
                             speaker.warn(app.getString(net.prototux.aare.R.string.mate_navi_at_charger_say, stop.leavePercent.toInt(), stop.chargeMinutes.toInt().coerceAtLeast(1)))
                             android.util.Log.i("MateNavi", "charging stop reached: %.0f -> %.0f %%, %.0f min".format(stop.arrivePercent, stop.leavePercent, stop.chargeMinutes))
                         } else if (d > LEAVE_M) approaching = null   // driven past

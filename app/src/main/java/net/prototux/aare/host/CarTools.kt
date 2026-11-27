@@ -154,8 +154,8 @@ object CarTools {
         "debug_charger_visit" -> if (!net.prototux.aare.BuildConfig.TEST_HOOKS) JSONObject().put("ok", false) else {
             val ctx = runtime.context; val V = net.prototux.aare.ui.car.navi.ChargerVisits
             if (args.optBoolean("remove")) V.all(ctx).filter { it.name.startsWith("mate-test") }.forEach { V.remove(ctx, it.at) }
-            else V.noteVisit(ctx, net.prototux.aare.ui.car.navi.Charger(org.maplibre.spatialk.geojson.Position(longitude = args.optDouble("lon"), latitude = args.optDouble("lat")),
-                args.optInt("kw", 300), 4, "mate-test ${args.optString("name", "Lader")}"))
+            else { V.seen(ctx, net.prototux.aare.ui.car.navi.Charger(org.maplibre.spatialk.geojson.Position(longitude = args.optDouble("lon"), latitude = args.optDouble("lat")),
+                args.optInt("kw", 300), 4, "mate-test ${args.optString("name", "Lader")}")); V.noticed(ctx) }
             JSONObject().put("ok", true).put("visits", V.all(ctx).size)
         }
         // test builds: a stop on the way into the preview ({"lat":..,"lon":..,"name":"mate-test …"})
