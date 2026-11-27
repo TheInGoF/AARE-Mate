@@ -106,7 +106,14 @@ internal fun StandaloneAppScreen(runtime: CarRuntime, driving: Boolean, packageN
                                 // connect() blocks (binds Shizuku), so do it off the main thread.
                                 starter.execute {
                                     if (launcher.connect() && live.get() && !cancelled.get()) {
-                                        val id = launcher.start(sf, w, h, cinemaDpi(runtime.appDensityDpi), packageName)
+                                        var id = launcher.start(sf, w, h, cinemaDpi(runtime.appDensityDpi), packageName)
+                                        // System I-149: refused at once (the surface not quite ready, the tablet's screen just woken):
+                                        // once more after a moment, with what Android said the first time in the log
+                                        if (id < 0 && live.get() && !cancelled.get()) {
+                                            net.prototux.aare.DiagLog.add("cinema: $packageName - first try refused: " + launcher.report().ifEmpty { "no display" } + " - trying again", area = "CAR")
+                                            Thread.sleep(RETRY_MS)
+                                            if (live.get() && !cancelled.get()) id = launcher.start(sf, w, h, cinemaDpi(runtime.appDensityDpi), packageName)
+                                        }
                                         // gone while it started: stopped at once
                                         if (id >= 0 && (!live.get() || cancelled.get())) { launcher.stop(); return@execute }
                                         main.post { started = id >= 0 }
@@ -191,3 +198,6 @@ private fun CinemaKey(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
  * small; 1.4 times the density gives it about 1200 dp - its phone-and-tablet layout with larger controls.
  */
 private fun cinemaDpi(appDpi: Int): Int = (appDpi * 1.4f).toInt()
+
+/** I-149: the second try at a refused display, after this. */
+private const val RETRY_MS = 800L

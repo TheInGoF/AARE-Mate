@@ -197,7 +197,11 @@ internal fun IdmateShell(
     // the cinema: the app shown in it (null: its app menu)
     var cinemaApp by remember { mutableStateOf<CarAppEntry?>(null) }
     // Split screen: navigation beside what is playing. Which side and how wide is remembered for the drive.
-    var split by remember { mutableStateOf(false) }
+    // System L-115 (27.11.2026: "wenn er sich die Split-Screen-Einstellungen speichern würde und man die nicht jedes Mal neu
+    // einstellen braucht"): whether it is on and which app lies beside are kept too - another app opened for a while (Claude)
+    // hides it, going back to the navigation brings it back; only switching it off ends it
+    val splitKept = remember { context.getSharedPreferences("mate_split", android.content.Context.MODE_PRIVATE) }
+    var split by remember { mutableStateOf(splitKept.getBoolean("split_on", false)) }
     var naviRightState by remember { mutableStateOf<Boolean?>(null) }
     // the navigation's share of the width (18.11.2026: "Die Splitansicht sollte auch 1/3, 1/4 beherrschen"), kept on the device
     val splitPrefs = remember { context.getSharedPreferences("mate_split", android.content.Context.MODE_PRIVATE) }
@@ -210,11 +214,16 @@ internal fun IdmateShell(
     var lastView by remember { mutableStateOf<String?>(null) }
     // a fault was marked: the card that takes its description (18.11.2026)
     var faultNote by remember { mutableStateOf(false) }
-    // the music app of the split, when one was laid in or a view named one (else what plays)
-    var splitMusic by remember { mutableStateOf<String?>(null) }
-    // it belongs to the split it was laid into: once that is closed, the next split shows what plays again (it kept
-    // the app of an earlier split or view beside the navigation, whatever was playing by then)
-    LaunchedEffect(split) { if (!split) splitMusic = null }
+    // the music app of the split, when one was laid in or a view named one (else what plays); kept on the device (L-115)
+    var splitMusic by remember { mutableStateOf(splitKept.getString("split_music", null)) }
+    // it belongs to the split it was laid into: once that is switched off, the next split shows what plays again (it kept
+    // the app of an earlier split or view beside the navigation, whatever was playing by then) - another app opened for a
+    // while is no switching off
+    fun keepSplit(on: Boolean) {
+        split = on
+        if (!on) splitMusic = null
+        splitKept.edit().putBoolean("split_on", on).apply { if (on) putString("split_music", splitMusic) else remove("split_music") }.apply()
+    }
     // an app in the hand (18.11.2026: "mit langem Druck auf eine App greift man die und zieht sie nach links oder rechts")
     var dragged by remember { mutableStateOf<CarAppEntry?>(null) }
     var dragAt by remember { mutableStateOf(Offset.Zero) }
@@ -232,7 +241,9 @@ internal fun IdmateShell(
     val open: (CarAppEntry) -> Unit = { app ->
         usage.count(app.id)
         switcher = false
-        split = false
+        // L-115: back to the navigation with the split kept on: the split again; any other app hides it for now
+        split = splitKept.getBoolean("split_on", false) &&
+            (app.kind == CarAppKind.NAVIGATION || app.kind == CarAppKind.PROJECTED || app.kind == CarAppKind.MATE_NAVI)
         inner = null
         actions.openApp(app)
     }
@@ -283,7 +294,7 @@ internal fun IdmateShell(
                         // the music app first, so it is the one playing beside; then the navigation in front, split
                         music?.let { actions.openApp(it); splitMusic = it.id }
                         naviShare = v.share; naviRightState = v.naviRight
-                        navi?.let(open); split = true
+                        navi?.let(open); keepSplit(true)
                     }
                     else -> { inner = null; split = false; idmate?.let { actions.openApp(it) } ?: actions.goHome() }
                 }
@@ -304,7 +315,7 @@ internal fun IdmateShell(
                     MateViews.START_NAVI -> startNavi?.let(open)
                     MateViews.START_MUSIC -> startMusic?.let(open)
                     MateViews.START_MESSAGES -> { inner = Inner.MESSAGES }
-                    MateViews.START_SPLIT -> { startMusic?.let { actions.openApp(it) }; startNavi?.let(open); split = true }
+                    MateViews.START_SPLIT -> { startMusic?.let { actions.openApp(it) }; startNavi?.let(open); keepSplit(true) }
                 }
                 android.util.Log.i("IdmateShell", "start view: ${startView?.name} -> ${startView?.start}")
             }
@@ -450,7 +461,7 @@ internal fun IdmateShell(
                 android.util.Log.i("IdmateShell", "app dropped: ${app.label} ${if (right) "right" else "left"}" + (if (wasSplit) " (replaced)" else " (new split)") +
                     String.format(java.util.Locale.ROOT, ", navi share %.2f", lay.naviShare))
                 navi?.let(open)
-                split = true
+                keepSplit(true)
             }
             val appDrag = AppDrag(
                 start = { app, at -> dragged = app; dragAt = at - shellOrigin },
@@ -565,7 +576,7 @@ internal fun IdmateShell(
             if (faultNote) FaultNoteCard(Modifier.align(side).padding(start = ControlsMargin, end = ControlsMargin, bottom = ControlsHeight + ControlsMargin * 2),
                 send = { actions.faultNote(it) }, close = { faultNote = false })
             Controls(state, actions, areas, overview, switcher, Modifier.align(side), mediaFront, playingTitle,
-                playing = if (player != null && state.nowPlaying != null) splitOn else null, toggleSplit = { split = !split; switcher = false },
+                playing = if (player != null && state.nowPlaying != null) splitOn else null, toggleSplit = { keepSplit(!split); switcher = false },
                 showPlaying = { player?.let { net.prototux.aare.media.NowPlayingRequest.count++; if (!splitOn) open(it) } },
                 call = if (state.call?.ringing == false) ({ callOpen = !callOpen; switcher = false }) else null, naviFront = naviFront) { switcher = !switcher }
             overlay(Modifier.align(Alignment.BottomCenter).padding(bottom = ControlsHeight + ControlsMargin * 2))

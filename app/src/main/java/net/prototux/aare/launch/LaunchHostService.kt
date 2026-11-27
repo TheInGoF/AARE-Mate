@@ -42,7 +42,14 @@ class LaunchHostService : ILaunchHost.Stub {
     override fun start(surface: Surface, width: Int, height: Int, dpi: Int, packageName: String): Int {
         stop()
         val ctx = injectedContext ?: systemContext() ?: return -1
-        val vd = createDisplay(ctx, surface, width, height, dpi) ?: run { lastReport = "no display could be made"; return -1 }
+        // System I-149 (27.11.2026: the Claude app "öffnet nicht während der Fahrt" - "no display could be made", why not said):
+        // Android's own words for each refusal go into the report, and the size and surface it was asked with
+        failures.clear()
+        val vd = createDisplay(ctx, surface, width, height, dpi) ?: run {
+            lastReport = "no display could be made (${width}x$height, $dpi dpi, surface ${if (surface.isValid) "valid" else "not valid"}): " +
+                failures.joinToString("; ").take(400)
+            return -1
+        }
         display = vd
         displayId = vd.display.displayId
         val how = launch(ctx, packageName, displayId)
@@ -73,6 +80,7 @@ class LaunchHostService : ILaunchHost.Stub {
     }
 
     @Volatile private var lastReport = ""
+    private val failures = java.util.Collections.synchronizedList(ArrayList<String>())
     @Volatile private var usedFlags = 0
 
     override fun report(): String = lastReport
@@ -101,7 +109,7 @@ class LaunchHostService : ILaunchHost.Stub {
         for (flags in intArrayOf(FULL_FLAGS or FLAG_SYSTEM_DECORATIONS or ownFocus(), FULL_FLAGS or ownFocus(), FULL_FLAGS,
                 BASE_FLAGS or FLAG_TRUSTED, BASE_FLAGS)) {
             val vd = runCatching { dm.createVirtualDisplay("AARE app", w, h, dpi.coerceAtLeast(120), surface, flags) }
-                .onFailure { Log.w(TAG, "createVirtualDisplay(flags=$flags) failed: ${it.message}") }
+                .onFailure { Log.w(TAG, "createVirtualDisplay(flags=$flags) failed: ${it.message}"); failures += "flags $flags: ${it.javaClass.simpleName} ${it.message}" }
                 .getOrNull()
             if (vd != null) { usedFlags = flags; return vd }
         }
