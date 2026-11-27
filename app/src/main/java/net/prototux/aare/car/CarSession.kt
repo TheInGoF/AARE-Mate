@@ -762,6 +762,8 @@ class CarSession(
                 }.also {
                     // Mate Navi's real position (F1): the car's GPS
                     net.prototux.aare.ui.car.navi.CarFixes.push(it)
+                    // System L-117: the way driven, for the dashboard's map
+                    net.prototux.aare.dash.DashTrail.note(it.latitude, it.longitude, SystemClock.elapsedRealtime())
                     // Turned off mid-drive: give the phone its own GPS back now, not at the disconnect.
                     if (settings.carGpsForPhone) locationFeed.push(it) else locationFeed.stop()
                 }

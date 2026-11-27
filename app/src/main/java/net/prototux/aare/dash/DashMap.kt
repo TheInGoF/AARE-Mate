@@ -369,6 +369,20 @@ private fun DashMap(go: (String) -> Unit) {
                 color = const(ferryCol), radius = const(3.5.dp), strokeColor = const(ferryHalo), strokeWidth = const(1.5.dp))
             LineLayer(id = "dash-trail", source = rememberGeoJsonSource(remember(trail) { GeoJsonData.JsonString(trail) }),
                 color = const(CAR_TEAL), width = const(4.dp), opacity = const(0.8f), cap = const(LineCap.Round), join = const(LineJoin.Round))
+            // System L-117: the way driven as it is driven (the car's GPS), over IDmate's trail - and the last bit to the car
+            val ownSettled by DashTrail.settled.collectAsState()
+            val ownRecent by DashTrail.recent.collectAsState()
+            for ((id, line) in listOf("dash-own-trail" to ownSettled, "dash-own-trail-recent" to ownRecent))
+                LineLayer(id = id, source = rememberGeoJsonSource(remember(line) { GeoJsonData.JsonString(line) }),
+                    color = const(CAR_TEAL), width = const(4.dp), opacity = const(0.8f), cap = const(LineCap.Round), join = const(LineJoin.Round))
+            val tail = DashTrail.last()
+            val headTo = shown
+            val head = remember(tail, headTo) {
+                if (tail == null || headTo == null || DashDrive.distanceM(tail, headTo) > 2_000) DashMapGeo.EMPTY
+                else DashMapGeo.lineCollection(listOf(listOf(doubleArrayOf(tail.longitude, tail.latitude), doubleArrayOf(headTo.longitude, headTo.latitude))))
+            }
+            LineLayer(id = "dash-own-trail-head", source = rememberGeoJsonSource(GeoJsonData.JsonString(head)),
+                color = const(CAR_TEAL), width = const(4.dp), opacity = const(0.8f), cap = const(LineCap.Round), join = const(LineJoin.Round))
             for (k in 0 until 4) {
                 SymbolLayer(id = "dash-wind-$k", source = rememberGeoJsonSource(remember(wind[k], windOn) { GeoJsonData.JsonString(if (windOn) wind[k] else DashMapGeo.EMPTY) }), minZoom = 5f,
                     iconImage = image(windImages[k]), iconSize = const(ICON_SCALE), iconRotate = feature.get("rot").asNumber(),

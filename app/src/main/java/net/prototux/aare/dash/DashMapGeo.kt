@@ -326,7 +326,7 @@ internal object DashMapGeo {
     private fun point(lon: Double, lat: Double, props: JSONObject) = JSONObject().put("type", "Feature").put("properties", props)
         .put("geometry", JSONObject().put("type", "Point").put("coordinates", JSONArray().put(lon).put(lat)))
     private fun collection(features: JSONArray) = JSONObject().put("type", "FeatureCollection").put("features", features).toString()
-    private fun lineCollection(lines: List<List<DoubleArray>>): String {
+    fun lineCollection(lines: List<List<DoubleArray>>): String {
         val f = JSONArray()
         lines.filter { it.size >= 2 }.forEach { l ->
             f.put(JSONObject().put("type", "Feature").put("properties", JSONObject())
