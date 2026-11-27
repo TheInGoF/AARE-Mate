@@ -417,7 +417,8 @@ internal object NaviKeep {
             trafficAhead.value.firstOrNull { it.alongM > driven && it.alongM - driven < TRAFFIC_SAY_M && NaviTraffic.onOurWay(it) }?.let { a ->
                 val key = "%.4f,%.4f".format(java.util.Locale.ROOT, a.incident.start.latitude, a.incident.start.longitude)
                 if (saidTraffic.add(key)) {
-                    val text = NaviTraffic.spoken(app, a.incident, a.alongM - driven)
+                    // said as the sign shows it: a lane narrowed for works is "Baustelle" (I-070)
+                    val text = NaviTraffic.spoken(app, a.incident, a.alongM - driven, NaviTraffic.shownKind(a))
                     speaker.warn(text)
                     android.util.Log.i("MateNavi", "incident warning: $text")
                 }

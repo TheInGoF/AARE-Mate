@@ -391,6 +391,19 @@ internal object NaviTraffic {
      * Autobahnsperrungen an den gleichen Stellen gestern Abend und heute Mittag gewesen sein"). Other kinds as before (an
      * accident is often a single point).
      */
+    /**
+     * The sign an incident ahead is shown with (Navi I-070, 27.11.2026: "er hat die Baustelle nicht als Baustelle
+     * gekennzeichnet"): TomTom gave the A9's works as "Fahrbahn auf zwei Fahrstreifen verengt" (lane closed, 7) - a lane
+     * closed or narrowed is road works unless its words speak of an accident or a breakdown, and a "closed" stretch the
+     * route runs through is too (works with the traffic switched over); the others as they are.
+     */
+    fun shownKind(a: Ahead): Int = when {
+        a.incident.kind == 8 && a.along -> 9
+        a.incident.kind == 7 && !MISHAP.containsMatchIn(a.incident.text) -> 9
+        else -> a.incident.kind
+    }
+    private val MISHAP = Regex("(?i)unfall|panne|liegengeblieben|accident|breakdown|broken.?down")
+
     fun onOurWay(a: Ahead): Boolean = !a.passedRamp && ((a.incident.kind != 7 && a.incident.kind != 8) || a.along)
 
     /**
@@ -660,11 +673,11 @@ internal object NaviTraffic {
     })
 
     /** What is said for [i] at [metres] ahead: "Stau in 3 Kilometern, etwa 6 Minuten Verzögerung". */
-    fun spoken(context: android.content.Context, i: Incident, metres: Double): String {
+    fun spoken(context: android.content.Context, i: Incident, metres: Double, kind: Int = i.kind): String {
         val where = if (metres >= 1000) context.getString(net.prototux.aare.R.string.traffic_in_km, Math.round(metres / 1000.0).toInt())
             else context.getString(net.prototux.aare.R.string.traffic_in_m, (Math.round(metres / 100.0) * 100).toInt().coerceAtLeast(100))
         val delay = i.delayS?.takeIf { it >= 60 }?.let { context.getString(net.prototux.aare.R.string.traffic_delay_say, Math.round(it / 60.0).toInt()) }
-        return listOfNotNull(word(context, i.kind) + " " + where, delay).joinToString(", ")
+        return listOfNotNull(word(context, kind) + " " + where, delay).joinToString(", ")
     }
 
     /**

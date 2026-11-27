@@ -134,12 +134,12 @@ internal fun NaviTrafficHint(a: NaviTraffic.Ahead, metres: Double, modifier: and
     androidx.compose.foundation.layout.Row(modifier.floatEdge(shape).clip(shape).background(Mate.cardSolid)
         .padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         // its sign: road works as road works, a hazard as "!" (18.11.2026)
-        TrafficSign(a.incident.kind, 36.dp)
+        TrafficSign(NaviTraffic.shownKind(a), 36.dp)
         androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(14.dp))
         androidx.compose.foundation.layout.Column {
             val where = if (metres >= 1000) "%.1f km".format(metres / 1000) else "${(Math.round(metres / 50.0) * 50).coerceAtLeast(50)} m"
             androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.traffic_hint, NaviTraffic.word(ctx, a.incident.kind), where),
+                androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.traffic_hint, NaviTraffic.word(ctx, NaviTraffic.shownKind(a)), where),
                     style = androidx.compose.material3.MaterialTheme.typography.titleMedium, color = Mate.text)
                 a.incident.delayS?.takeIf { it >= 60 }?.let { d ->
                     androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(10.dp))

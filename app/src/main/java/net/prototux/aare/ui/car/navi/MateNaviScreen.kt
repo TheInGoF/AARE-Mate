@@ -1318,7 +1318,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             signsLogged.add("c${a.incident.kind}@${a.incident.start.latitude},${a.incident.start.longitude}"))
             chargeLog("strip: %s (TomTom kind %d) at %.1f km of the route, %s - \"%s\"".format(java.util.Locale.ROOT, NaviTraffic.word(context, a.incident.kind),
                 a.incident.kind, a.alongM / 1000, if (!NaviTraffic.onOurWay(a)) "beside it (a ramp, a service area), not shown"
-                    else if (a.incident.kind == 8 && a.along) "on our way, shown as road works (the route runs through it)" else "on our way, shown", a.incident.text.take(120)))
+                    else if (NaviTraffic.shownKind(a) == 9 && a.incident.kind != 9) "on our way, shown as road works" else "on our way, shown", a.incident.text.take(120)))
         for (a in aheadNow) for (st in chargeStops) {
             val d = ChargerIndex.distanceM(a.incident.start, st.charger.at)
             if (d < 500 && signsLogged.add("${a.incident.kind}@${a.incident.start.latitude},${a.incident.start.longitude}"))
@@ -1500,7 +1500,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             // Navi E-035, I-070: the road works TomTom gives on the guided route ahead, as a sign where they begin - also those
             // it calls a closure the route runs through (works with the traffic switched over), no longer planned round
             val worksAheadJson = remember(aheadNow, guiding) {
-                if (!guiding) null else aheadNow.filter { NaviTraffic.onOurWay(it) && (it.incident.kind == 9 || (it.incident.kind == 8 && it.along)) }
+                if (!guiding) null else aheadNow.filter { NaviTraffic.onOurWay(it) && NaviTraffic.shownKind(it) == 9 }
                     .takeIf { it.isNotEmpty() }?.let { l -> org.json.JSONObject().put("type", "FeatureCollection").put("features", org.json.JSONArray(l.map { a ->
                         org.json.JSONObject().put("type", "Feature").put("properties", org.json.JSONObject()).put("geometry",
                             org.json.JSONObject().put("type", "Point").put("coordinates", org.json.JSONArray().put(a.incident.start.longitude).put(a.incident.start.latitude)))
@@ -2018,7 +2018,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             // map, I-043) - its sign on the strip too (Navi I-070, 27.11.2026: "er zeigt die Baustelle gar nicht mehr an,
             // auf der Route und auf dem Wegstrahl"; TomTom gave the A9's works as "Gesperrt")
             NaviKeep.trafficAhead.value.filter { it.incident.kind != 6 && it.alongM > d && NaviTraffic.onOurWay(it) }
-                .map { (it.alongM - d) to (if (it.incident.kind == 8 && it.along) 9 else it.incident.kind) }
+                .map { (it.alongM - d) to NaviTraffic.shownKind(it) }
         } else emptyList()
         // the whole height of the screen, with some room above and below (19.11.2026: "Der Wegstrahl, der kann ruhig die
         // komplette Höhe des Displays mit Abständen einnehmen, damit er ein wenig detaillierter dargestellt wird, wenn

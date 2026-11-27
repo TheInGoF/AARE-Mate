@@ -35,6 +35,17 @@ class NaviTrafficWorksTest {
         assertFalse("a plain closure is one", NaviTraffic.worksWords(props(listOf("A9"), "Gesperrt")))
     }
 
+    /** Navi I-070: "er hat die Baustelle nicht als Baustelle gekennzeichnet" - the A9's works as TomTom gave them on 27.11. */
+    @Test fun aNarrowedLaneIsShownAsWorks() {
+        fun ahead(kind: Int, text: String, along: Boolean = true) =
+            NaviTraffic.Ahead(NaviTraffic.Incident(kind, north(0.0), null, text), 43_300.0, 45_000.0, along)
+        assertTrue(NaviTraffic.shownKind(ahead(7, "Fahrbahn auf zwei Fahrstreifen verengt")) == 9)
+        assertTrue(NaviTraffic.shownKind(ahead(8, "Gesperrt", along = true)) == 9)
+        assertTrue("a closure beside the route stays one", NaviTraffic.shownKind(ahead(8, "Gesperrt", along = false)) == 8)
+        assertTrue("an accident stays one", NaviTraffic.shownKind(ahead(7, "Unfall, linker Fahrstreifen gesperrt")) == 7)
+        assertTrue(NaviTraffic.shownKind(ahead(6, "Stau")) == 6)
+    }
+
     @Test fun worksNearTheClosure() {
         val closure = (0..10).map { north(it * 100.0) }
         val lanes = (0..5).map { north(1_800.0 + it * 100.0) }        // narrowed lanes starting 800 m after it
