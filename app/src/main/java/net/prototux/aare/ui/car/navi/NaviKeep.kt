@@ -65,7 +65,9 @@ internal object NaviKeep {
     @Volatile var startSoc: Double? = null
     @Volatile private var drivenRoute: Any? = null
     @Volatile private var drivenLast = 0.0
-    fun startTrip(soc: Double?) { drivenTotalM.doubleValue = 0.0; drivenRoute = null; drivenLast = 0.0; startSoc = soc; eta = null; closuresHandled.clear() }
+    fun startTrip(soc: Double?) { drivenTotalM.doubleValue = 0.0; drivenRoute = null; drivenLast = 0.0; startSoc = soc; eta = null; closuresHandled.clear(); visited.clear() }
+    /** Navi I-075: the planned chargers the car reached on this trip (no more stops to guard). */
+    val visited: MutableSet<Charger> = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap())
 
     /**
      * The arrival as said and as it came, for the log (19.11.2026: "auf einer 15-Minuten-Route, hat er sich um 5 Minuten
@@ -213,7 +215,7 @@ internal object NaviKeep {
         val current = t.progress.durationRemaining + delay
         android.util.Log.i("MateNavi", "faster route: asking from %.5f,%.5f to %s".format(java.util.Locale.ROOT, here.latitude, here.longitude,
             waypoints.joinToString(";") { "%.5f,%.5f".format(java.util.Locale.ROOT, it.latitude, it.longitude) }))
-        val alts = runCatching { session.routesFrom(here, waypoints) }.onFailure { android.util.Log.w("MateNavi", "faster route: $it") }.getOrNull().orEmpty()
+        val alts = runCatching { session.routesFrom(here, waypoints, chargeStops.value.map { it.charger.at }) }.onFailure { android.util.Log.w("MateNavi", "faster route: $it") }.getOrNull().orEmpty()
         var best: Pair<uniffi.ferrostar.Route, Double>? = null
         for (a in alts) {
             val line = a.geometry.map { Position(longitude = it.lng, latitude = it.lat) }
@@ -263,7 +265,7 @@ internal object NaviKeep {
         val waypoints = t.remainingWaypoints.map { Position(longitude = it.coordinate.lng, latitude = it.coordinate.lat) }
         if (waypoints.isEmpty()) return
         session.closures = (session.closures + NaviTraffic.excludePoints(listOf(closed))).distinct()
-        val alts = runCatching { session.routesFrom(here, waypoints) }.onFailure { android.util.Log.w("MateNavi", "around the closure: $it") }.getOrNull().orEmpty()
+        val alts = runCatching { session.routesFrom(here, waypoints, chargeStops.value.map { it.charger.at }) }.onFailure { android.util.Log.w("MateNavi", "around the closure: $it") }.getOrNull().orEmpty()
         val free = alts.firstOrNull { a -> NaviTraffic.onClosures(a.geometry.map { Position(longitude = it.lng, latitude = it.lat) }, listOf(closed)) == 0.0 }
         // into the kept log (24.11.2026: whether a way round a closure was offered could not be seen)
         net.prototux.aare.DiagLog.add("closure %.0f m ahead: %d routes from here, %s".format(java.util.Locale.ROOT, c.alongM - driven, alts.size,
@@ -678,6 +680,7 @@ internal object NaviKeep {
                         if (there) {
                             approaching = null
                             atCharger.value = stop
+                            visited += stop.charger
                             // the charger planned, put first when a charge is noticed here (not in test drives); no visit yet -
                             // the car may drive on without charging (System I-143)
                             if (testDrive.value != true) ChargeAsk.plannedReached(app, stop.charger)

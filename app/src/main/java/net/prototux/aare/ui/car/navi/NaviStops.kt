@@ -53,6 +53,27 @@ internal object NaviStops {
         return points.sortedBy { p -> cum[line.indices.minByOrNull { ChargerIndex.distanceM(line[it], p) } ?: 0] }
     }
 
+    /**
+     * Metres from [p] to the nearest point of [line], between its points too (a motorway's line has points far apart on a
+     * straight; Navi I-075: whether the route goes to a planned charger at all).
+     */
+    fun offLineM(line: List<Position>, p: Position): Double {
+        if (line.isEmpty()) return Double.MAX_VALUE
+        if (line.size == 1) return ChargerIndex.distanceM(line[0], p)
+        val kx = 111_320.0 * Math.cos(Math.toRadians(p.latitude)); val ky = 111_320.0
+        var best = Double.MAX_VALUE
+        for (i in 1 until line.size) {
+            val ax = (line[i - 1].longitude - p.longitude) * kx; val ay = (line[i - 1].latitude - p.latitude) * ky
+            val bx = (line[i].longitude - p.longitude) * kx; val by = (line[i].latitude - p.latitude) * ky
+            val dx = bx - ax; val dy = by - ay
+            val len = dx * dx + dy * dy
+            val t = if (len <= 0.0) 0.0 else (-(ax * dx + ay * dy) / len).coerceIn(0.0, 1.0)
+            val x = ax + t * dx; val y = ay + t * dy
+            best = minOf(best, Math.sqrt(x * x + y * y))
+        }
+        return best
+    }
+
     /** A stop this close behind or ahead counts as reached. */
     private const val PASSED_M = 30.0
 }

@@ -915,6 +915,8 @@
     <string name="mate_navi_speed_step_down_say">Bitte etwas langsamer, etwa %1$d, damit der Akku bis zum nächsten Stopp reicht.</string>
     <string name="mate_navi_speed_next_say">Richtwert bis zum nächsten Ladestopp jetzt %1$d.</string>
     <string name="mate_navi_speed_end_say">Richtwert bis zum Ziel jetzt %1$d.</string>
+    <string name="mate_navi_stop_rerouted_say">Die Route führt jetzt über den Ladestopp %1$s.</string>
+    <string name="mate_navi_stop_off_route_say">Achtung: Der Ladestopp %1$s liegt nicht auf der Route. Bitte im Reiseplan prüfen.</string>
     <string name="mate_navi_route_list">Route</string>
     <string name="mate_navi_stop_remove">Diesen Ladestopp herausnehmen</string>
     <string name="mate_navi_stop_restore">Diesen Ladestopp wieder aufnehmen</string>

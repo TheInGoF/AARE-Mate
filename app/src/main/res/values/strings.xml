@@ -928,6 +928,8 @@
     <string name="mate_navi_speed_step_down_say">Please slow down to about %1$d, so the battery reaches the next stop.</string>
     <string name="mate_navi_speed_next_say">Advised speed to the next charging stop now %1$d.</string>
     <string name="mate_navi_speed_end_say">Advised speed to the destination now %1$d.</string>
+    <string name="mate_navi_stop_rerouted_say">The route now goes over the charging stop %1$s.</string>
+    <string name="mate_navi_stop_off_route_say">Attention: the charging stop %1$s is not on the route. Please check the trip plan.</string>
     <string name="mate_navi_route_list">Route</string>
     <string name="mate_navi_stop_remove">Take this charging stop out</string>
     <string name="mate_navi_stop_restore">Take this charging stop in again</string>

@@ -386,7 +386,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val waypoints = t.remainingWaypoints.map { Position(longitude = it.coordinate.lng, latitude = it.coordinate.lat) }
         if (waypoints.isEmpty()) return
         scope.launch {
-            val alts = runCatching { session.routesFrom(here, waypoints) }.getOrNull().orEmpty()
+            val alts = runCatching { session.routesFrom(here, waypoints, chargeStops.map { it.charger.at }) }.getOrNull().orEmpty()
             val free = alts.firstOrNull { NaviTraffic.onClosures(raw(it), closed) == 0.0 }
             net.prototux.aare.DiagLog.add("route: the guided route runs %.0f m over a closed road (found after the start); %d route(s) from here, %s"
                 .format(java.util.Locale.ROOT, onIt, alts.size, if (free != null) "taking one round it" else "none round it - stays"), area = "NAVI")
@@ -419,17 +419,12 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 .getOrNull() ?: return@launch
             if (!guiding) return@launch
             val now = net.prototux.aare.host.CarDataService.car(context) ?: car
-            // Navi I-067: not a way far round the route the car is on - then that route stays, the stops shown by it
+            // Navi I-075 (27.11.2026: "an der Ladestation vorbei navigiert … was dann, wenn ich mit 5 % auf der Autobahn stehen
+            // bleibe?"): the stops of this plan are needed - the route goes over them, however much longer than the route
+            // without them (I-067 kept that route and only showed the stops beside it); the plan itself weighed the detours
             val nowS = (session.state.value.tripState as? TripState.Navigating)?.progress?.durationRemaining
-            val guidedNow = session.route.value
-            if (nowS != null && guidedNow != null && r.steps.sumOf { it.duration } - nowS > ChargeRouting.allowedExtraS(nowS, 0.0)) {
-                chargeStops = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                    ChargePlanner.replay(guidedTrack(guidedNow, now), now, now.socPercent, stops.map { it.charger }, ChargePlanner.Rules.of(net.prototux.aare.Settings(context)))
-                }.stops
-                chargeLog("charging: plan done while driving - the route over its stops %.0f min longer than the route now; the route stays, the stops shown by it"
-                    .format(java.util.Locale.ROOT, (r.steps.sumOf { it.duration } - nowS) / 60))
-                return@launch
-            }
+            if (nowS != null) chargeLog("charging: plan done while driving - the route over its stops %+.0f min against the route now"
+                .format(java.util.Locale.ROOT, (r.steps.sumOf { it.duration } - nowS) / 60))
             val plan = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                 ChargePlanner.replay(guidedTrack(r, now), now, now.socPercent, stops.map { it.charger }, ChargePlanner.Rules.of(net.prototux.aare.Settings(context)))
             }
@@ -897,7 +892,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             ChargerIndex.distanceM(Position(longitude = w.coordinate.lng, latitude = w.coordinate.lat), p) < OWN_SNAP_M } }
         val via = NaviStops.inOrder(raw(r), ownAhead + keep.map { it.charger.at })
         scope.launch {
-            val nr = runCatching { session.planOne(NaviSession.Kind.FAST, here, end, via, RouteOptions.of(net.prototux.aare.Settings(context))) }
+            val nr = runCatching { session.planOne(NaviSession.Kind.FAST, here, end, via, RouteOptions.of(net.prototux.aare.Settings(context)), keep.map { it.charger.at }) }
                 .onFailure { e -> if (e is kotlinx.coroutines.CancellationException) throw e }.getOrNull()
             if (nr == null) { chargeLog("charging: the route without the stop was refused - it stays as it was"); NaviKeep.noNewStops = false; return@launch }
             chargeStops = keep
@@ -942,7 +937,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             ChargerIndex.distanceM(Position(longitude = w.coordinate.lng, latitude = w.coordinate.lat), p) < OWN_SNAP_M } }
         val via = NaviStops.inOrder(raw(r), ownAhead + keep.map { it.charger.at })
         scope.launch {
-            val nr = runCatching { session.planOne(NaviSession.Kind.FAST, here, end, via, RouteOptions.of(net.prototux.aare.Settings(context))) }
+            val nr = runCatching { session.planOne(NaviSession.Kind.FAST, here, end, via, RouteOptions.of(net.prototux.aare.Settings(context)), keep.map { it.charger.at }) }
                 .onFailure { e -> if (e is kotlinx.coroutines.CancellationException) throw e }.getOrNull()
             if (nr == null) { chargeLog("charging: the route over the other charger was refused - it stays as it was"); return@launch }
             chargeStops = keep
@@ -1230,6 +1225,63 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         saveTrip()
         if (kmh.first() != before.first()) speaker.warn(context.getString(
             if (ahead.isEmpty()) net.prototux.aare.R.string.mate_navi_speed_end_say else net.prototux.aare.R.string.mate_navi_speed_next_say, kmh.first()))
+    }
+    // Navi I-075 (27.11.2026: "Ich wurde an der Ladestation vorbei navigiert … Er hat sie auch dort angezeigt und die war auch
+    // eingeplant, aber die Route ging einfach die Autobahn weiter geradeaus … was dann, wenn ich mit 5 % auf der Autobahn
+    // stehen bleibe?"): a planned charging stop ahead that the guided route does not go to - however the route came about
+    // (a plan done on the way, a way round a jam or a closure, a waypoint taken in passing) - the route made over it at
+    // once; looked at with every new route or plan and every 30 s
+    val stopGuardAt = remember { HashMap<Charger, Long>() }
+    LaunchedEffect(guided, chargeStops, guiding) {
+        while (guiding) {
+            val g = guided ?: break
+            val t = session.state.value.tripState as? TripState.Navigating
+            if (t != null && startedPending == null && chargeStops.isNotEmpty()) {
+                val here = Position(longitude = t.userLocation.coordinates.lng, latitude = t.userLocation.coordinates.lat)
+                val end = t.remainingWaypoints.lastOrNull()?.let { Position(longitude = it.coordinate.lng, latitude = it.coordinate.lat) }
+                if (end != null) {
+                    val line = raw(g)
+                    // ahead: not reached yet, and nearer the destination than the car
+                    val ahead = chargeStops.filter { st -> st.charger !in NaviKeep.visited && st.charger !== NaviKeep.atCharger.value?.charger &&
+                        ChargerIndex.distanceM(st.charger.at, end) < ChargerIndex.distanceM(here, end) - 500 }
+                    val off = ahead.filter { NaviStops.offLineM(line, it.charger.at) > STOP_OFF_ROUTE_M }
+                    val nowMs = android.os.SystemClock.elapsedRealtime()
+                    val first = off.firstOrNull()
+                    if (first != null && nowMs - (stopGuardAt[first.charger] ?: 0L) > STOP_GUARD_AGAIN_MS) {
+                        stopGuardAt[first.charger] = nowMs
+                        val name = NaviTripPlan.chargerName(first.charger)
+                        val said = ChargeNetworks.name(first.charger.network) ?: first.charger.operator
+                        net.prototux.aare.DiagLog.add("charging: the route does not go to the planned stop $name (%.1f km beside it) - made over it"
+                            .format(java.util.Locale.ROOT, NaviStops.offLineM(line, first.charger.at) / 1000), net.prototux.aare.DiagLog.Level.ERROR, area = "CHARGE")
+                        val ownAhead = ownStops.map { it.first }.filter { p -> t.remainingWaypoints.any { w ->
+                            ChargerIndex.distanceM(Position(longitude = w.coordinate.lng, latitude = w.coordinate.lat), p) < OWN_SNAP_M } }
+                        val via = NaviStops.inOrder(line, ownAhead + ahead.map { it.charger.at })
+                        val nr = runCatching { session.planOne(tripKind ?: NaviSession.Kind.FAST, here, end, via, RouteOptions.of(net.prototux.aare.Settings(context)),
+                            ahead.map { it.charger.at }) }.onFailure { e -> if (e is kotlinx.coroutines.CancellationException) throw e }.getOrNull()
+                        val reaches = nr != null && ahead.all { NaviStops.offLineM(raw(nr), it.charger.at) <= STOP_OFF_ROUTE_M }
+                        if (nr != null && reaches && guiding) {
+                            val car = net.prototux.aare.host.CarDataService.car(context)
+                            if (car != null) chargeStops = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                                ChargePlanner.replay(guidedTrack(nr, car), car, car.socPercent, ahead.map { it.charger }, ChargePlanner.Rules.of(net.prototux.aare.Settings(context)))
+                            }.stops
+                            session.go(nr, simulate = testDrive)
+                            show(nr); drawnLine = NaviRoute.smooth(raw(nr)); limits = null
+                            scope.launch { limits = NaviLimits.load(context, raw(nr), nr) }
+                            startRolling(nr)
+                            saveTrip()
+                            net.prototux.aare.DiagLog.add("charging: new route %.1f km over the planned stop(s) %s".format(java.util.Locale.ROOT, nr.distance / 1000,
+                                ahead.joinToString { NaviTripPlan.chargerName(it.charger) }), area = "CHARGE")
+                            speaker.warn(context.getString(net.prototux.aare.R.string.mate_navi_stop_rerouted_say, said))
+                        } else {
+                            net.prototux.aare.DiagLog.add("charging: no route over the planned stop $name (" + (if (nr == null) "refused" else "it still goes past") + ") - said",
+                                net.prototux.aare.DiagLog.Level.ERROR, area = "CHARGE")
+                            speaker.warn(context.getString(net.prototux.aare.R.string.mate_navi_stop_off_route_say, said))
+                        }
+                    }
+                }
+            }
+            kotlinx.coroutines.delay(STOP_GUARD_MS)
+        }
     }
     // Navi T-073, L-052: what came of a hint, for looking at it later - the battery at the charger against the plan
     val atChargerNow by NaviKeep.atCharger
@@ -2308,6 +2360,10 @@ private fun testFrom(): Position = NaviDebug.from ?: TEST_FROM
 private const val SIM_WARP = 3
 /** No stop moved this long after a route set on purpose, and a move said only after [ROLL_SAY_AFTER_MS] (System I-094). */
 private const val ROLL_CALM_MS = 120_000L
+/** Navi I-075: a planned charger farther than this from the guided route is not on it (a charger as a waypoint is put on a road within 300 m). */
+internal const val STOP_OFF_ROUTE_M = 330.0
+private const val STOP_GUARD_MS = 30_000L
+private const val STOP_GUARD_AGAIN_MS = 120_000L
 private const val ROLL_SAY_AFTER_MS = 300_000L
 /** How close the map comes to a stop picked in the trip plan (System L-089). */
 private const val PLAN_LOOK_ZOOM = 17.0

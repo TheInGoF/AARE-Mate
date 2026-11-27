@@ -375,9 +375,11 @@ internal class NaviSession(parent: CoroutineScope, private val valhalla: String,
      * F2: the routes from where the car is to the same waypoints (stops and destination), Valhalla's alternatives with
      * them, kept off the trip's closures - for the faster route while guiding.
      */
-    suspend fun routesFrom(from: Position, waypoints: List<Position>): List<Route> = withContext(Dispatchers.IO) {
+    suspend fun routesFrom(from: Position, waypoints: List<Position>, chargers: List<Position> = emptyList()): List<Route> = withContext(Dispatchers.IO) {
         val here = UserLocation(GeographicCoordinate(from.latitude, from.longitude), 5.0, null, Instant.now(), null)
-        val points = waypoints.map { Waypoint(GeographicCoordinate(it.latitude, it.longitude), WaypointKind.BREAK, null) }
+        // Navi I-075: a planned charger among them as one (not taken to the motorway beside it)
+        val points = waypoints.map { w -> GeographicCoordinate(w.latitude, w.longitude).let { at ->
+            if (chargers.any { ChargerIndex.distanceM(it, w) < CHARGER_SAME_M }) chargerWaypoint(at) else Waypoint(at, WaypointKind.BREAK, null) } }
         // no exclusions right at the car: Valhalla finds no start on an excluded road and answers 400 (17.11.2026); the
         // points only, the areas are for the planning - given to this request, the trip's own closures stay as they are
         val json = options(false, 2, routeOptions, closures.filter { ChargerIndex.distanceM(it, from) > NEAR_CAR_M }, emptyList())
@@ -411,9 +413,7 @@ internal class NaviSession(parent: CoroutineScope, private val valhalla: String,
             val at = GeographicCoordinate(p.latitude, p.longitude)
             // a charger of the plan (Navi I-066): only a road right by it - one reached only from far off (a site behind a
             // fence, the village road behind a service area) is refused, and the plan takes another charger, not a way round
-            if (chargers.any { ChargerIndex.distanceM(it, p) < 1.0 })
-                uniffi.ferrostar.createWaypointWithValhallaProperties(at, WaypointKind.BREAK,
-                    uniffi.ferrostar.ValhallaWaypointProperties(searchCutoff = CHARGER_CUTOFF_M))
+            if (chargers.any { ChargerIndex.distanceM(it, p) < 1.0 }) chargerWaypoint(at)
             else Waypoint(at, WaypointKind.BREAK, null)
         }
         val places = listOf(from) + via + listOf(to)
@@ -449,6 +449,18 @@ internal class NaviSession(parent: CoroutineScope, private val valhalla: String,
     private val NEAR_STOP_M = 1500.0
     /** A charger's stop is put on a road no further off than this (Valhalla's search_cutoff, metres). */
     private val CHARGER_CUTOFF_M = 300u
+    /** A waypoint this close to a planned charger is that charger (the route's waypoints are put on the road by Valhalla). */
+    private val CHARGER_SAME_M = 350.0
+
+    /**
+     * A planned charger as a waypoint: only a road right by it ([CHARGER_CUTOFF_M], Navi I-066), and never the motorway or
+     * a fast road beside it (Navi I-075, 27.11.2026: "Ich wurde an der Ladestation vorbei navigiert … Er hat sie auch dort
+     * angezeigt und die war auch eingeplant, aber die Route ging einfach die Autobahn weiter geradeaus") - put on the
+     * carriageway, the stop is a point the route drives by at full speed, and the waypoint counts as reached in passing.
+     */
+    private fun chargerWaypoint(at: GeographicCoordinate) = uniffi.ferrostar.createWaypointWithValhallaProperties(at, WaypointKind.BREAK,
+        uniffi.ferrostar.ValhallaWaypointProperties(searchCutoff = CHARGER_CUTOFF_M,
+            searchFilter = uniffi.ferrostar.ValhallaLocationSearchFilter(maxRoadClass = uniffi.ferrostar.ValhallaRoadClass.PRIMARY)))
 
     private fun same(a: Route, b: Route) = Math.abs(a.distance - b.distance) < 50 && Math.abs(a.geometry.size - b.geometry.size) < 5
 
