@@ -134,13 +134,22 @@ internal object DashMapCache {
      * so a round can tell when the car's range has moved enough to draw anew.
      */
     @Volatile private var areaKm: Double? = null
+    /** IDmate's range when the area it drew was taken: what the area stands for (System I-147). */
+    @Volatile private var areaBackendKm: Double? = null
     @Volatile private var stretchUsed = 1.0
 
+    /**
+     * The range now against the range the area was drawn for. System I-147 (27.11.2026: "Ich lade gerade live … aber die
+     * Umkreiskarte ändert sich nicht … schon 50 % geladen"): the base was IDmate's range of now, which rises with the
+     * charge as the car's does - nothing moved until IDmate drew anew (every 10 min at most). Now the base is the range
+     * the area was drawn for, the car's own range (stick) or else IDmate's of now against it; 0.5..2.5.
+     */
     private fun stretchFactor(context: Context): Double {
-        val car = DashData.rangeKmFrom(context, "stick", Telemetry.LIVE_HOLD_MS) ?: return 1.0
-        val base = DashData.rangeKmFrom(context, "backend", 6 * 3600_000L) ?: areaKm ?: return 1.0
+        val backendNow = DashData.rangeKmFrom(context, "backend", 6 * 3600_000L)
+        val now = DashData.rangeKmFrom(context, "stick", Telemetry.LIVE_HOLD_MS) ?: backendNow ?: return 1.0
+        val base = areaBackendKm ?: backendNow ?: areaKm ?: return 1.0
         if (base < 5) return 1.0
-        return (car / base).coerceIn(0.7, 1.4)
+        return (now / base).coerceIn(0.5, 2.5)
     }
 
     private fun makeArea(context: Context, raw: JSONObject): DashMapGeo.Area? {
@@ -190,6 +199,7 @@ internal object DashMapCache {
                 if (ts != areaTs) {
                     val raw = got.optJSONObject("geojson")
                     areaKm = got.optJSONArray("kms")?.let { k -> (0 until k.length()).maxOfOrNull { k.optDouble(it, 0.0) } }?.takeIf { it > 0 }
+                    areaBackendKm = DashData.rangeKmFrom(context, "backend", 6 * 3600_000L)
                     val made = raw?.let { makeArea(context, it) }
                     net.prototux.aare.DiagLog.add("dashboard map: range area " + (if (made != null) "taken (${got.optJSONArray("kms")} km)" else "not readable"))
                     if (made != null) { _area.value = made; areaTs = ts; areaRaw = raw }

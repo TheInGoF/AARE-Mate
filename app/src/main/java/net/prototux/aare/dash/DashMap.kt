@@ -148,6 +148,13 @@ private val WIND_SIZE = listOf(17, 21, 25, 25)
  */
 private const val WIND_SCALE = 160f / 208f
 private const val NEAR_ZOOM = 13.0
+/** The car's place looked at this often; the glide between two places takes the time between them, within these (I-148). */
+private const val POLL_MS = 1_000L
+private const val GLIDE_MIN_MS = 500L
+private const val GLIDE_MAX_MS = 2_500L
+private const val FRAME_MS = 40L
+/** Further than this from the last place: no glide, the car is put there. */
+private const val JUMP_KM = 1.0
 /** The map draws the symbols at half the size the legend shows (its own pixel ratio): twice, as the legend's arrows. */
 private const val ICON_SCALE = 2f
 private const val START_ZOOM = 7.0
@@ -176,7 +183,7 @@ private fun DashMap(go: (String) -> Unit) {
             }
             heading = DashData.number(context, "heading", 10 * 60_000L)
             rangeKm = DashData.rangeKm(context)
-            delay(2_000)
+            delay(POLL_MS)
         }
     }
     // the base map: the region package around the car (the device's own map), the server's only without one
@@ -264,7 +271,36 @@ private fun DashMap(go: (String) -> Unit) {
         }
         if (ferryNote != null) { delay(6_000); ferryNote = null; DashMapCache.ferriesOff() }
     }
-    LaunchedEffect(car) { if (follow && introDone) car?.let { c -> runCatching { camera.animateTo(CameraPosition(target = c, zoom = followZoom, padding = FOLLOW_PADDING), 900.milliseconds) } } }
+    // System I-148 (27.11.2026: "Wenn man mit dem Dashboard fährt, springt die Karte immer Punkt für Punkt und läuft nicht
+    // flüssig mit wie beim Navi … nicht so dieses Neulade-Erlebnis"): the car and the camera glide from one place to the
+    // next over the time between them, some 25 times a second, instead of a jump (and a stop) at each new place
+    var shown by remember { mutableStateOf<Position?>(null) }
+    var shownHeading by remember { mutableStateOf<Double?>(null) }
+    var lastPlaceAt by remember { mutableStateOf(0L) }
+    LaunchedEffect(car) {
+        val to = car ?: return@LaunchedEffect
+        val now = android.os.SystemClock.uptimeMillis()
+        val span = (if (lastPlaceAt == 0L) 0L else now - lastPlaceAt).coerceIn(GLIDE_MIN_MS, GLIDE_MAX_MS)
+        lastPlaceAt = now
+        val from = shown
+        val h0 = shownHeading; val h1 = heading
+        if (from == null || net.prototux.aare.ui.car.navi.ChargerIndex.distanceM(from, to) > JUMP_KM * 1000) {
+            shown = to; shownHeading = h1
+            // a jump (the first place, or far): the camera follows at once, as the glide does
+            if (follow && introDone) runCatching { camera.animateTo(CameraPosition(target = to, zoom = followZoom, padding = FOLLOW_PADDING), 300.milliseconds) }
+            return@LaunchedEffect
+        }
+        val start = android.os.SystemClock.uptimeMillis()
+        while (true) {
+            val f = ((android.os.SystemClock.uptimeMillis() - start).toDouble() / span).coerceIn(0.0, 1.0)
+            val p = Position(longitude = from.longitude + (to.longitude - from.longitude) * f, latitude = from.latitude + (to.latitude - from.latitude) * f)
+            shown = p
+            shownHeading = if (h0 == null || h1 == null) h1 else h0 + (((h1 - h0 + 540) % 360) - 180) * f
+            if (follow && introDone) runCatching { camera.position = CameraPosition(target = p, zoom = followZoom, padding = FOLLOW_PADDING, bearing = camera.position.bearing, tilt = camera.position.tilt) }
+            if (f >= 1.0) break
+            delay(FRAME_MS)
+        }
+    }
 
     var picked by remember { mutableStateOf<Position?>(null) }
     val windImages = remember(density) { List(4) { arrow(it, density) } }
@@ -332,8 +368,9 @@ private fun DashMap(go: (String) -> Unit) {
                     iconImage = image(windImages[k]), iconSize = const(ICON_SCALE), iconRotate = feature.get("rot").asNumber(),
                     iconRotationAlignment = const(IconRotationAlignment.Map), iconAllowOverlap = const(true))
             }
-            val c = car
-            SymbolLayer(id = "dash-car", source = rememberGeoJsonSource(remember(c, heading) { GeoJsonData.JsonString(c?.let { DashMapGeo.car(it.latitude, it.longitude, heading) } ?: DashMapGeo.EMPTY) }),
+            val c = shown ?: car
+            val ch = shownHeading ?: heading
+            SymbolLayer(id = "dash-car", source = rememberGeoJsonSource(remember(c, ch) { GeoJsonData.JsonString(c?.let { DashMapGeo.car(it.latitude, it.longitude, ch) } ?: DashMapGeo.EMPTY) }),
                 iconImage = image(carImage), iconSize = const(ICON_SCALE), iconRotate = feature.get("head").asNumber(),
                 iconRotationAlignment = const(IconRotationAlignment.Map), iconAllowOverlap = const(true))
         }
