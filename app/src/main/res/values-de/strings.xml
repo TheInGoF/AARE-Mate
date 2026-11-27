@@ -850,7 +850,7 @@
     <string name="mate_navi_trip_estimated">geschätzt</string>
     <string name="mate_navi_charge_at_charger">am Lader</string>
     <string name="mate_navi_preheat_title">Batterie jetzt vorheizen</string>
-    <string name="mate_navi_preheat_detail">Batterie %1$d °C · etwa %2$d min · etwa %3$s kWh · im Auto starten</string>
+    <string name="mate_navi_preheat_detail">Batterie %1$d °C → %4$d °C · etwa %2$d min · etwa %3$s kWh · im Auto starten</string>
     <string name="mate_navi_charge_spread">± %1$d</string>
     <string name="mate_navi_charge_at_destination">am Ziel</string>
     <string name="mate_navi_eta_arrival">Ankunft</string>

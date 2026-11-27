@@ -79,7 +79,7 @@ internal fun NaviPreheatHint(advice: NaviPreheat.Advice, modifier: androidx.comp
             androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_preheat_title),
                 style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = Mate.text)
             androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_preheat_detail,
-                advice.fromC.roundToInt(), advice.minutes.roundToInt(), String.format(java.util.Locale.getDefault(), "%.1f", advice.kwh)),
+                advice.fromC.roundToInt(), advice.minutes.roundToInt(), String.format(java.util.Locale.getDefault(), "%.1f", advice.kwh), advice.targetC.roundToInt()),
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = Mate.textDim)
         }
         androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(12.dp))

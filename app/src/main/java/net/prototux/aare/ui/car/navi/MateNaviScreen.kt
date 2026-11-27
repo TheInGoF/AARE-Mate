@@ -1008,14 +1008,28 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 val driven = g.distance - t.progress.distanceRemaining
                 NaviKeep.stillToCharge(t).firstOrNull { it !== NaviKeep.atCharger.value }?.let { next ->
                     val toM = roll.alongM(next.charger)
+                    // Navi L-052: the warming weighed for this stop - the levels there, the car, the least level at a charger
+                    val stop = net.prototux.aare.host.CarDataService.car(context)?.let { car -> NaviPreheat.Stop(car, next.arrivePercent, next.leavePercent,
+                        ChargePlanner.Rules.of(net.prototux.aare.Settings(context)).atCharger) }
                     if (toM <= driven) null
-                    else NaviPreheat.advice(bt, out, next.charger.kw, roll.secondsBetween(driven, toM) / 60.0, NaviPreheat.Rates.of(context))?.let { next.charger to it }
+                    else NaviPreheat.advice(bt, out, next.charger.kw, roll.secondsBetween(driven, toM) / 60.0, NaviPreheat.Rates.of(context), stop)?.let { next.charger to it }
                 }
             }
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { preheat = next }
             kotlinx.coroutines.delay(30_000)
         }
     } }
+    // Navi T-073, L-052: what came of a hint, for looking at it later - the battery at the charger against the plan
+    var preheatFor by remember { mutableStateOf<Triple<Charger, NaviPreheat.Advice, Long>?>(null) }
+    val atChargerNow by NaviKeep.atCharger
+    LaunchedEffect(atChargerNow) {
+        val (c, a, at) = preheatFor ?: return@LaunchedEffect
+        if (atChargerNow?.charger !== c) return@LaunchedEffect
+        preheatFor = null
+        val bt = net.prototux.aare.dash.DashData.batteryCelsius(context)
+        net.prototux.aare.DiagLog.add("battery warm: at the charger %s (from %.0f °C, aimed at %.0f °C; hint %.0f min before, said %.0f min)".format(java.util.Locale.ROOT,
+            bt?.let { "%.0f °C".format(java.util.Locale.ROOT, it) } ?: "unknown", a.fromC, a.targetC, (System.currentTimeMillis() - at) / 60_000.0, a.minutes), area = "CHARGE")
+    }
     // said once per charger, as it appears
     LaunchedEffect(preheat?.first) {
         val (c, a) = preheat ?: return@LaunchedEffect
@@ -1024,8 +1038,10 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val out = net.prototux.aare.dash.DashData.outsideCelsius(context)
         val age = (System.currentTimeMillis() - net.prototux.aare.dash.DashData.batteryAtMs(context)) / 60_000
         net.prototux.aare.DiagLog.add("battery warm: start now - %.0f °C, %.0f min to %.0f °C, about %.1f kWh, %d kW charger; at %s, outside %s, battery read %d min ago (%s)".format(java.util.Locale.ROOT,
-            a.fromC, a.minutes, NaviPreheat.TARGET_C, a.kwh, c.kw, NaviPreheat.Rates.of(context).said(out),
-            out?.let { "%.0f °C".format(java.util.Locale.ROOT, it) } ?: "unknown", age, net.prototux.aare.dash.DashData.sourceOf(context, "t_batt") ?: "?"), area = "CHARGE")
+            a.fromC, a.minutes, a.targetC, a.kwh, c.kw, NaviPreheat.Rates.of(context).said(out),
+            out?.let { "%.0f °C".format(java.util.Locale.ROOT, it) } ?: "unknown", age, net.prototux.aare.dash.DashData.sourceOf(context, "t_batt") ?: "?") +
+            (if (a.why.isNotEmpty()) "; weighed: ${a.why}" else ""), area = "CHARGE")
+        preheatFor = Triple(c, a, System.currentTimeMillis())
         // a tone is enough, no words (22.11.2026: "Dafür muss er aber nicht unbedingt eine Navi-Ansage machen … sondern ein
         // Hinweiston würde reichen"); the hint itself blinks three times (NaviPreheatHint)
         if (voiceMode != NaviSpeaker.Mode.MUTE && !NaviKeep.away) NaviSpeedAlert.play(NaviSpeedAlert.Companion.Tone.DOUBLE, 0.8f, 1)
