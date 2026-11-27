@@ -375,24 +375,14 @@ private fun DashMap(go: (String) -> Unit) {
             for ((id, line) in listOf("dash-own-trail" to ownSettled, "dash-own-trail-recent" to ownRecent))
                 LineLayer(id = id, source = rememberGeoJsonSource(remember(line) { GeoJsonData.JsonString(line) }),
                     color = const(CAR_TEAL), width = const(4.dp), opacity = const(0.8f), cap = const(LineCap.Round), join = const(LineJoin.Round))
-            val tail = DashTrail.last()
-            val headTo = shown
-            val head = remember(tail, headTo) {
-                if (tail == null || headTo == null || DashDrive.distanceM(tail, headTo) > 2_000) DashMapGeo.EMPTY
-                else DashMapGeo.lineCollection(listOf(listOf(doubleArrayOf(tail.longitude, tail.latitude), doubleArrayOf(headTo.longitude, headTo.latitude))))
-            }
-            LineLayer(id = "dash-own-trail-head", source = rememberGeoJsonSource(GeoJsonData.JsonString(head)),
-                color = const(CAR_TEAL), width = const(4.dp), opacity = const(0.8f), cap = const(LineCap.Round), join = const(LineJoin.Round))
             for (k in 0 until 4) {
                 SymbolLayer(id = "dash-wind-$k", source = rememberGeoJsonSource(remember(wind[k], windOn) { GeoJsonData.JsonString(if (windOn) wind[k] else DashMapGeo.EMPTY) }), minZoom = 5f,
                     iconImage = image(windImages[k]), iconSize = const(ICON_SCALE), iconRotate = feature.get("rot").asNumber(),
                     iconRotationAlignment = const(IconRotationAlignment.Map), iconAllowOverlap = const(true))
             }
-            val c = shown ?: car
-            val ch = shownHeading ?: heading
-            SymbolLayer(id = "dash-car", source = rememberGeoJsonSource(remember(c, ch) { GeoJsonData.JsonString(c?.let { DashMapGeo.car(it.latitude, it.longitude, ch) } ?: DashMapGeo.EMPTY) }),
-                iconImage = image(carImage), iconSize = const(ICON_SCALE), iconRotate = feature.get("head").asNumber(),
-                iconRotationAlignment = const(IconRotationAlignment.Map), iconAllowOverlap = const(true))
+            // System I-153: what moves 25 times a second in a part of its own - read here, the whole map with its thirty
+            // layers was made anew with every frame and held up the screen's thread (taps that did nothing)
+            DashCarLayers({ shown ?: car }, { shownHeading ?: heading }, carImage)
         }
         // the own controls at the driver's side, with the signs they had (CarStage.MapButton): crosshair, range, wind,
         // rain - as large as the car bar's microphone; zoom with two fingers (21.11.2026: "braucht kein Plus und Minus")
@@ -528,4 +518,22 @@ private fun carMark(density: Float): ImageBitmap {
     c.drawCircle(m, m, r + 3 * density, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE })
     c.drawCircle(m, m, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = teal })
     return b.asImageBitmap()
+}
+
+/** System L-117, I-150, I-153: the car and the last bit of the way driven to it - the only layers redrawn every frame. */
+@Composable
+@org.maplibre.compose.util.MaplibreComposable
+private fun DashCarLayers(at: () -> Position?, heading: () -> Double?, carImage: androidx.compose.ui.graphics.ImageBitmap) {
+    val c = at()
+    val ch = heading()
+    val tail = DashTrail.last()
+    val head = remember(tail, c) {
+        if (tail == null || c == null || DashDrive.distanceM(tail, c) > 2_000) DashMapGeo.EMPTY
+        else DashMapGeo.lineCollection(listOf(listOf(doubleArrayOf(tail.longitude, tail.latitude), doubleArrayOf(c.longitude, c.latitude))))
+    }
+    LineLayer(id = "dash-own-trail-head", source = rememberGeoJsonSource(GeoJsonData.JsonString(head)),
+        color = const(CAR_TEAL), width = const(4.dp), opacity = const(0.8f), cap = const(LineCap.Round), join = const(LineJoin.Round))
+    SymbolLayer(id = "dash-car", source = rememberGeoJsonSource(remember(c, ch) { GeoJsonData.JsonString(c?.let { DashMapGeo.car(it.latitude, it.longitude, ch) } ?: DashMapGeo.EMPTY) }),
+        iconImage = image(carImage), iconSize = const(ICON_SCALE), iconRotate = feature.get("head").asNumber(),
+        iconRotationAlignment = const(IconRotationAlignment.Map), iconAllowOverlap = const(true))
 }

@@ -63,12 +63,30 @@ class ProjectionDisplay(
         val p = CarPresentation(context, display.display, content)
         p.show()
         presentation = p
+        MainWatch.start()
     }
 
+    /** System I-153: a resting finger's small moves held back, so a tap stays a tap (20 dp around where it came down). */
+    private val steady = TapSteady(TAP_RADIUS_DP * densityDpi / 160f)
+    private var steadiedSaid = 0
+    private var lastWaitLogMs = 0L
+
     fun dispatchTouch(event: MotionEvent) {
+        val posted = android.os.SystemClock.uptimeMillis()
         main.post {
+            // System I-153: a touch that waited long for the screen's thread (the log says why: MainWatch)
+            val waited = android.os.SystemClock.uptimeMillis() - posted
+            if (waited > TOUCH_WAIT_LOG_MS && posted - lastWaitLogMs > 30_000) {
+                lastWaitLogMs = posted
+                net.prototux.aare.DiagLog.add("touch: waited $waited ms for the screen's thread", net.prototux.aare.DiagLog.Level.WARN, area = "CAR")
+            }
             if (event.actionMasked == MotionEvent.ACTION_DOWN) CarFocusVisibility.keyInput = false
-            presentation?.window?.decorView?.dispatchTouchEvent(event)
+            steady.filter(event)?.let { presentation?.window?.decorView?.dispatchTouchEvent(it) }
+            if (steady.steadied > steadiedSaid && (steady.steadied == 1 || steady.steadied % 25 == 0)) {
+                steadiedSaid = steady.steadied
+                net.prototux.aare.DiagLog.add("touch: %d tap(s) kept as taps though the finger moved (up to %.0f px, a swipe from %.0f px on)".format(
+                    java.util.Locale.ROOT, steady.steadied, steady.mostPx, TAP_RADIUS_DP * densityDpi / 160f), area = "CAR")
+            }
             event.recycle()
         }
     }
@@ -107,6 +125,7 @@ class ProjectionDisplay(
     }
 
     fun release() {
+        MainWatch.stop()
         main.post {
             presentation?.dismissSafely()
             presentation = null
@@ -115,6 +134,8 @@ class ProjectionDisplay(
     }
 
     private companion object {
+        const val TAP_RADIUS_DP = 20f
+        const val TOUCH_WAIT_LOG_MS = 300L
         /** Keys that move or use focus, as in the platform's own check for leaving touch mode. */
         fun isNavigationKey(code: Int) = when (code) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
