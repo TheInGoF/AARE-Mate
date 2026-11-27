@@ -1497,6 +1497,22 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     iconRotationAlignment = const(org.maplibre.compose.expressions.value.IconRotationAlignment.Viewport),
                     iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport))
             }
+            // Navi E-035, I-070: the road works TomTom gives on the guided route ahead, as a sign where they begin - also those
+            // it calls a closure the route runs through (works with the traffic switched over), no longer planned round
+            val worksAheadJson = remember(aheadNow, guiding) {
+                if (!guiding) null else aheadNow.filter { NaviTraffic.onOurWay(it) && (it.incident.kind == 9 || (it.incident.kind == 8 && it.along)) }
+                    .takeIf { it.isNotEmpty() }?.let { l -> org.json.JSONObject().put("type", "FeatureCollection").put("features", org.json.JSONArray(l.map { a ->
+                        org.json.JSONObject().put("type", "Feature").put("properties", org.json.JSONObject()).put("geometry",
+                            org.json.JSONObject().put("type", "Point").put("coordinates", org.json.JSONArray().put(a.incident.start.longitude).put(a.incident.start.latitude)))
+                    })).toString() }
+            }
+            if (trafficShown && worksAheadJson != null) {
+                val aheadData = remember(worksAheadJson) { GeoJsonData.JsonString(worksAheadJson) }
+                val signImage = NaviTraffic.rememberSignImage(9, WORKS_PX)
+                org.maplibre.compose.layers.SymbolLayer(id = "verkehr-baustelle-voraus", source = rememberGeoJsonSource(aheadData), minZoom = 9f,
+                    iconImage = org.maplibre.compose.expressions.dsl.image(signImage), iconAllowOverlap = const(true),
+                    iconPitchAlignment = const(org.maplibre.compose.expressions.value.IconPitchAlignment.Viewport))
+            }
             if (trafficShown && worksJson != null) {
                 val worksData = remember(worksJson) { GeoJsonData.JsonString(worksJson) }
                 val worksImage = NaviTraffic.rememberSignImage(9, WORKS_PX)

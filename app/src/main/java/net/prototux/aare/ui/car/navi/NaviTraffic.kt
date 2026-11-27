@@ -79,15 +79,20 @@ internal object NaviTraffic {
             val client = NaviServer.client(context)
             val out = ArrayList<List<org.maplibre.spatialk.geojson.Position>>()
             val works = ArrayList<String>()
+            // Navi E-035 (27.11.2026: "Autobahnbaustellen, da fährt man grundsätzlich erstmal durch … nur wegen einer Baustelle
+            // muss er nicht umleiten, wegen einer Straßensperrung schon"): road works and narrowed lanes on a motorway, and the
+            // motorway closures TomTom gives for them (a carriageway closed, the traffic switched over), kept apart
+            val motorwayWorks = ArrayList<List<org.maplibre.spatialk.geojson.Position>>()
+            val motorwayClosed = ArrayList<Pair<List<org.maplibre.spatialk.geojson.Position>, Boolean>>()
             for (chunk in chunks(line)) {
                 val minLon = chunk.minOf { it.longitude } - 0.01; val maxLon = chunk.maxOf { it.longitude } + 0.01
                 val minLat = chunk.minOf { it.latitude } - 0.01; val maxLat = chunk.maxOf { it.latitude } + 0.01
-                val fields = java.net.URLEncoder.encode("{incidents{geometry{type,coordinates},properties{iconCategory,magnitudeOfDelay}}}", "UTF-8")
+                val fields = java.net.URLEncoder.encode("{incidents{geometry{type,coordinates},properties{iconCategory,magnitudeOfDelay,roadNumbers,events{description}}}}", "UTF-8")
                 // the box formatted on its own: the encoded fields hold "%7B..." that format() would take for its own
                 val box = "%.5f,%.5f,%.5f,%.5f".format(java.util.Locale.ROOT, minLon, minLat, maxLon, maxLat)
                 // closures (8), and road works (9) for the log only (24.11.2026, 19:30: led through road works no closure
                 // had been reported for - whether TomTom knew them could not be seen)
-                val url = "$base/verkehr/traffic/services/5/incidentDetails?bbox=$box&fields=$fields&categoryFilter=8,9&timeValidityFilter=present&language=${net.prototux.aare.Language.tag()}"
+                val url = "$base/verkehr/traffic/services/5/incidentDetails?bbox=$box&fields=$fields&categoryFilter=7,8,9&timeValidityFilter=present&language=${net.prototux.aare.Language.tag()}"
                 val body = client.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { if (it.isSuccessful) it.body.string() else null } ?: continue
                 val incidents = org.json.JSONObject(body).optJSONArray("incidents") ?: continue
                 for (i in 0 until incidents.length()) {
@@ -96,16 +101,29 @@ internal object NaviTraffic {
                     val pts = if (g.optString("type") == "LineString") (0 until coords.length()).map { k -> coords.getJSONArray(k).let {
                         org.maplibre.spatialk.geojson.Position(longitude = it.getDouble(0), latitude = it.getDouble(1)) } } else continue
                     val props = incidents.getJSONObject(i).optJSONObject("properties")
-                    if (props?.optInt("iconCategory") == 9) {
+                    val kind = props?.optInt("iconCategory") ?: 0
+                    val motorway = onMotorway(props)
+                    // E-035: lanes narrowed or works on a motorway mark the works there; no closure themselves
+                    if (motorway && (kind == 7 || kind == 9)) motorwayWorks += pts
+                    if (kind == 7) continue
+                    if (kind == 9) {
                         val on = onRoute(pts, chunk)
                         if (on.isNotEmpty()) works += "%d m (magnitude %d)".format(java.util.Locale.ROOT,
                             on.sumOf { l -> l.zipWithNext { p, q -> ChargerIndex.distanceM(p, q) }.sum() }.toInt(), props.optInt("magnitudeOfDelay"))
                         continue
                     }
-                    // the part of the closed stretch the route runs on (19.11.2026: see onRoute)
-                    out += onRoute(pts, chunk)
+                    // the part of the closed stretch the route runs on (19.11.2026: see onRoute); on a motorway weighed below
+                    val on = onRoute(pts, chunk)
+                    if (motorway) on.forEach { motorwayClosed += it to worksWords(props) } else out += on
                 }
             }
+            // E-035: a motorway closure that is the works' (its words say so, or works or narrowed lanes lie within
+            // [WORKS_NEAR_M]) is driven through; one without any works is a closure as before
+            var throughWorks = 0
+            for ((l, said) in motorwayClosed) {
+                if (said || motorwayWorks.any { w -> near(w, l, WORKS_NEAR_M) }) throughWorks++ else out += l
+            }
+            if (throughWorks > 0) net.prototux.aare.DiagLog.add("closures on the motorway taken as road works, driven through: $throughWorks", area = "NAVI")
             if (works.isNotEmpty()) net.prototux.aare.DiagLog.add("road works on the route (not avoided): ${works.size} - ${works.take(6).joinToString()}", area = "NAVI")
             // and the closed roads of the flow tiles - they mark whole closed roads where the incidents name a piece
             val fetch: (String) -> ByteArray? = { u -> runCatching { client.newCall(okhttp3.Request.Builder().url(u).build()).execute()
@@ -115,6 +133,8 @@ internal object NaviTraffic {
             var told = 0
             for (l in flow) {
                 val parts = onRoute(l, line)
+                // E-035: a closed carriageway of the flow tiles at motorway works is the works' too
+                if (parts.isNotEmpty() && motorwayWorks.any { w -> near(w, l, WORKS_NEAR_M) }) { throughWorks++; continue }
                 if (parts.isNotEmpty()) { out += parts; fromFlow++; continue }
                 // for checking: a closed line near the route that was not taken - how near, which way
                 if (told < 8) {
@@ -126,6 +146,27 @@ internal object NaviTraffic {
             android.util.Log.i("MateNavi", "closures along: ${out.size - fromFlow} from incidents, $fromFlow from ${flow.size} closed flow lines")
             out.distinctBy { it.first().let { p -> "%.5f,%.5f".format(java.util.Locale.ROOT, p.latitude, p.longitude) } }
         }
+
+    /** E-035: works or narrowed lanes this near a motorway closure make it the works'. */
+    const val WORKS_NEAR_M = 1_500.0
+
+    /** Whether TomTom's incident lies on a motorway: a road number "A 9", "A9", "E 51" among its roads. */
+    fun onMotorway(props: org.json.JSONObject?): Boolean {
+        val a = props?.optJSONArray("roadNumbers") ?: return false
+        return (0 until a.length()).any { MOTORWAY.matches(a.optString(it).trim()) }
+    }
+    private val MOTORWAY = Regex("^[AE] ?\\d{1,3}.*")
+
+    /** Whether TomTom's words for an incident speak of road works (the closure is the works' own). */
+    fun worksWords(props: org.json.JSONObject?): Boolean {
+        val ev = props?.optJSONArray("events") ?: return false
+        return (0 until ev.length()).any { i -> WORKS.containsMatchIn(ev.optJSONObject(i)?.optString("description").orEmpty()) }
+    }
+    private val WORKS = Regex("(?i)baustelle|bauarbeit|arbeitsstelle|verkehrsführung|gegenverkehr|road ?works|construction|contraflow|maintenance")
+
+    /** Whether any point of [a] lies within [m] of any point of [b]. */
+    fun near(a: List<org.maplibre.spatialk.geojson.Position>, b: List<org.maplibre.spatialk.geojson.Position>, m: Double): Boolean =
+        a.any { p -> b.any { q -> ChargerIndex.distanceM(p, q) <= m } }
 
     /** Whether the closure [pts] near its point [p] runs along [line] (close by and in its direction, either way). */
     private fun runsAlong(p: org.maplibre.spatialk.geojson.Position, pts: List<org.maplibre.spatialk.geojson.Position>,
