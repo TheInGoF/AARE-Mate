@@ -1167,7 +1167,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     } }
     // Navi I-071: the guided route's limits came in, or the works ahead changed - the plan on the way counts with them
     val worksKey = remember(NaviKeep.trafficAhead.value) { NaviKeep.trafficAhead.value.filter { NaviTraffic.shownKind(it) == 9 }.map { it.alongM.toInt() } }
-    LaunchedEffect(limits, worksKey, guided) {
+    // Navi L-056: the speeds per stretch weighed anew (leaving a charging stop) - the plan on the way counts with them too
+    val legsKey by NaviKeep.speedLegs
+    LaunchedEffect(limits, worksKey, guided, legsKey) {
         val g = guided ?: return@LaunchedEffect
         val roll = NaviKeep.rolling ?: return@LaunchedEffect
         if (NaviKeep.rollingRoute !== g || testDrive) return@LaunchedEffect
@@ -1176,10 +1178,48 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val t = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { guidedTrack(g, car) }
         if (NaviKeep.rollingRoute === g) {
             roll.replaceTrack(t)
-            chargeLog("charging on the way: the plan counts with the map's limits%s and %d road works ahead (I-071); your speed on open motorway %s".format(
+            chargeLog("charging on the way: the plan counts with the map's limits%s and %d road works ahead (I-071); on open motorway %s".format(
                 java.util.Locale.ROOT, if (limits?.of(g) == true) "" else " (not loaded)", worksKey.size,
-                NaviPace.cruise(context)?.let { "%.0f km/h".format(java.util.Locale.ROOT, it) } ?: "not learned yet"))
+                legsKey?.let { "the advised speeds per stretch, " + it.describe() }
+                    ?: NaviPace.cruise(context)?.let { "your speed, %.0f km/h".format(java.util.Locale.ROOT, it) } ?: "the route's (your speed not learned yet)"))
         }
+    }
+    // Navi L-056 step 2 ("ich bin in Potsdam … den nächsten Abschnitt kannst du ein bisschen schneller fahren, weil du nur
+    // 10 Minuten laden musst … nicht immer gleich neu berechnen"): driven away from a charging stop, and only then - the
+    // stretches still ahead weighed anew from the level now, the stops kept; said when the next stretch's speed changed
+    val leftNow by NaviKeep.leftCharger
+    LaunchedEffect(leftNow) {
+        // once per stop left (the screen shown anew runs this again; the key is not reset, that would end this run)
+        val left = leftNow?.takeIf { it !== NaviKeep.leftWeighed } ?: return@LaunchedEffect
+        NaviKeep.leftWeighed = left
+        val legs = NaviKeep.speedLegs.value ?: return@LaunchedEffect
+        val g = guided ?: return@LaunchedEffect
+        if (testDrive) return@LaunchedEffect
+        val t = session.state.value.tripState as? TripState.Navigating ?: return@LaunchedEffect
+        val car = net.prototux.aare.host.CarDataService.car(context) ?: return@LaunchedEffect
+        val lim = NaviKeep.limits.value?.takeIf { it.of(g) }
+            ?: run { chargeLog("charging: left the charging stop - speeds ahead kept (the map's limits not there)"); return@LaunchedEffect }
+        val driven = g.distance - t.progress.distanceRemaining
+        val ahead = chargeStops.filter { it.atM > driven + 500 && ChargerIndex.distanceM(it.charger.at, left.charger.at) > 150 }.sortedBy { it.atM }
+        val before = legs.of(ahead)
+        val rules = ChargePlanner.Rules.of(net.prototux.aare.Settings(context))
+        val t0 = System.nanoTime()
+        val got = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { runCatching {
+            val trackAt = { fn: ((Double, Position, Double) -> Double)? -> ChargePlanner.track(g, car, heights = NaviKeep.heights, weather = NaviKeep.weather, speed = fn) }
+            val from = trackAt(null).metres.indexOfFirst { it >= driven }.coerceAtLeast(0)
+            ChargeSpeed.perStretch(trackAt, { lim.walker() }, { tr -> ChargeChain.solve(tr, ChargeCorridor.candidates(tr, { _, _, _ -> emptyList() }, rules, from,
+                ahead.map { it.charger }), car, car.socPercent, rules, from) }, ahead.map { it.atM } + g.distance, before)
+        }.onFailure { chargeLog("charging: left the charging stop - speeds ahead not weighed anew: ${it.message}") }.getOrNull() } ?: return@LaunchedEffect
+        val (kmh, plan) = got
+        if (!guiding || session.route.value !== g) return@LaunchedEffect
+        NaviKeep.speedLegs.value = ChargeSpeed.Legs(legs.toCharger.filter { (p, _) -> ahead.none { ChargerIndex.distanceM(it.charger.at, p) < 150 } } +
+            ahead.mapIndexed { i, st -> st.charger.at to kmh[i] }, kmh.last())
+        NaviKeep.speedStep.value = null
+        chargeLog("charging: left the charging stop at %.0f %% - speeds ahead %s km/h (were %s), %.0f min to the destination (%.0f ms)".format(java.util.Locale.ROOT,
+            car.socPercent, kmh.joinToString("/"), before.joinToString("/"), plan.tripMinutes, (System.nanoTime() - t0) / 1e6))
+        saveTrip()
+        if (kmh.first() != before.first()) speaker.warn(context.getString(
+            if (ahead.isEmpty()) net.prototux.aare.R.string.mate_navi_speed_end_say else net.prototux.aare.R.string.mate_navi_speed_next_say, kmh.first()))
     }
     // Navi T-073, L-052: what came of a hint, for looking at it later - the battery at the charger against the plan
     val atChargerNow by NaviKeep.atCharger

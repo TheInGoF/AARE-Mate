@@ -71,6 +71,22 @@ class ChargeSpeedTest {
         assertTrue("slower takes less per km", ChargeSpeed.energyRatio(130, 110, car) < 1.0)
     }
 
+    @Test fun leavingAStopTheStretchesAheadAnew() {
+        // stopped at km 200, on to the charger at km 420 and the destination at 600: left with more, the next stretch is
+        // driven at least as fast; the stretch behind is not touched
+        val stops = listOf(w.charger(420.0, 300))
+        fun ahead(soc: Double) = ChargeSpeed.perStretch({ fn -> trackAt(600, 130.0, fn) }, { { _ -> NaviLimits.UNLIMITED } }, { t ->
+            ChargeChain.solve(t, ChargeCorridor.candidates(t, { _, _, _ -> emptyList() }, rules, 200, stops), car, soc, rules, 200) },
+            listOf(420_000.0, 600_000.0), listOf(130, 130)).first
+        val short = ahead(45.0); val long = ahead(80.0)
+        assertTrue("$short / $long", long[0] >= short[0])
+        assertTrue("never below 120", (short + long).all { it >= 120 })
+        val kept = ChargeSpeed.perStretch({ fn -> trackAt(600, 130.0, fn) }, { { _ -> NaviLimits.UNLIMITED } }, { t ->
+            ChargeChain.solve(t, ChargeCorridor.candidates(t, { _, _, _ -> emptyList() }, rules, 0, stops), car, 80.0, rules) },
+            listOf(200_000.0, 420_000.0, 600_000.0), listOf(140, 130, 130), from = 1).first
+        assertEquals("the stretch behind stays", 140, kept[0])
+    }
+
     @Test fun theSpeedsFollowTheStopsByPlace() {
         val stops = listOf(ChargePlanner.Stop(w.charger(200.0), 200_000.0, 15.0, 70.0, 20.0),
             ChargePlanner.Stop(w.charger(420.0), 420_000.0, 15.0, 60.0, 18.0))

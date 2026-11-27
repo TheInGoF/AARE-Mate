@@ -117,21 +117,34 @@ internal object ChargeSpeed {
         if (uniform.size < 2) return null
         val quickest = uniform.minOf { it.totalMinutes }
         val first = uniform.filter { it.totalMinutes <= quickest + TIE_MIN }.minByOrNull { it.kmh } ?: return null
-        // each stretch on its own, the stops kept: one pass over the stretches, each speed tried with the others held
-        val chargers = first.plan.links.map { it.cand.charger }
+        // each stretch on its own, the stops kept
         val ends = first.plan.links.map { it.cand.alongM } + total
-        val kmh = MutableList(ends.size) { first.kmh }
-        var best = first.plan
-        for (k in kmh.indices) for (v in SPEEDS) {
-            if (v == kmh[k]) continue
-            val trial = kmh.toMutableList().also { it[k] = v }
-            fresh()
-            val r = solve(trackAt(legs(trial, ends, limitAt)), chargers)
-            if (r.shortPercent > ChargeChain.SHORT_OK) continue
-            // quicker by more than the tie, or as quick and slower
-            if (r.tripMinutes < best.tripMinutes - TIE_MIN || (r.tripMinutes <= best.tripMinutes + 0.1 && v < kmh[k])) { kmh[k] = v; best = r }
-        }
+        val (kmh, best) = perStretch(trackAt, limitFor, { t -> solve(t, first.plan.links.map { it.cand.charger }) }, ends,
+            List(ends.size) { first.kmh }, first.plan)
         return Advice(kmh, ends, best, uniform)
+    }
+
+    /**
+     * Each stretch from stop to stop on its own, the stops kept: one pass over the stretches ending at [endsM] (from
+     * [from] on; those before stay), each speed tried with the others held; the quicker by more than the tie, or as quick
+     * and slower, kept. [kmh] the speeds to start from, [start] the plan with them (null: worked out here).
+     */
+    fun perStretch(trackAt: (((Double, Position, Double) -> Double)?) -> ChargePlanner.Track, limitFor: () -> ((Position) -> Int?),
+                   solve: (ChargePlanner.Track) -> ChargeChain.Result, endsM: List<Double>, kmh: List<Int>,
+                   start: ChargeChain.Result? = null, from: Int = 0): Pair<List<Int>, ChargeChain.Result> {
+        var current: ((Position) -> Int?)? = null
+        val limitAt: (Position) -> Int? = { p -> current?.invoke(p) }
+        fun run(k: List<Int>): ChargeChain.Result { current = limitFor(); return solve(trackAt(legs(k, endsM, limitAt))) }
+        val out = kmh.toMutableList()
+        var best = start ?: run(out)
+        for (k in from until out.size) for (v in SPEEDS) {
+            if (v == out[k]) continue
+            val trial = out.toMutableList().also { it[k] = v }
+            val r = run(trial)
+            if (r.shortPercent > ChargeChain.SHORT_OK) continue
+            if (r.tripMinutes < best.tripMinutes - TIE_MIN || (r.tripMinutes <= best.tripMinutes + 0.1 && v < out[k])) { out[k] = v; best = r }
+        }
+        return out to best
     }
 
     /**

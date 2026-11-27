@@ -925,6 +925,8 @@
     <string name="mate_navi_speed_advice_faster">At %1$d km/h: %2$s min%3$s</string>
     <string name="mate_navi_speed_advice_stops">, %1$s charging stop</string>
     <string name="mate_navi_speed_step_down_say">Please slow down to about %1$d, so the battery reaches the next stop.</string>
+    <string name="mate_navi_speed_next_say">Advised speed to the next charging stop now %1$d.</string>
+    <string name="mate_navi_speed_end_say">Advised speed to the destination now %1$d.</string>
     <string name="mate_navi_route_list">Route</string>
     <string name="mate_navi_stop_remove">Take this charging stop out</string>
     <string name="mate_navi_stop_restore">Take this charging stop in again</string>

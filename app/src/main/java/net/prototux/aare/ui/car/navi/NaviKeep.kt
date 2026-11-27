@@ -152,6 +152,9 @@ internal object NaviKeep {
     @Volatile var weather: ChargeEnergy.Weather? = null
     /** Navi L-056: the speeds recommended per stretch of the trip being guided */
     val speedLegs = mutableStateOf<ChargeSpeed.Legs?>(null)
+    /** Navi L-056 step 2: the charging stop the car drove away from (not a card closed by a tap) - the speeds ahead anew */
+    val leftCharger = mutableStateOf<ChargePlanner.Stop?>(null)
+    @Volatile var leftWeighed: ChargePlanner.Stop? = null
     /** Navi L-056: one step slower (110, then 100) while the next stop is in doubt - and the stop it was for */
     val speedStep = mutableStateOf<Pair<Position?, Int>?>(null)
 
@@ -684,7 +687,7 @@ internal object NaviKeep {
                     }
                     lastWaypoints = now
                     atCharger.value?.let { s ->
-                        if (ChargerIndex.distanceM(s.charger.at, here) > LEAVE_M) { atCharger.value = null; android.util.Log.i("MateNavi", "charging stop left") }
+                        if (ChargerIndex.distanceM(s.charger.at, here) > LEAVE_M) { atCharger.value = null; leftCharger.value = s; android.util.Log.i("MateNavi", "charging stop left") }
                     }
                 } else { lastWaypoints = emptyList(); atCharger.value = null; approaching = null }
                 // only when what the bar shows changes, not with every position
