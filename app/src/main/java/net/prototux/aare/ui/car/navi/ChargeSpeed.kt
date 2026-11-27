@@ -25,6 +25,8 @@ internal object ChargeSpeed {
     const val OPEN_KMH = 90.0
     /** Of speeds this close in time at the destination, the slower is recommended. */
     const val TIE_MIN = 2.0
+    /** On the way, slower than planned only when the next stop's level on arrival falls below this (close to empty). */
+    const val STEP_AT_PERCENT = 5.0
     /** A recommendation only where the open stretches a speed changes are this long at least. */
     const val MIN_OPEN_KM = 20.0
 
@@ -50,9 +52,39 @@ internal object ChargeSpeed {
         fun at(m: Double): Int = kmh[endsM.indexOfFirst { m <= it }.let { if (it < 0) kmh.lastIndex else it }.coerceIn(0, kmh.lastIndex)]
         /** The quickest plan at one speed above the first stretch's, to show what driving faster would bring. */
         val faster: Option? get() = uniform.filter { it.kmh > kmh.first() }.minByOrNull { it.totalMinutes }
+        /**
+         * The same advice on the route as finally planned: the stretches ending at its stops [stopsM] (metres along) and
+         * at [totalM]. The same number of stops: the speeds as they are; else each stretch takes the speed of the one its
+         * end fell in before.
+         */
+        fun along(stopsM: List<Double>, totalM: Double): Advice {
+            val ends = stopsM + totalM
+            val k = if (ends.size == kmh.size) kmh else ends.map { at(it - 1.0) }
+            return Advice(k, ends, plan, uniform)
+        }
         fun describe() = "per stretch " + kmh.joinToString("/") + " km/h, %.0f min with %d stop(s); weighed: ".format(java.util.Locale.ROOT,
             plan.tripMinutes, plan.links.size) + uniform.joinToString { "%d km/h %.0f min (%d stop(s))".format(java.util.Locale.ROOT, it.kmh, it.totalMinutes, it.stops) }
     }
+
+    /**
+     * The speeds as kept while driving (and saved for going on after a stop): the stretch ending at each charger, known by
+     * its place (the plan on the way may move or drop stops), and the last one to the destination.
+     */
+    class Legs(val toCharger: List<Pair<Position, Int>>, val toEnd: Int) {
+        /** The speed of the stretch ending at [charger] (null: the destination); a charger the plan did not have: the slowest. */
+        fun before(charger: Position?): Int = if (charger == null) toEnd
+            else toCharger.firstOrNull { ChargerIndex.distanceM(it.first, charger) < SAME_M }?.second ?: (toCharger.map { it.second } + toEnd).min()
+        /** The speeds of the stretches ending at [stops] (in order) and at the destination. */
+        fun of(stops: List<ChargePlanner.Stop>): List<Int> = stops.map { before(it.charger.at) } + toEnd
+        fun describe() = (toCharger.map { it.second } + toEnd).joinToString("/") + " km/h"
+        companion object {
+            fun of(a: Advice, stops: List<ChargePlanner.Stop>): Legs {
+                val k = a.along(stops.map { it.atM }, a.endsM.lastOrNull() ?: 0.0).kmh
+                return Legs(stops.mapIndexed { i, s -> s.charger.at to k[i] }, k.last())
+            }
+        }
+    }
+    private const val SAME_M = 150.0
 
     /** One speed weighed for the whole trip: the plan with it. */
     class Option(val kmh: Int, val plan: ChargeChain.Result) {
@@ -65,14 +97,21 @@ internal object ChargeSpeed {
      * on a track, [solve] the plan on a track over the given chargers only (the stops kept). Null where it is not worth a
      * word: too little open road, or no plan reaching the destination.
      */
-    fun advise(trackAt: (((Double, Position, Double) -> Double)?) -> ChargePlanner.Track, limitAt: (Position) -> Int?,
+    fun advise(trackAt: (((Double, Position, Double) -> Double)?) -> ChargePlanner.Track, limitFor: () -> ((Position) -> Int?),
                plan: (ChargePlanner.Track) -> ChargeChain.Result,
                solve: (ChargePlanner.Track, List<Charger>) -> ChargeChain.Result): Advice? {
-        val own = trackAt(null)
-        val total = own.metres.lastOrNull() ?: return null
+        // a fresh look-up of the limits for each track made (a walker goes along the line once); local, as routes are
+        // weighed side by side
+        var current: ((Position) -> Int?)? = null
+        val limitAt: (Position) -> Int? = { p -> current?.invoke(p) }
+        fun fresh() { current = limitFor() }
+        val total = trackAt(null).metres.lastOrNull() ?: return null
+        // a faster speed counts only where it changes the trip against the slowest (a limit of 120 everywhere: none does)
+        fresh()
+        val slowest = trackAt(legs(listOf(SPEEDS.first()), listOf(total), limitAt))
         val uniform = SPEEDS.mapNotNull { v ->
-            val t = trackAt(legs(listOf(v), listOf(total), limitAt))
-            if (v != SPEEDS.first() && changedKm(own, t) < MIN_OPEN_KM) null
+            val t = if (v == SPEEDS.first()) slowest else { fresh(); trackAt(legs(listOf(v), listOf(total), limitAt)) }
+            if (v != SPEEDS.first() && changedKm(slowest, t) < MIN_OPEN_KM) null
             else plan(t).takeIf { it.shortPercent <= ChargeChain.SHORT_OK }?.let { Option(v, it) }
         }
         if (uniform.size < 2) return null
@@ -86,6 +125,7 @@ internal object ChargeSpeed {
         for (k in kmh.indices) for (v in SPEEDS) {
             if (v == kmh[k]) continue
             val trial = kmh.toMutableList().also { it[k] = v }
+            fresh()
             val r = solve(trackAt(legs(trial, ends, limitAt)), chargers)
             if (r.shortPercent > ChargeChain.SHORT_OK) continue
             // quicker by more than the tie, or as quick and slower

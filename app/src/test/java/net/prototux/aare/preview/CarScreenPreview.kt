@@ -261,6 +261,7 @@ class CarScreenPreview {
             net.prototux.aare.ui.car.navi.NaviTripPlan.Row(K, net.prototux.aare.ui.car.navi.NaviTripPlan.chargerName(tesla), now + 95 * 60_000L, 168_000.0, 12.0, 70.0, 22.0, tesla.network, tesla.at, tesla),
             net.prototux.aare.ui.car.navi.NaviTripPlan.Row(K, net.prototux.aare.ui.car.navi.NaviTripPlan.chargerName(ionity), now + 225 * 60_000L, 352_000.0, 14.0, 65.0, 19.0, ionity.network, ionity.at, ionity),
             net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.DESTINATION, "Ziel", now + 330 * 60_000L, 470_000.0, 21.0))
+            .let { net.prototux.aare.ui.car.navi.NaviTripPlan.legSpeeds(it, listOf(140, 120, 150)) }
         shoot("reiseplan") {
             CompositionLocalProvider(LocalDensity provides car(1f)) {
                 Box(Modifier.fillMaxSize().background(Color(0xFF3A4A40))) {
@@ -286,6 +287,9 @@ class CarScreenPreview {
                     net.prototux.aare.ui.car.navi.NaviSpeed(118.0, 120, Modifier, net.prototux.aare.ui.car.navi.NaviSpeedSource.From.GPS)
                     net.prototux.aare.ui.car.navi.NaviSpeed(123.0, 120, Modifier, net.prototux.aare.ui.car.navi.NaviSpeedSource.From.CAR)
                     net.prototux.aare.ui.car.navi.NaviSpeed(48.0, 50, Modifier, null)
+                    // Navi L-056: the speed recommended, where the road allows more
+                    net.prototux.aare.ui.car.navi.NaviSpeed(152.0, net.prototux.aare.ui.car.navi.NaviLimits.UNLIMITED, Modifier, net.prototux.aare.ui.car.navi.NaviSpeedSource.From.CAR, adviseKmh = 140)
+                    net.prototux.aare.ui.car.navi.NaviSpeed(128.0, 130, Modifier, net.prototux.aare.ui.car.navi.NaviSpeedSource.From.CAR, adviseKmh = 110)
                 }
             }
         }
@@ -361,7 +365,12 @@ class CarScreenPreview {
             net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.OWN, "Freunde", now + 150 * 60_000L, 236_000.0, at = at(51.8)),
             net.prototux.aare.ui.car.navi.NaviTripPlan.Row(net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.DESTINATION, "Musterstadt", now + 215 * 60_000L, 301_000.0, arrivePercent = 24.0, at = at(52.3)))
         val p = net.prototux.aare.ui.car.navi.Preview("Musterstadt", 301.0, 215.0, 52.3, 24.0, false,
-            plan = rows.filter { it.kind != net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.CHARGE }, pending = true)
+            plan = rows.filter { it.kind != net.prototux.aare.ui.car.navi.NaviTripPlan.Kind.CHARGE }, pending = true,
+            speed = run {
+                fun res(min: Double) = net.prototux.aare.ui.car.navi.ChargeChain.Result(emptyList(), 24.0, 0.0, 0.0, min, 0, 0L)
+                net.prototux.aare.ui.car.navi.ChargeSpeed.Advice(listOf(130, 140), listOf(158_000.0, 301_000.0), res(215.0),
+                    listOf(net.prototux.aare.ui.car.navi.ChargeSpeed.Option(130, res(216.0)), net.prototux.aare.ui.car.navi.ChargeSpeed.Option(150, res(219.0))))
+            })
         shoot("navi-routenliste") {
             CompositionLocalProvider(LocalDensity provides car(1f)) {
                 Row(Modifier.padding(start = 16.dp, top = 130.dp, bottom = 130.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {

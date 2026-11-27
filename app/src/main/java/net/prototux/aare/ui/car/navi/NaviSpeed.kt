@@ -2,6 +2,7 @@ package net.prototux.aare.ui.car.navi
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -41,7 +43,8 @@ import kotlin.math.roundToInt
  * comes from the route ([NaviLimits]); without one known here no sign is shown.
  */
 @Composable
-internal fun NaviSpeed(kmh: Double?, limitKmh: Int?, modifier: Modifier, from: NaviSpeedSource.From? = null, clock: () -> Long = { 0L }) {
+internal fun NaviSpeed(kmh: Double?, limitKmh: Int?, modifier: Modifier, from: NaviSpeedSource.From? = null, adviseKmh: Int? = null,
+                       clock: () -> Long = { 0L }) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         val over = kmh != null && limitKmh != null && limitKmh > 0 && kmh > limitKmh + 3
         Box(Modifier.widthIn(min = 96.dp).floatEdge(RoundedCornerShape(20.dp)).clip(RoundedCornerShape(20.dp)).background(Mate.cardSolid)) {
@@ -59,6 +62,19 @@ internal fun NaviSpeed(kmh: Double?, limitKmh: Int?, modifier: Modifier, from: N
         // no limit known here: no sign at all rather than a grey placeholder (16.11.2026: "wenn er wirklich mal keine
         // tempo daten hat dann kann das schild auch ausgeblendet werden"); "unlimited" keeps its own sign
         if (limitKmh != null && (limitKmh > 0 || limitKmh == NaviLimits.UNLIMITED)) LimitSign(limitKmh, over, clock)
+        // Navi L-056: the speed recommended for this stretch, as the blue sign of an advisory speed - only where the road
+        // is known to allow more (no limit, or a higher one); a friendly hint, no tone
+        if (adviseKmh != null && limitKmh != null && (limitKmh == NaviLimits.UNLIMITED || limitKmh > adviseKmh)) AdviceSign(adviseKmh, 64.dp)
+    }
+}
+
+/** The blue square of an advisory speed (Germany's sign 380): white number on blue. */
+@Composable
+internal fun AdviceSign(kmh: Int, size: androidx.compose.ui.unit.Dp) {
+    Box(Modifier.size(size).clip(RoundedCornerShape(size / 8)).background(Color(0xFF0B57A4)).padding(size / 16)
+        .border(size / 32, Color.White, RoundedCornerShape(size / 10)), contentAlignment = Alignment.Center) {
+        Text(kmh.toString(), color = Color.White, fontWeight = FontWeight.Bold,
+            fontSize = (size.value * (if (kmh >= 100) 0.36f else 0.46f)).sp)
     }
 }
 

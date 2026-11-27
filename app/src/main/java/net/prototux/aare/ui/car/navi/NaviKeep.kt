@@ -150,6 +150,10 @@ internal object NaviKeep {
     @Volatile var rollingDriven = 0.0
     @Volatile var heights: ChargeHeights? = null
     @Volatile var weather: ChargeEnergy.Weather? = null
+    /** Navi L-056: the speeds recommended per stretch of the trip being guided */
+    val speedLegs = mutableStateOf<ChargeSpeed.Legs?>(null)
+    /** Navi L-056: one step slower (110, then 100) while the next stop is in doubt - and the stop it was for */
+    val speedStep = mutableStateOf<Pair<Position?, Int>?>(null)
 
     /** A planned charging stop just reached (as ABRP: what to charge to and how long); gone once the car drives on. */
     val atCharger = mutableStateOf<ChargePlanner.Stop?>(null)

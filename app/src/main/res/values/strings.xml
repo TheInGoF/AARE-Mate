@@ -920,6 +920,11 @@
     <string name="mate_navi_plan_more">Menu</string>
     <string name="mate_navi_plan_start">Here, now</string>
     <string name="mate_navi_plan_leg">%1$s · %2$s driving</string>
+    <string name="mate_navi_plan_leg_speed">advised %1$d km/h</string>
+    <string name="mate_navi_speed_advice">Advised on the motorway: %1$s km/h</string>
+    <string name="mate_navi_speed_advice_faster">At %1$d km/h: %2$s min%3$s</string>
+    <string name="mate_navi_speed_advice_stops">, %1$s charging stop</string>
+    <string name="mate_navi_speed_step_down_say">Please slow down to about %1$d, so the battery reaches the next stop.</string>
     <string name="mate_navi_route_list">Route</string>
     <string name="mate_navi_stop_remove">Take this charging stop out</string>
     <string name="mate_navi_stop_restore">Take this charging stop in again</string>

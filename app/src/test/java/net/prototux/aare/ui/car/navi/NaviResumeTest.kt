@@ -28,6 +28,15 @@ class NaviResumeTest {
 
     @Before fun clean() { NaviResume.clear(ctx) }
 
+    @Test fun theSpeedsPerStretchKept() {
+        val legs = ChargeSpeed.Legs(listOf(stop(100.0).charger.at to 140, stop(220.0).charger.at to 120), 150)
+        NaviResume.save(ctx, place, emptyList(), stops = listOf(stop(100.0), stop(220.0)), line = line, speeds = legs)
+        val r = NaviResume.load(ctx)!!
+        assertEquals(listOf(140, 120, 150), r.speeds!!.of(r.stops))
+        NaviResume.save(ctx, place, emptyList(), line = line)
+        assertEquals("none planned: none kept", null, NaviResume.load(ctx)!!.speeds)
+    }
+
     @Test fun keptWithStopsAndLine() {
         NaviResume.save(ctx, place, listOf(north(150.0) to "Halt"), kind = "FAST", stops = listOf(stop(100.0), stop(220.0)), line = line)
         val r = assertNotNull(NaviResume.load(ctx)).let { NaviResume.load(ctx)!! }

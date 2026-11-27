@@ -168,7 +168,9 @@ internal class Preview(val name: String, val km: Double, val minutes: Double, va
                        /** charging stops the driver took out, to take in again */
                        val removed: List<Charger> = emptyList(),
                        /** the charging stops are still being planned (the route can start already) */
-                       val pending: Boolean = false)
+                       val pending: Boolean = false,
+                       /** Navi L-056: the speed recommended, and what driving faster would bring */
+                       val speed: ChargeSpeed.Advice? = null)
 
 @Composable
 internal fun androidx.compose.foundation.layout.ColumnScope.NaviPreview(p: Preview?, error: String?, placeName: String, options: List<Pair<NaviSession.Kind, Preview>>, chosen: Int, countdown: Int,
@@ -229,6 +231,26 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviPreview(p: Previ
                     if (p.needsCharge) Mate.warn else Mate.text)
                 // a charge is needed on the way: the plus pole, as on the tile while driving
                 if (p.needsCharge) PlusPole(Modifier.align(Alignment.TopEnd).padding(start = 8.dp).size(24.dp).offset(x = 26.dp, y = (-6).dp))
+            }
+        }
+        // Navi L-056 ("das lohnt sich, wenn du mit 120 bis nach Potsdam fährst … als wenn du mit 150 bis nach Beelitz fährst"):
+        // the speed worth driving on the open motorway, per stretch where they differ, and what the quickest faster one brings
+        p.speed?.let { a ->
+            Spacer(Modifier.size(14.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AdviceSign(a.kmh.first(), 40.dp)
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(stringResource(R.string.mate_navi_speed_advice, a.kmh.filterIndexed { i, v -> i == 0 || a.kmh[i - 1] != v }.joinToString(" → ")),
+                        style = MaterialTheme.typography.titleSmall, color = Mate.text)
+                    a.faster?.let { f ->
+                        val more = (f.totalMinutes - a.plan.tripMinutes).roundToInt()
+                        val stops = f.stops - a.plan.links.size
+                        Text(stringResource(R.string.mate_navi_speed_advice_faster, f.kmh,
+                            if (more >= 0) "+$more" else "$more", if (stops == 0) "" else stringResource(R.string.mate_navi_speed_advice_stops, if (stops > 0) "+$stops" else "$stops")),
+                            style = MaterialTheme.typography.bodySmall, color = Mate.textDim)
+                    }
+                }
             }
         }
         // what is avoided, changeable right here (O188)

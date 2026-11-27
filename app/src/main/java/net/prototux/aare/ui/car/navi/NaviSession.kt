@@ -238,7 +238,9 @@ internal class NaviSession(parent: CoroutineScope, private val valhalla: String,
 
     /** What the driver chooses between (O180): the fastest, an economical one (fast too), an alternative. */
     enum class Kind { FAST, ECO, ALT }
-    class Choice(val kind: Kind, val route: Route, val charging: ChargePlanner.Plan? = null)
+    class Choice(val kind: Kind, val route: Route, val charging: ChargePlanner.Plan? = null,
+                 /** Navi L-056: the speed recommended per stretch from stop to stop, the plan made with it */
+                 val speed: ChargeSpeed.Advice? = null)
 
     /**
      * Valhalla's options for the driver's route settings (O181: ferries, motorways, borders, tolls) and, for the

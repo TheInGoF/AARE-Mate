@@ -20,7 +20,9 @@ internal object NaviResume {
      * update of the app, with one request for the way from where the car is. Empty from a save before.
      */
     class Saved(val place: net.prototux.aare.places.Places.Place, val own: List<Pair<Position, String>>, val atMillis: Long,
-                val kind: String? = null, val stops: List<ChargePlanner.Stop> = emptyList(), val line: List<Position> = emptyList()) {
+                val kind: String? = null, val stops: List<ChargePlanner.Stop> = emptyList(), val line: List<Position> = emptyList(),
+                /** Navi L-056: the speeds recommended per stretch, kept with the trip */
+                val speeds: ChargeSpeed.Legs? = null) {
         /** The charging stops still ahead of [here]: along the saved line beyond the car, not the one it stands at. */
         fun stopsAhead(here: Position): List<ChargePlanner.Stop> {
             if (stops.isEmpty()) return emptyList()
@@ -52,7 +54,8 @@ internal object NaviResume {
     private fun prefs(c: Context) = c.getSharedPreferences("navi_resume", Context.MODE_PRIVATE)
 
     fun save(c: Context, place: net.prototux.aare.places.Places.Place, own: List<Pair<Position, String>>, nowMillis: Long = System.currentTimeMillis(),
-             kind: String? = null, stops: List<ChargePlanner.Stop> = emptyList(), line: List<Position> = emptyList()) {
+             kind: String? = null, stops: List<ChargePlanner.Stop> = emptyList(), line: List<Position> = emptyList(),
+             speeds: ChargeSpeed.Legs? = null) {
         val j = JSONObject().put("at", nowMillis).put("place", JSONObject().put("id", place.id).put("category", place.category)
             .put("name", place.name).put("address", place.address).put("lat", place.lat).put("lon", place.lon))
             .put("own", JSONArray(own.map { (p, n) -> JSONObject().put("lat", p.latitude).put("lon", p.longitude).put("name", n) }))
@@ -60,6 +63,8 @@ internal object NaviResume {
         if (stops.isNotEmpty()) j.put("stops", JSONArray(stops.map { s -> JSONObject().put("lat", s.charger.at.latitude).put("lon", s.charger.at.longitude)
             .put("kw", s.charger.kw).put("points", s.charger.points).put("operator", s.charger.operator).put("atM", s.atM)
             .put("arrive", s.arrivePercent).put("leave", s.leavePercent).put("minutes", s.chargeMinutes).put("over", s.overLimit) }))
+        if (speeds != null) j.put("speeds", JSONObject().put("end", speeds.toEnd).put("chargers", JSONArray(speeds.toCharger.map { (p, k) ->
+            JSONObject().put("lat", p.latitude).put("lon", p.longitude).put("kmh", k) })))
         if (line.size >= 2) j.put("line", JSONArray(thin(line).flatMap { listOf(Math.round(it.latitude * 1e5) / 1e5, Math.round(it.longitude * 1e5) / 1e5) }))
         prefs(c).edit { putString("trip", j.toString()) }
     }
@@ -75,8 +80,11 @@ internal object NaviResume {
             ChargePlanner.Stop(Charger(Position(longitude = o.getDouble("lon"), latitude = o.getDouble("lat")), o.getInt("kw"), o.optInt("points"),
                 o.optString("operator")), o.optDouble("atM"), o.optDouble("arrive"), o.optDouble("leave"), o.optDouble("minutes"), o.optBoolean("over")) } } }.orEmpty()
         val line = j.optJSONArray("line")?.let { a -> (0 until a.length() / 2).map { i -> Position(longitude = a.getDouble(2 * i + 1), latitude = a.getDouble(2 * i)) } }.orEmpty()
+        val speeds = j.optJSONObject("speeds")?.let { o -> ChargeSpeed.Legs(o.optJSONArray("chargers")?.let { a -> (0 until a.length()).map { i ->
+            a.getJSONObject(i).let { Position(longitude = it.getDouble("lon"), latitude = it.getDouble("lat")) to it.getInt("kmh") } } }.orEmpty(),
+            o.getInt("end")) }
         Saved(net.prototux.aare.places.Places.Place(p.optString("id"), p.optString("category"), p.optString("name"), p.optString("address"),
-            p.getDouble("lat"), p.getDouble("lon")), own, at, j.optString("kind").ifBlank { null }, stops, line)
+            p.getDouble("lat"), p.getDouble("lon")), own, at, j.optString("kind").ifBlank { null }, stops, line, speeds)
     }.getOrNull()
 
     fun clear(c: Context) = prefs(c).edit { remove("trip") }

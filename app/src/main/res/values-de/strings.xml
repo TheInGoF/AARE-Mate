@@ -907,6 +907,11 @@
     <string name="mate_navi_plan_more">Menü</string>
     <string name="mate_navi_plan_start">Hier, jetzt</string>
     <string name="mate_navi_plan_leg">%1$s · %2$s Fahrt</string>
+    <string name="mate_navi_plan_leg_speed">Richtwert %1$d km/h</string>
+    <string name="mate_navi_speed_advice">Empfehlung Autobahn: %1$s km/h</string>
+    <string name="mate_navi_speed_advice_faster">Mit %1$d km/h: %2$s min%3$s</string>
+    <string name="mate_navi_speed_advice_stops">, %1$s Ladestopp</string>
+    <string name="mate_navi_speed_step_down_say">Bitte etwas langsamer, etwa %1$d, damit der Akku bis zum nächsten Stopp reicht.</string>
     <string name="mate_navi_route_list">Route</string>
     <string name="mate_navi_stop_remove">Diesen Ladestopp herausnehmen</string>
     <string name="mate_navi_stop_restore">Diesen Ladestopp wieder aufnehmen</string>

@@ -62,7 +62,36 @@ internal object NaviTripPlan {
               val network: String? = null, val at: Position? = null, val charger: Charger? = null,
               val overLimit: Boolean = false,
               /** a ferry: the minutes over the sea (the clock time is when the car reaches its port) */
-              val ferryMinutes: Double? = null, val seaM: Double? = null)
+              val ferryMinutes: Double? = null, val seaM: Double? = null,
+              /** Navi L-056: the speed recommended on the stretch that ends here */
+              val legKmh: Int? = null) {
+        fun withLeg(kmh: Int?) = Row(kind, name, arriveAtMillis, metresLeft, arrivePercent, leavePercent, chargeMinutes, network, at, charger,
+            overLimit, ferryMinutes, seaM, kmh)
+    }
+
+    /**
+     * Navi L-056: each row with the speed recommended on the stretch that ends at it - [kmh] one per stretch from stop to
+     * stop (the start to the first charging stop, …, the last to the destination), [passed] stretches already behind.
+     */
+    fun legSpeeds(rows: List<Row>, kmh: List<Int>?): List<Row> {
+        if (kmh.isNullOrEmpty()) return rows
+        var charges = 0
+        return rows.map { r ->
+            val k = charges.coerceAtMost(kmh.lastIndex)
+            if (r.kind == Kind.CHARGE) charges++
+            r.withLeg(kmh[k])
+        }
+    }
+
+    /** The same on the way: the speeds kept by the chargers' places ([legs]), so stops already behind do not count. */
+    fun legSpeeds(rows: List<Row>, legs: ChargeSpeed.Legs?): List<Row> {
+        if (legs == null) return rows
+        var cur = legs.toEnd
+        return rows.asReversed().map { r ->
+            if (r.kind == Kind.CHARGE) cur = legs.before(r.charger?.at ?: r.at)
+            r.withLeg(cur)
+        }.asReversed()
+    }
 
     /** Another charger for a stop of the running trip (System L-092): [shiftM] before (-) or after it, the level on arrival there. */
     class Option(val charger: Charger, val shiftM: Double, val arrivePercent: Double?)
@@ -222,7 +251,8 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                     androidx.compose.foundation.layout.Box(Modifier.size(4.dp, LEG_H).clip(RoundedCornerShape(2.dp)).background(Mate.textFaint))
                 }
                 Spacer(Modifier.width(16.dp))
-                Text(stringResource(R.string.mate_navi_plan_leg, if (legM >= 10_000) "%d km".format((legM / 1000).roundToInt()) else NaviSearch.distanceText(legM, 10, rounded = true), duration(legMin)), style = MaterialTheme.typography.titleSmall,
+                Text(stringResource(R.string.mate_navi_plan_leg, if (legM >= 10_000) "%d km".format((legM / 1000).roundToInt()) else NaviSearch.distanceText(legM, 10, rounded = true), duration(legMin)) +
+                    (r.legKmh?.let { " · " + androidx.compose.ui.res.stringResource(R.string.mate_navi_plan_leg_speed, it) } ?: ""), style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold, color = Mate.textDim)
             }
             Row(Modifier.graphicsLayer { val sc = if (dragging) 1.03f else 1f; scaleX = sc; scaleY = sc }
