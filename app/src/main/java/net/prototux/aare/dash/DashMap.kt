@@ -148,10 +148,8 @@ private val WIND_SIZE = listOf(17, 21, 25, 25)
  */
 private const val WIND_SCALE = 160f / 208f
 private const val NEAR_ZOOM = 13.0
-/** The car's place looked at this often; the glide between two places takes the time between them, within these (I-148). */
+/** The car's place looked at this often; the car drawn 25 times a second in between (I-148, I-150). */
 private const val POLL_MS = 1_000L
-private const val GLIDE_MIN_MS = 500L
-private const val GLIDE_MAX_MS = 2_500L
 private const val FRAME_MS = 40L
 /** Further than this from the last place: no glide, the car is put there. */
 private const val JUMP_KM = 1.0
@@ -271,33 +269,27 @@ private fun DashMap(go: (String) -> Unit) {
         }
         if (ferryNote != null) { delay(6_000); ferryNote = null; DashMapCache.ferriesOff() }
     }
-    // System I-148 (27.11.2026: "Wenn man mit dem Dashboard fährt, springt die Karte immer Punkt für Punkt und läuft nicht
-    // flüssig mit wie beim Navi … nicht so dieses Neulade-Erlebnis"): the car and the camera glide from one place to the
-    // next over the time between them, some 25 times a second, instead of a jump (and a stop) at each new place
+    // System I-148, I-150 (27.11.2026: "zeigt dieser Mini-Pfeil die ganze Zeit Richtung Norden, obwohl ich der Autobahn entlang
+    // fahre. Es läuft immer nur ein bisschen mit und dann pausiert das wieder. Warum kann das nicht genauso funktionieren wie die
+    // Navi-Map"): the car is carried on between two places at its speed and in its direction, some 25 times a second, as the
+    // navigation's car is - a new place only corrects it softly; the direction from its moves where the stick gives none
     var shown by remember { mutableStateOf<Position?>(null) }
     var shownHeading by remember { mutableStateOf<Double?>(null) }
-    var lastPlaceAt by remember { mutableStateOf(0L) }
-    LaunchedEffect(car) {
-        val to = car ?: return@LaunchedEffect
-        val now = android.os.SystemClock.uptimeMillis()
-        val span = (if (lastPlaceAt == 0L) 0L else now - lastPlaceAt).coerceIn(GLIDE_MIN_MS, GLIDE_MAX_MS)
-        lastPlaceAt = now
-        val from = shown
-        val h0 = shownHeading; val h1 = heading
-        if (from == null || net.prototux.aare.ui.car.navi.ChargerIndex.distanceM(from, to) > JUMP_KM * 1000) {
-            shown = to; shownHeading = h1
-            // a jump (the first place, or far): the camera follows at once, as the glide does
-            if (follow && introDone) runCatching { camera.animateTo(CameraPosition(target = to, zoom = followZoom, padding = FOLLOW_PADDING), 300.milliseconds) }
-            return@LaunchedEffect
-        }
-        val start = android.os.SystemClock.uptimeMillis()
+    val track = remember { DashDrive() }
+    LaunchedEffect(car, heading) { car?.let { track.place(it, heading, android.os.SystemClock.uptimeMillis()) } }
+    LaunchedEffect(Unit) {
+        var lastFollow: Position? = null
         while (true) {
-            val f = ((android.os.SystemClock.uptimeMillis() - start).toDouble() / span).coerceIn(0.0, 1.0)
-            val p = Position(longitude = from.longitude + (to.longitude - from.longitude) * f, latitude = from.latitude + (to.latitude - from.latitude) * f)
-            shown = p
-            shownHeading = if (h0 == null || h1 == null) h1 else h0 + (((h1 - h0 + 540) % 360) - 180) * f
-            if (follow && introDone) runCatching { camera.position = CameraPosition(target = p, zoom = followZoom, padding = FOLLOW_PADDING, bearing = camera.position.bearing, tilt = camera.position.tilt) }
-            if (f >= 1.0) break
+            val now = android.os.SystemClock.uptimeMillis()
+            val (p, h) = track.at(now) ?: run { delay(FRAME_MS); return@run null } ?: continue
+            shown = p; shownHeading = h
+            if (follow && introDone) {
+                // a jump (the first place, or far): the camera there at once; else along with the car each frame
+                val far = lastFollow?.let { net.prototux.aare.ui.car.navi.ChargerIndex.distanceM(it, p) > JUMP_KM * 1000 } ?: true
+                if (far) runCatching { camera.animateTo(CameraPosition(target = p, zoom = followZoom, padding = FOLLOW_PADDING), 300.milliseconds) }
+                else runCatching { camera.position = CameraPosition(target = p, zoom = followZoom, padding = FOLLOW_PADDING, bearing = camera.position.bearing, tilt = camera.position.tilt) }
+                lastFollow = p
+            } else lastFollow = null
             delay(FRAME_MS)
         }
     }
