@@ -1314,10 +1314,11 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     val signsLogged = remember { mutableSetOf<String>() }
     LaunchedEffect(aheadNow, chargeStops) {
         // every closure (lane or road) TomTom reports on or beside the route, once: its words, whether it runs along our way
-        for (a in aheadNow) if ((a.incident.kind == 7 || a.incident.kind == 8) &&
+        for (a in aheadNow) if ((a.incident.kind == 7 || a.incident.kind == 8 || a.incident.kind == 9) &&
             signsLogged.add("c${a.incident.kind}@${a.incident.start.latitude},${a.incident.start.longitude}"))
             chargeLog("strip: %s (TomTom kind %d) at %.1f km of the route, %s - \"%s\"".format(java.util.Locale.ROOT, NaviTraffic.word(context, a.incident.kind),
-                a.incident.kind, a.alongM / 1000, if (NaviTraffic.onOurWay(a)) "on our way, shown" else "beside it (a ramp, a service area), not shown", a.incident.text.take(120)))
+                a.incident.kind, a.alongM / 1000, if (!NaviTraffic.onOurWay(a)) "beside it (a ramp, a service area), not shown"
+                    else if (a.incident.kind == 8 && a.along) "on our way, shown as road works (the route runs through it)" else "on our way, shown", a.incident.text.take(120)))
         for (a in aheadNow) for (st in chargeStops) {
             val d = ChargerIndex.distanceM(a.incident.start, st.charger.at)
             if (d < 500 && signsLogged.add("${a.incident.kind}@${a.incident.start.latitude},${a.incident.start.longitude}"))
@@ -1997,7 +1998,11 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         // road works, closures, accidents ahead (jams are coloured on the line already): their signs on the strip
         val stripIncidents = if (stripData != null && stripG != null && trip != null) {
             val d = stripG.distance - trip.progress.distanceRemaining
-            NaviKeep.trafficAhead.value.filter { it.incident.kind != 6 && it.alongM > d && NaviTraffic.onOurWay(it) }.map { (it.alongM - d) to it.incident.kind }
+            // a "closed" stretch the route runs through is road works with the traffic switched over or narrowed (as on the
+            // map, I-043) - its sign on the strip too (Navi I-070, 27.11.2026: "er zeigt die Baustelle gar nicht mehr an,
+            // auf der Route und auf dem Wegstrahl"; TomTom gave the A9's works as "Gesperrt")
+            NaviKeep.trafficAhead.value.filter { it.incident.kind != 6 && it.alongM > d && NaviTraffic.onOurWay(it) }
+                .map { (it.alongM - d) to (if (it.incident.kind == 8 && it.along) 9 else it.incident.kind) }
         } else emptyList()
         // the whole height of the screen, with some room above and below (19.11.2026: "Der Wegstrahl, der kann ruhig die
         // komplette Höhe des Displays mit Abständen einnehmen, damit er ein wenig detaillierter dargestellt wird, wenn

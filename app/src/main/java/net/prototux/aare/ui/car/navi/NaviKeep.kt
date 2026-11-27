@@ -153,6 +153,9 @@ internal object NaviKeep {
 
     /** A planned charging stop just reached (as ABRP: what to charge to and how long); gone once the car drives on. */
     val atCharger = mutableStateOf<ChargePlanner.Stop?>(null)
+    /** What the last look at the traffic found, by kind, as logged (only a change is logged). */
+    @Volatile private var lastTrafficSaid = ""
+
     /** F2 step 2: the incidents on the guided route ahead (TomTom), renewed every [TRAFFIC_MS] while guiding. */
     val trafficAhead = mutableStateOf<List<NaviTraffic.Ahead>>(emptyList())
     /** The flow's slow stretches on the guided route, in metres along it (0 slow, 1 jam, 2 standing). */
@@ -395,6 +398,11 @@ internal object NaviKeep {
                         // round them (I-080) - also once the car has left this route and its incidents are asked no more
                         keepJams(session, all, placed)
                         android.util.Log.i("MateNavi", "incidents on the route: ${found.size}, delay ahead %.0f s".format(trafficDelayS(driven)))
+                        // Navi I-070: what TomTom gave, by kind, into the diagnosis log when it changes (roadworks missing on the
+                        // strip could not be told from the log: only closures were in it, once each)
+                        val kinds = placed.groupingBy { it.incident.kind }.eachCount().toSortedMap().entries.joinToString { (k, n) -> "${NaviTraffic.word(app, k)} $n" }
+                        val said = "%s%s".format(if (full) "whole route" else "next km", if (kinds.isEmpty()) ": none" else ": $kinds")
+                        if (said != lastTrafficSaid) { lastTrafficSaid = said; net.prototux.aare.DiagLog.add("traffic on the route ($said)", area = "NAVI") }
                     }
                     // the flow on the next 30 km: the route coloured as the roads (17.11.2026)
                     val flow = runCatching { NaviTraffic.flowAlong(app, line) }.onFailure { android.util.Log.w("MateNavi", "flow: $it") }.getOrNull()
