@@ -685,6 +685,38 @@ internal object NaviTraffic {
      * (dark red), as Google colours the route (17.11.2026: "Stau-Anteile auf der Navigationslinie werden noch nicht
      * eingefärbt"). Closures stay the red crosses; what is driven already is left out.
      */
+    /**
+     * Navi I-070: the road works on the route (as shown, [shownKind] 9) as stretches of the drawn [line], from where the car
+     * is (or they begin) to their end - a GeoJSON FeatureCollection; [scale] as for [stretches].
+     */
+    fun worksStretches(line: List<org.maplibre.spatialk.geojson.Position>, ahead: List<Ahead>, drivenM: Double, scale: Double = 1.0): String {
+        val ranges = ahead.filter { onOurWay(it) && shownKind(it) == 9 }
+            .map { maxOf(it.alongM, drivenM) * scale to maxOf(it.endM, it.alongM + 100) * scale }.filter { (a, b) -> b - a >= 20 }
+        return linesAlong(line, ranges)
+    }
+
+    /** Stretches of [line] between metres along it, as a GeoJSON FeatureCollection of lines. */
+    fun linesAlong(line: List<org.maplibre.spatialk.geojson.Position>, ranges: List<Pair<Double, Double>>): String {
+        if (line.size < 2 || ranges.isEmpty()) return "{\"type\":\"FeatureCollection\",\"features\":[]}"
+        val cum = DoubleArray(line.size); for (i in 1 until line.size) cum[i] = cum[i - 1] + ChargerIndex.distanceM(line[i - 1], line[i])
+        fun at(m: Double): org.maplibre.spatialk.geojson.Position {
+            if (m <= 0) return line.first()
+            var k = 1; while (k < line.size - 1 && cum[k] < m) k++
+            val seg = cum[k] - cum[k - 1]; val f = if (seg <= 0) 0.0 else ((m - cum[k - 1]) / seg).coerceIn(0.0, 1.0)
+            return org.maplibre.spatialk.geojson.Position(longitude = line[k - 1].longitude + (line[k].longitude - line[k - 1].longitude) * f,
+                latitude = line[k - 1].latitude + (line[k].latitude - line[k - 1].latitude) * f)
+        }
+        val feats = ranges.map { (a0, b0) ->
+            val a = a0.coerceIn(0.0, cum.last()); val b = b0.coerceIn(a, cum.last())
+            val pts = ArrayList<org.maplibre.spatialk.geojson.Position>(); pts += at(a)
+            for (k in line.indices) if (cum[k] > a && cum[k] < b) pts += line[k]
+            pts += at(b)
+            "{\"type\":\"Feature\",\"properties\":{},\"geometry\":{\"type\":\"LineString\",\"coordinates\":" +
+                pts.joinToString(",", "[", "]") { "[%.6f,%.6f]".format(java.util.Locale.ROOT, it.longitude, it.latitude) } + "}}"
+        }
+        return feats.joinToString(",", "{\"type\":\"FeatureCollection\",\"features\":[", "]}")
+    }
+
     fun stretches(line: List<org.maplibre.spatialk.geojson.Position>, ahead: List<Ahead>, drivenM: Double,
                   flow: List<Triple<Double, Double, Int>> = emptyList(),
                   /** [line] is the drawn (smoothed) line: metres of the route's own geometry times this */

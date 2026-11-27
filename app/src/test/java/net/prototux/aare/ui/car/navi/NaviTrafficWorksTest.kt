@@ -46,6 +46,21 @@ class NaviTrafficWorksTest {
         assertTrue(NaviTraffic.shownKind(ahead(6, "Stau")) == 6)
     }
 
+    /** I-070: long works the car is in are drawn from the car to their end, not left out once their start is passed. */
+    @Test fun longWorksFromTheCarToTheirEnd() {
+        val line = (0..100).map { north(it * 200.0) }                       // 20 km north
+        val works = NaviTraffic.Ahead(NaviTraffic.Incident(9, north(2_000.0), null, "Bauarbeiten"), 2_000.0, 14_000.0, along = true)
+        val json = org.json.JSONObject(NaviTraffic.worksStretches(line, listOf(works), drivenM = 5_000.0))
+        val f = json.getJSONArray("features")
+        assertTrue(f.length() == 1)
+        val c = f.getJSONObject(0).getJSONObject("geometry").getJSONArray("coordinates")
+        val first = c.getJSONArray(0).getDouble(1); val last = c.getJSONArray(c.length() - 1).getDouble(1)
+        assertTrue("begins at the car", Math.abs(first - north(5_000.0).latitude) < 1e-4)
+        assertTrue("ends with the works", Math.abs(last - north(14_000.0).latitude) < 1e-4)
+        // passed: nothing
+        assertTrue(org.json.JSONObject(NaviTraffic.worksStretches(line, listOf(works), drivenM = 15_000.0)).getJSONArray("features").length() == 0)
+    }
+
     @Test fun worksNearTheClosure() {
         val closure = (0..10).map { north(it * 100.0) }
         val lanes = (0..5).map { north(1_800.0 + it * 100.0) }        // narrowed lanes starting 800 m after it

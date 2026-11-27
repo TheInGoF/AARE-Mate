@@ -56,8 +56,12 @@ val LocalNaviShare = staticCompositionLocalOf { 1f }
 @Composable
 internal fun NaviRouteStrip(rows: List<NaviTripPlan.Row>, jams: List<Triple<Double, Double, Int>>, leftM: Double, leftS: Double,
                             modifier: Modifier = Modifier, labels: Boolean = true, totalM: Double = leftM,
-                            /** road works, closures, accidents ahead: metres from here and their kind (TomTom's) */
-                            incidents: List<Pair<Double, Int>> = emptyList()) {
+                            /**
+                             * road works, closures, accidents ahead: metres from here to where they begin and end, and
+                             * their kind as shown; road works (9) also marked along their stretch, their sign kept in sight
+                             * while the car is inside (Navi I-070: the long works were not shown once entered)
+                             */
+                            incidents: List<Triple<Double, Double, Int>> = emptyList()) {
     if (!labels) { SlimStrip(rows, jams, leftM, totalM.coerceAtLeast(leftM), modifier, incidents); return }
     val now = System.currentTimeMillis()
     val dest = rows.lastOrNull { it.kind == NaviTripPlan.Kind.DESTINATION }
@@ -83,6 +87,12 @@ internal fun NaviRouteStrip(rows: List<NaviTripPlan.Row>, jams: List<Triple<Doub
                 val grow = ((8.dp.toPx() - (ya - yb)) / 2).coerceAtLeast(0f)
                 drawLine(levels[level.coerceIn(0, 3)], Offset(x, ya + grow), Offset(x, yb - grow), w, StrokeCap.Butt)
             }
+            // road works along their stretch: the line edged in the works' orange and white (I-070)
+            for ((from, to, kind) in incidents) {
+                if (kind != 9 || to <= 0 || from >= leftM) continue
+                val ya = yOf(from.coerceAtLeast(0.0)).toPx(); val yb = yOf(to.coerceAtMost(leftM)).toPx()
+                worksEdge(x, ya, yb, w)
+            }
             // the car: an arrow at the bottom end
             val a = 14.dp.toPx()
             val p = Path().apply {
@@ -92,7 +102,8 @@ internal fun NaviRouteStrip(rows: List<NaviTripPlan.Row>, jams: List<Triple<Doub
         }
         // road works and the like on the line, their sign beside it (18.11.2026: "Baustelle in 3,1 Kilometern ... wird das
         // nicht auf dem Routenfortschritt dargestellt")
-        incidents.filter { it.first in 0.0..leftM }.forEach { (m, kind) -> IncidentMark(kind, 34.dp, Modifier.offset(cx + 12.dp, yOf(m) - 17.dp)) }
+        // the sign where it begins - or at the car while it is inside the works
+        incidents.filter { it.second > 0 && it.first <= leftM }.forEach { (m, _, kind) -> IncidentMark(kind, 34.dp, Modifier.offset(cx + 12.dp, yOf(m.coerceAtLeast(0.0)) - 17.dp)) }
         // the stops on the line, with the time (left) and the kilometres (right)
         rows.filter { it.kind != NaviTripPlan.Kind.DESTINATION }.forEach { r ->
             val y = yOf(r.metresLeft)
@@ -128,7 +139,7 @@ internal fun NaviRouteStrip(rows: List<NaviTripPlan.Row>, jams: List<Triple<Doub
  */
 @Composable
 private fun SlimStrip(rows: List<NaviTripPlan.Row>, jams: List<Triple<Double, Double, Int>>, leftM: Double, totalM: Double, modifier: Modifier,
-                      incidents: List<Pair<Double, Int>> = emptyList()) {
+                      incidents: List<Triple<Double, Double, Int>> = emptyList()) {
     BoxWithConstraints(modifier.width(40.dp)) {
         val top = 16.dp
         val lineH = (maxHeight - top - 18.dp).coerceAtLeast(40.dp)
@@ -153,10 +164,14 @@ private fun SlimStrip(rows: List<NaviTripPlan.Row>, jams: List<Triple<Double, Do
                 val grow = ((6.dp.toPx() - (ya - yb)) / 2).coerceAtLeast(0f)
                 drawLine(levels[level.coerceIn(0, 3)], Offset(x, ya + grow), Offset(x, yb - grow), w, StrokeCap.Butt)
             }
+            for ((from, to, kind) in incidents) {
+                if (kind != 9 || to <= 0 || from >= leftM) continue
+                worksEdge(x, yOf(from.coerceAtLeast(0.0)).toPx(), yOf(to.coerceAtMost(leftM)).toPx(), w)
+            }
             val a = 9.dp.toPx()
             drawPath(Path().apply { moveTo(x, y0 - a); lineTo(x + a * 0.8f, y0 + a * 0.9f); lineTo(x, y0 + a * 0.45f); lineTo(x - a * 0.8f, y0 + a * 0.9f); close() }, Color.White)
         }
-        incidents.filter { it.first in 0.0..leftM }.forEach { (m, kind) -> IncidentMark(kind, 24.dp, Modifier.offset(cx - 12.dp, yOf(m) - 12.dp)) }
+        incidents.filter { it.second > 0 && it.first <= leftM }.forEach { (m, _, kind) -> IncidentMark(kind, 24.dp, Modifier.offset(cx - 12.dp, yOf(m.coerceAtLeast(0.0)) - 12.dp)) }
         rows.forEach { r ->
             val y = yOf(r.metresLeft)
             val charge = r.kind == NaviTripPlan.Kind.CHARGE
@@ -167,6 +182,21 @@ private fun SlimStrip(rows: List<NaviTripPlan.Row>, jams: List<Triple<Double, Do
                 Icon(icon, null, tint = if (charge) teal else Color.White, modifier = Modifier.size(18.dp))
             }
         }
+    }
+}
+
+/** A stretch of road works beside the line from [ya] to [yb] (screen y, [ya] the nearer): orange and white in turn, both sides. */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.worksEdge(x: Float, ya: Float, yb: Float, w: Float) {
+    val grow = ((8.dp.toPx() - (ya - yb)) / 2).coerceAtLeast(0f)
+    val a = ya + grow; val b = yb - grow
+    val dash = 6.dp.toPx(); val off = w / 2 + 3.dp.toPx(); val sw = 3.dp.toPx()
+    var y = a; var orange = true
+    while (y > b) {
+        val y2 = maxOf(b, y - dash)
+        val c = if (orange) Color(0xFFFF8F00) else Color.White
+        drawLine(c, Offset(x - off, y), Offset(x - off, y2), sw, StrokeCap.Butt)
+        drawLine(c, Offset(x + off, y), Offset(x + off, y2), sw, StrokeCap.Butt)
+        y = y2; orange = !orange
     }
 }
 

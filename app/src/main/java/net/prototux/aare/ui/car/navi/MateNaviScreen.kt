@@ -1341,6 +1341,17 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         }.also { (a, b, c) ->
             Log.i(TAG, "route traffic: slow ${a.split("\"Feature\"").size - 1}, jam ${b.split("\"Feature\"").size - 1}, standing ${c.split("\"Feature\"").size - 1} stretches") }
     }
+    // Navi I-070: the road works on the route line as their stretch (the long works were not shown once entered)
+    val worksLineJson = remember(guided, aheadNow, drivenStep, guiding) {
+        val g = guided
+        if (!guiding || g == null || aheadNow.none { NaviTraffic.shownKind(it) == 9 }) null else {
+            val raw = g.geometry.map { Position(longitude = it.lng, latitude = it.lat) }
+            val drawn = NaviRoute.smooth(raw)
+            fun len(l: List<Position>) = (1 until l.size).sumOf { ChargerIndex.distanceM(l[it - 1], l[it]) }
+            val scale = len(raw).let { r -> if (r > 0) len(drawn) / r else 1.0 }
+            NaviTraffic.worksStretches(drawn, aheadNow, drivenStep * 200.0, scale)
+        }
+    }
     // O237 ("im Stau die Zeit im Stau anzeigen"): what each jam ahead costs ("+4 min" at it, as Google) and, inside one,
     // the time to its end in the trip's tile
     val jams = remember(guided, aheadNow, flowNow, drivenStep, guiding) {
@@ -1449,6 +1460,14 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                         LineLayer(id = id, source = src, color = const(c), width = const(9.dp), cap = const(LineCap.Round), join = const(LineJoin.Round))
                     }
             }
+                // road works along the route: orange and white dashes on the line where they run (I-070)
+                run {
+                    val data = remember(worksLineJson) { GeoJsonData.JsonString(worksLineJson ?: EMPTY_FC) }
+                    val src = rememberGeoJsonSource(data)
+                    LineLayer(id = "route-works-base", source = src, color = const(androidx.compose.ui.graphics.Color.White), width = const(6.dp))
+                    LineLayer(id = "route-works", source = src, color = const(androidx.compose.ui.graphics.Color(0xFFFF8F00)), width = const(6.dp),
+                        dasharray = const(listOf(2, 2)))
+                }
                 // O237: the delay of each jam ahead as a small sign on the line; always the same layers, empty when unused
                 for (k in 0 until JAM_LABELS) {
                     val l = jamLabels.getOrNull(k)
@@ -2017,8 +2036,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             // a "closed" stretch the route runs through is road works with the traffic switched over or narrowed (as on the
             // map, I-043) - its sign on the strip too (Navi I-070, 27.11.2026: "er zeigt die Baustelle gar nicht mehr an,
             // auf der Route und auf dem Wegstrahl"; TomTom gave the A9's works as "Gesperrt")
-            NaviKeep.trafficAhead.value.filter { it.incident.kind != 6 && it.alongM > d && NaviTraffic.onOurWay(it) }
-                .map { (it.alongM - d) to NaviTraffic.shownKind(it) }
+            // ahead or still around the car (a long stretch of works the car is in, I-070), with where it ends
+            NaviKeep.trafficAhead.value.filter { it.incident.kind != 6 && maxOf(it.endM, it.alongM) > d && NaviTraffic.onOurWay(it) }
+                .map { Triple(it.alongM - d, maxOf(it.endM, it.alongM + 100) - d, NaviTraffic.shownKind(it)) }
         } else emptyList()
         // the whole height of the screen, with some room above and below (19.11.2026: "Der Wegstrahl, der kann ruhig die
         // komplette Höhe des Displays mit Abständen einnehmen, damit er ein wenig detaillierter dargestellt wird, wenn

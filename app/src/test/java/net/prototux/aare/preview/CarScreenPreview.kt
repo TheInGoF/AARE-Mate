@@ -612,7 +612,7 @@ class CarScreenPreview {
             androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides car(1f)) {
                 Box(Modifier.size(480.dp, 1080.dp)) {
                     net.prototux.aare.ui.car.navi.NaviRouteStrip(rows, jams, 290_000.0, 210 * 60.0,
-                        Modifier.padding(top = 107.dp, bottom = 106.dp), incidents = listOf(3_100.0 to 9, 120_000.0 to 8, 240_000.0 to 1))
+                        Modifier.padding(top = 107.dp, bottom = 106.dp), incidents = listOf(Triple(-2_000.0, 12_000.0, 9), Triple(120_000.0, 121_000.0, 8), Triple(240_000.0, 240_500.0, 1)))
                 }
             }
         }
@@ -704,7 +704,7 @@ class CarScreenPreview {
                 contentAlignment = Alignment.Center) { Text("05:13   19 min   11,6 km", color = Color.White) }
             if (share >= 0.6f) net.prototux.aare.ui.car.navi.NaviRouteStrip(tripRows(), tripJams, 290_000.0, 0.0,
                 Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 10.dp, bottom = inset + 40.dp).fillMaxHeight(), labels = false,
-                totalM = 400_000.0, incidents = listOf(30_000.0 to 9, 150_000.0 to 8))
+                totalM = 400_000.0, incidents = listOf(Triple(30_000.0, 48_000.0, 9), Triple(150_000.0, 151_000.0, 8)))
             if (share < 0.3f) net.prototux.aare.ui.car.navi.NaviRouteStrip(tripRows(), tripJams, 290_000.0, 210 * 60.0)
         }
     }
