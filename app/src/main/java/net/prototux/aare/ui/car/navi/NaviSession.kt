@@ -374,9 +374,18 @@ internal class NaviSession(parent: CoroutineScope, private val valhalla: String,
      * road for it - as for the car's own place, 17.11.2026). Refused all the same: Valhalla's own words into the log, and
      * asked once more without the closures.
      */
-    suspend fun planOne(kind: Kind, from: Position, to: Position, via: List<Position>, o: RouteOptions): Route = withContext(Dispatchers.IO) {
+    suspend fun planOne(kind: Kind, from: Position, to: Position, via: List<Position>, o: RouteOptions,
+                        chargers: List<Position> = emptyList()): Route = withContext(Dispatchers.IO) {
         val here = UserLocation(GeographicCoordinate(from.latitude, from.longitude), 5.0, null, Instant.now(), null)
-        val points = (via + listOf(to)).map { Waypoint(GeographicCoordinate(it.latitude, it.longitude), WaypointKind.BREAK, null) }
+        val points = (via + listOf(to)).map { p ->
+            val at = GeographicCoordinate(p.latitude, p.longitude)
+            // a charger of the plan (Navi I-066): only a road right by it - one reached only from far off (a site behind a
+            // fence, the village road behind a service area) is refused, and the plan takes another charger, not a way round
+            if (chargers.any { ChargerIndex.distanceM(it, p) < 1.0 })
+                uniffi.ferrostar.createWaypointWithValhallaProperties(at, WaypointKind.BREAK,
+                    uniffi.ferrostar.ValhallaWaypointProperties(searchCutoff = CHARGER_CUTOFF_M))
+            else Waypoint(at, WaypointKind.BREAK, null)
+        }
         val places = listOf(from) + via + listOf(to)
         val (keptPoints, keptAreas) = awayFrom(places, closures, closureAreas, NEAR_STOP_M)
         if (keptPoints.size < closures.size || keptAreas.size < closureAreas.size)
@@ -408,6 +417,8 @@ internal class NaviSession(parent: CoroutineScope, private val valhalla: String,
     }
     /** Closures this close to the start, a stop or the destination are not sent with a route over stops. */
     private val NEAR_STOP_M = 1500.0
+    /** A charger's stop is put on a road no further off than this (Valhalla's search_cutoff, metres). */
+    private val CHARGER_CUTOFF_M = 300u
 
     private fun same(a: Route, b: Route) = Math.abs(a.distance - b.distance) < 50 && Math.abs(a.geometry.size - b.geometry.size) < 5
 

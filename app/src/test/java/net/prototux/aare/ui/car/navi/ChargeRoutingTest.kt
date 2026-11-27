@@ -203,4 +203,29 @@ class ChargeRoutingTest {
         assertTrue(o.notes.any { it.contains("longer than without stops") })
         check(o)
     }
+
+    /**
+     * Navi I-066 (27.11.2026: "Ich kann nicht einfach 2 Stunden Umweg fahren … mit 300 km Reichweite auf der A9 bin ich
+     * wesentlich schneller"): every way over chargers an hour and more round - none is taken, the plain route stays with its
+     * stops by it (before, the least of the long ways was).
+     */
+    @Test fun everyWayRoundLongThePlainRouteStays() = runBlocking {
+        val base = w.track(409)
+        val v = MockValhalla(base, extraS = { 90 * 60.0 })
+        val o = v.routing().plan(base, car, 70.0, w.near(every(409)), rules)
+        assertFalse(o.overStops)
+        assertTrue(o.route === base)
+        assertTrue("never a long trip without stops", o.plan.stops.isNotEmpty())
+        assertTrue(o.notes.any { it.contains("the plain route kept") })
+        assertTrue(v.calls <= ChargeRouting.MAX_CALLS)
+        check(o)
+    }
+
+    /** A way over chargers 25 min longer on a three-hour drive with stops a few minutes off the road is too long now. */
+    @Test fun aQuarterHourMoreIsTheMost() {
+        val threeHours = 3 * 3600.0
+        assertTrue(ChargeRouting.allowedExtraS(threeHours, 6 * 60.0) < 25 * 60.0)
+        // stops further off: their own way half again
+        assertEquals((20 * 60.0) * 1.5 + 10 * 60.0, ChargeRouting.allowedExtraS(threeHours, 20 * 60.0), 1e-6)
+    }
 }

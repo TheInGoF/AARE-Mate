@@ -260,7 +260,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         val options = RouteOptions.of(settings)
         // Navi L-029 step E: the chain on the device, one request for the route over its chargers, at most three in all
         val routing = ChargeRouting<uniffi.ferrostar.Route>(
-            route = { chargers -> session.planOne(c.kind, from, to, NaviStops.inOrder(raw(c.route), via + chargers.map { it.at }), options) },
+            route = { chargers -> session.planOne(c.kind, from, to, NaviStops.inOrder(raw(c.route), via + chargers.map { it.at }), options,
+                chargers.map { it.at }) },
             trackOf = ::tr,
             matrix = { cands, track -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 ChargeMatrix.fetch(NaviServer.client(context), NaviServer.valhalla(context), cands, track) } })
