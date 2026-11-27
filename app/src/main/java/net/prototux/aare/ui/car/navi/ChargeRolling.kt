@@ -53,6 +53,11 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
     private var takenEarlier = 0.0; private var modelEarlier = 0.0; private var kmEarlier = 0.0
     // chargers given up as the next stop: going back to one takes [BACK_MIN]
     private val left = HashSet<Charger>()
+    // chargers whose way led far round the route (Navi I-067): not offered again on this trip
+    private val refused = HashSet<Charger>()
+
+    /** The way over [chargers] went far round the route: none of them is taken again on this trip (Navi I-067). */
+    @Synchronized fun refuse(chargers: Collection<Charger>) { refused += chargers }
     private var usedBefore = 0.0; private var kmBefore = 0.0
     // what the plan said at this place: the level it was made with and the model's use since
     private var planSoc = startSoc; private var planM = 0.0; private var planUsedBefore = 0.0
@@ -174,7 +179,7 @@ internal class ChargeRolling(track: ChargePlanner.Track, private val car: Energy
         val scale = scale(drivenM, soc)
         // the plan as it is (its stops, each may be left out) and the best of all from here
         val current = onChain(chain, ownAhead, from, soc, scale, rules)
-        val best = ChargeChain.plan(track, car, soc, near, rules, from, scale, ownAhead, keep = chain)
+        val best = ChargeChain.plan(track, car, soc, { p, r, kw -> near(p, r, kw).filter { it !in refused } }, rules, from, scale, ownAhead, keep = chain)
         val bestChain = best.links.map { it.cand.charger }.filter { it !in own }
         val expected = planSoc - planUsedBefore - used(planM, drivenM)
         val why = "level %.0f %% instead of the plan's %.0f %%, the car takes x%.2f of the model".format(java.util.Locale.ROOT, soc, expected, scale)

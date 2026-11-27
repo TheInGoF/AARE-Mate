@@ -283,9 +283,28 @@ internal class NaviSession(parent: CoroutineScope, private val valhalla: String,
         closures = emptyList(); closureAreas = emptyList(); closureLines = emptyList()
         var choices = planChoicesOnce(from, to, via, o)
         if (closuresAlong == null) return choices
-        onFirst?.invoke(choices)
         fun key(l: List<Position>) = l.first().let { p -> "%.5f,%.5f".format(java.util.Locale.ROOT, p.latitude, p.longitude) }
         val lines = LinkedHashMap<String, List<Position>>()
+        // Navi I-068 (27.11.2026: "Zwei Straßen weiter, wo ich losfahre, ist die Hauptstraße gesperrt. Er lädt die Sperrung erst
+        // später rein. Dadurch ist er fünfmal hin und her gesprungen"): the closures of the first few km are looked at before
+        // the routes are shown, briefly - the car is there at once; a new way off the route goes round them too
+        if (onFirst != null) {
+            val t0 = android.os.SystemClock.elapsedRealtime()
+            val heads = choices.map { head(line(it.route), START_CHECK_M) }
+            val found = kotlinx.coroutines.withTimeoutOrNull(START_CHECK_MS) {
+                runCatching { coroutineScope { heads.map { h -> async { closuresAlong(h) } }.flatMap { it.await() } } }.getOrNull() }.orEmpty()
+            val onHead = found.filter { l -> heads.any { NaviTraffic.onClosures(it, listOf(l)) > 0 } }
+            onHead.forEach { lines.putIfAbsent(key(it), it) }
+            if (onHead.isNotEmpty()) {
+                closures = NaviTraffic.excludePoints(lines.values.toList())
+                choices = runCatching { planChoicesOnce(from, to, via, o) }.onFailure {
+                    net.prototux.aare.DiagLog.add("closures at the start: the routes round them refused (${it.message ?: it}) - the routes before kept")
+                }.getOrNull() ?: choices
+            }
+            net.prototux.aare.DiagLog.add("closures at the start: %d on the first %.0f km, looked at in %.1f s".format(java.util.Locale.ROOT,
+                onHead.size, START_CHECK_M / 1000, (android.os.SystemClock.elapsedRealtime() - t0) / 1000.0), area = "NAVI")
+        }
+        onFirst?.invoke(choices)
         // O216/O219: never through a closure. A route planned round one closure may run into another (17.11.: round the
         // Behrenstraße into the closed Tunnel Tiergarten) - so the closures are asked again along the new routes, until
         // no new one turns up; points on the closed stretches first, narrow areas along the whole roads if still needed
@@ -327,7 +346,16 @@ internal class NaviSession(parent: CoroutineScope, private val valhalla: String,
     }
 
     private fun line(r: Route) = r.geometry.map { Position(longitude = it.lng, latitude = it.lat) }
+    /** The first [m] metres of [l]. */
+    private fun head(l: List<Position>, m: Double): List<Position> {
+        var d = 0.0
+        for (i in 1 until l.size) { d += ChargerIndex.distanceM(l[i - 1], l[i]); if (d >= m) return l.subList(0, i + 1) }
+        return l
+    }
     private val MAX_ROUNDS = 4
+    /** The closures of this much of each route are looked at before it is shown (Navi I-068), for at most [START_CHECK_MS]. */
+    private val START_CHECK_M = 5_000.0
+    private val START_CHECK_MS = 3_000L
 
     private suspend fun planChoicesOnce(from: Position, to: Position, via: List<Position>, o: RouteOptions): List<Choice> = coroutineScope {
         val here = UserLocation(GeographicCoordinate(from.latitude, from.longitude), 5.0, null, Instant.now(), null)

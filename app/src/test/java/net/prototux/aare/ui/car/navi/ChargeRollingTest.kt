@@ -80,6 +80,42 @@ class ChargeRollingTest {
         assertEquals(0, flips)
     }
 
+    /**
+     * Navi I-067: a new stop whose way led far round the route is refused - the stops stay, and that charger is not offered
+     * again on the trip (before, the way over it was taken without a look at how long it was).
+     */
+    @Test fun aChargerWhoseWayWentFarRoundIsNotOfferedAgain() {
+        var refusedSome = 0
+        for (seed in 1L..40L) {
+            val r = Random(seed)
+            val km = 400 + r.nextInt(200)
+            val track = w.track(km)
+            val all = ArrayList<Charger>(); var at = 12.0
+            while (at < km - 5) { all += w.charger(at, 300, w.NETS[r.nextInt(w.NETS.size)], r.nextDouble() * 300); at += 20.0 + r.nextInt(20) }
+            val near = w.near(all)
+            val rules = ChargePlanner.Rules(buffer = { k -> minOf(6.0, 0.5 * maxOf(0.0, k) / 100.0) })
+            val chain = ChargeChain.plan(track, car, 70.0, near, rules).links.map { it.cand.charger }
+            val roll = ChargeRolling(track, car, rules, near, 70.0, chain)
+            val refused = HashSet<Charger>()
+            var soc = 70.0
+            for (i in 1..km) {
+                soc -= (track.wh[i] - track.wh[i - 1]) * 1.25 / car.capacityWh * 100
+                val next = roll.chain.firstOrNull()
+                if (next != null && roll.alongM(next) <= i * 1000.0) soc = maxOf(soc, roll.leaveAt(next, i * 1000.0, soc))
+                val before = roll.chain
+                val d = roll.check(i * 1000.0, soc) ?: continue
+                assertTrue("trip $seed at $i km: a refused charger offered again", d.chain.none { it in refused })
+                if (d.kind == ChargeRolling.Kind.MOVE) {
+                    // the map server's way over the new stops went far round: refused as the screen does
+                    val fresh = d.chain.filter { it !in before }
+                    roll.undo(before); roll.refuse(fresh); refused += fresh; refusedSome++
+                    assertEquals(before, roll.chain)
+                }
+            }
+        }
+        assertTrue("some moves refused", refusedSome > 0)
+    }
+
     @Test fun asPlannedNothingChanges() {
         for (seed in 1L..40L) {
             val t = drive(seed, bias = 0.0, noise = 0.0)
