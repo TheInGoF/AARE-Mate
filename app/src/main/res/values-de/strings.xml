@@ -849,8 +849,10 @@
     <string name="mate_navi_trip_fuel">Diese Energie steckt in %1$s l Super 95 · %2$s l Super Plus 98 · %3$s l Diesel</string>
     <string name="mate_navi_trip_estimated">geschätzt</string>
     <string name="mate_navi_charge_at_charger">am Lader</string>
+    <string name="mate_navi_preheating_title">Batterie wird geheizt</string>
+    <string name="mate_navi_preheating_detail">Jetzt %1$d °C · am Lader etwa %2$d °C · in %3$d min · %4$s kWh</string>
     <string name="mate_navi_preheat_title">Batterie jetzt vorheizen</string>
-    <string name="mate_navi_preheat_detail">Batterie %1$d °C → %4$d °C · etwa %2$d min · etwa %3$s kWh · im Auto starten</string>
+    <string name="mate_navi_preheat_detail">%1$d °C → %4$d °C · etwa %2$d min · %3$s kWh · im Auto starten</string>
     <string name="mate_navi_charge_spread">± %1$d</string>
     <string name="mate_navi_charge_at_destination">am Ziel</string>
     <string name="mate_navi_eta_arrival">Ankunft</string>

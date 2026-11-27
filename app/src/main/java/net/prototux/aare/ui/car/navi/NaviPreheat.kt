@@ -201,6 +201,56 @@ internal object NaviPreheat {
         }
     }
 
+    // ── Navi L-053: the heating seen ─────────────────────────────────────────────────────────────────────────────────
+    // (27.11.2026: "Wenn er erkennt, dass ich die Batterieheizung angemacht habe … sagt: Batterie wird geheizt, und trotzdem
+    // noch die Temperatur und Zeit anzeigt, die bis zum Ladestopp zu erwarten sind … die kWh sollten gleich bleiben")
+
+    /**
+     * Sees a heating start: the battery [RISE_SEEN_C] warmer than [SEEN_WINDOW_MIN] minutes ago at most, on one source, not
+     * charging. Quicker than [Watch], which wants 2 K for a rate to learn: the hint is to turn into "wird geheizt" soon.
+     */
+    class Seen {
+        var fromC = Double.NaN; private set
+        var sinceMs = 0L; private set
+        private var source: String? = null
+
+        fun reset() { fromC = Double.NaN; sinceMs = 0L; source = null }
+
+        /** A reading; true when it shows the battery being heated (from [fromC] at [sinceMs]). */
+        fun reading(c: Double, atMs: Long, src: String?): Boolean {
+            if (fromC.isNaN() || src != source || c < fromC - 0.3 || atMs - sinceMs > SEEN_WINDOW_MIN * 60_000L) {
+                fromC = c; sinceMs = atMs; source = src; return false
+            }
+            return c - fromC >= RISE_SEEN_C
+        }
+    }
+    const val RISE_SEEN_C = 1.0
+    const val SEEN_WINDOW_MIN = 20
+
+    /**
+     * A heating going on for [charger]'s stop: begun at [fromC] at [sinceMs], [kwh] the whole heating as said first (it
+     * stays, the heating is one), [targetC] what the hint aimed at.
+     */
+    class Heating(val charger: Charger, val fromC: Double, val sinceMs: Long, val kwh: Double, val targetC: Double)
+
+    /** What the display shows while it heats: the battery now, about at the charger, minutes to the charger, the whole kWh. */
+    class HeatingNow(val nowC: Double, val atChargerC: Double, val minutes: Double, val kwh: Double)
+
+    /**
+     * The battery at the charger, heated on from [nowC] for [minutesToCharger] at the rate seen since the start (from [h]'s
+     * [Heating.fromC] at its time, once it is [RATE_SEEN_MIN] minutes old) or else [learned]; no warmer than [TARGET_C]
+     * (the car stops there).
+     */
+    fun heatingNow(h: Heating, nowC: Double, nowMs: Long, minutesToCharger: Double, learned: Double): HeatingNow {
+        val min = (nowMs - h.sinceMs) / 60_000.0
+        val seen = if (min >= RATE_SEEN_MIN) ((nowC - h.fromC) / min).coerceIn(MIN_RATE, MAX_RATE) else learned
+        return HeatingNow(nowC, minOf(TARGET_C, nowC + seen * minutesToCharger).coerceAtLeast(nowC), minutesToCharger, h.kwh)
+    }
+    const val RATE_SEEN_MIN = 8.0
+
+    /** The whole heating's energy when it was not hinted at: from [fromC] to [toC] at [rate]. */
+    fun heatingKwh(fromC: Double, toC: Double, rate: Double) = maxOf(0.0, toC - fromC) / rate / 60.0 * HEATER_KW
+
     /**
      * Learns the heating rate from the battery's readings: a rise of at least [RISE_C] within [WINDOW_MIN] minutes is a
      * warming (the driver started it, or the car does on its own), its rate goes to [Rates]. Readings come every few

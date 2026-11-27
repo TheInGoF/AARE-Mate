@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
@@ -544,8 +545,11 @@ class CarScreenPreview {
         shoot("batterie-vorheizen") {
             CompositionLocalProvider(LocalDensity provides car(1f)) {
                 Box(Modifier.fillMaxSize()) {
-                    net.prototux.aare.ui.car.navi.NaviPreheatHint(net.prototux.aare.ui.car.navi.NaviPreheat.Advice(25.0, 2.1, 5.0),
-                        Modifier.align(Alignment.TopEnd).padding(top = 120.dp, end = 16.dp).size(620.dp, 76.dp)) {}
+                    net.prototux.aare.ui.car.navi.NaviPreheatHint(net.prototux.aare.ui.car.navi.NaviPreheat.Advice(48.0, 4.0, 8.0, 20.0),
+                        Modifier.align(Alignment.TopEnd).padding(top = 120.dp, end = 16.dp).widthIn(max = 620.dp)) {}
+                    // Navi L-053: the heating seen - the same place, a statement now
+                    net.prototux.aare.ui.car.navi.NaviPreheatHint(null, Modifier.align(Alignment.TopEnd).padding(top = 220.dp, end = 16.dp).widthIn(max = 620.dp),
+                        net.prototux.aare.ui.car.navi.NaviPreheat.HeatingNow(9.0, 21.0, 64.0, 4.0)) {}
                 }
             }
         }

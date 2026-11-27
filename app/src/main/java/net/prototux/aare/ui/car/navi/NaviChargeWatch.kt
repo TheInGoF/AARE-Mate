@@ -57,13 +57,18 @@ internal fun NaviChargeHint(result: NaviChargeWatch.Result, modifier: androidx.c
     }
 }
 
-/** N-019 step 1: "Batterie jetzt vorheizen" before a fast charger - how long and about what it costs; a cross to leave it. */
+/**
+ * N-019 step 1: "Batterie jetzt vorheizen" before a fast charger - how long and about what it costs; a cross to leave it.
+ * Navi L-053: once the heating is seen ([heating]) it says so instead - "Batterie wird geheizt", the battery now and about at
+ * the charger, the minutes to it, the whole heating's kWh - and blinks once more, to show it was seen.
+ */
 @androidx.compose.runtime.Composable
-internal fun NaviPreheatHint(advice: NaviPreheat.Advice, modifier: androidx.compose.ui.Modifier, onDismiss: () -> Unit) {
+internal fun NaviPreheatHint(advice: NaviPreheat.Advice?, modifier: androidx.compose.ui.Modifier, heating: NaviPreheat.HeatingNow? = null,
+                             onDismiss: () -> Unit) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
-    // three blinks as it comes (22.11.2026: "wenn das Batterie-Pop-Up vielleicht 3-mal blinken würde")
+    // three blinks as it comes (22.11.2026: "wenn das Batterie-Pop-Up vielleicht 3-mal blinken würde"); again when it heats
     val flash = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    androidx.compose.runtime.LaunchedEffect(heating != null) {
         repeat(3) {
             flash.animateTo(1f, androidx.compose.animation.core.tween(250))
             flash.animateTo(0f, androidx.compose.animation.core.tween(400))
@@ -76,11 +81,17 @@ internal fun NaviPreheatHint(advice: NaviPreheat.Advice, modifier: androidx.comp
             tint = Mate.accent, modifier = androidx.compose.ui.Modifier.size(28.dp))
         androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(12.dp))
         androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.weight(1f, fill = false)) {
-            androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_preheat_title),
+            androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(if (heating != null) net.prototux.aare.R.string.mate_navi_preheating_title
+                else net.prototux.aare.R.string.mate_navi_preheat_title),
                 style = androidx.compose.material3.MaterialTheme.typography.titleSmall, color = Mate.text)
-            androidx.compose.material3.Text(androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_preheat_detail,
-                advice.fromC.roundToInt(), advice.minutes.roundToInt(), String.format(java.util.Locale.getDefault(), "%.1f", advice.kwh), advice.targetC.roundToInt()),
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = Mate.textDim)
+            val detail = when {
+                heating != null -> androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_preheating_detail,
+                    heating.nowC.roundToInt(), heating.atChargerC.roundToInt(), heating.minutes.roundToInt(), String.format(java.util.Locale.getDefault(), "%.1f", heating.kwh))
+                advice != null -> androidx.compose.ui.res.stringResource(net.prototux.aare.R.string.mate_navi_preheat_detail,
+                    advice.fromC.roundToInt(), advice.minutes.roundToInt(), String.format(java.util.Locale.getDefault(), "%.1f", advice.kwh), advice.targetC.roundToInt())
+                else -> ""
+            }
+            androidx.compose.material3.Text(detail, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = Mate.textDim)
         }
         androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(12.dp))
         androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Close, null, tint = Mate.textDim,

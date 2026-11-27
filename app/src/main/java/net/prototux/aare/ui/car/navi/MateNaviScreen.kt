@@ -982,21 +982,29 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     // once the next stop is a fast charger nearer than the warming takes, a hint says to start it now (once per charger)
     var preheat by remember { mutableStateOf<Pair<Charger, NaviPreheat.Advice>?>(null) }
     var preheatLeft by remember { mutableStateOf<Charger?>(null) }
+    // Navi L-053: the heating seen for the next fast charger - "Batterie wird geheizt" with what to expect there
+    var preheatHeat by remember { mutableStateOf<Pair<Charger, NaviPreheat.HeatingNow>?>(null) }
+    // Navi T-073, L-052: the hint (or the heating seen) whose outcome is logged at the charger
+    var preheatFor by remember { mutableStateOf<Triple<Charger, NaviPreheat.Advice, Long>?>(null) }
     // the chargers the hint was said for already: said once each, also when it goes and comes back (a reading too old)
     val preheatSaid = remember { HashSet<Charger>() }
     val tripForWarm by androidx.compose.runtime.rememberUpdatedState(trip)
     // off the main thread: the charger's place along the route goes over all of its points (no stutter on the map)
     LaunchedEffect(Unit) { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
         val watch = NaviPreheat.Watch()
+        val seen = NaviPreheat.Seen()
+        var heating: NaviPreheat.Heating? = null
         var lastAt = 0L
         while (true) {
             val bt = net.prototux.aare.dash.DashData.batteryCelsius(context)
             val out = net.prototux.aare.dash.DashData.outsideCelsius(context)
             val at = net.prototux.aare.dash.DashData.batteryAtMs(context)
+            var heats = false
             // while charging the battery warms by the charge itself: no heating rate learned then, the watch starts anew
-            if (net.prototux.aare.dash.DashData.charging(context)) watch.reset()
+            if (net.prototux.aare.dash.DashData.charging(context)) { watch.reset(); seen.reset() }
             else if (bt != null && at > lastAt) {
                 lastAt = at
+                heats = seen.reading(bt, at, net.prototux.aare.dash.DashData.sourceOf(context, "t_batt"))
                 watch.reading(bt, at, net.prototux.aare.dash.DashData.sourceOf(context, "t_batt"))?.let { rate -> if (out != null) {
                     val r = NaviPreheat.Rates.of(context).learn(out, rate)
                     NaviPreheat.Rates.save(context, r)
@@ -1004,10 +1012,13 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 } }
             }
             val t = tripForWarm; val g = session.route.value; val roll = NaviKeep.rolling
+            // the next stop and the minutes to it, for the heating seen (L-053)
+            var ahead: Charger? = null; var minutesTo: Double? = null
             val next = if (t == null || g == null || roll == null || NaviKeep.rollingRoute !== g || testDrive) null else {
                 val driven = g.distance - t.progress.distanceRemaining
                 NaviKeep.stillToCharge(t).firstOrNull { it !== NaviKeep.atCharger.value }?.let { next ->
                     val toM = roll.alongM(next.charger)
+                    if (toM > driven && next.charger.kw >= NaviPreheat.FAST_KW) { ahead = next.charger; minutesTo = roll.secondsBetween(driven, toM) / 60.0 }
                     // Navi L-052: the warming weighed for this stop - the levels there, the car, the least level at a charger
                     val stop = net.prototux.aare.host.CarDataService.car(context)?.let { car -> NaviPreheat.Stop(car, next.arrivePercent, next.leavePercent,
                         ChargePlanner.Rules.of(net.prototux.aare.Settings(context)).atCharger) }
@@ -1015,12 +1026,27 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     else NaviPreheat.advice(bt, out, next.charger.kw, roll.secondsBetween(driven, toM) / 60.0, NaviPreheat.Rates.of(context), stop)?.let { next.charger to it }
                 }
             }
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { preheat = next }
+            // Navi L-053: the battery being heated for the next fast charger - seen once, then shown until the charger
+            val c = ahead; val toMin = minutesTo
+            if (heating != null && heating.charger !== c) heating = null
+            if (heats && c != null && heating == null && bt != null && toMin != null) {
+                val rate = NaviPreheat.Rates.of(context).at(out)
+                val hinted = (preheat?.takeIf { it.first === c } ?: next?.takeIf { it.first === c })?.second
+                // the whole heating's energy, as said first: it stays while it heats (it was the remaining part, falling)
+                val kwh = hinted?.kwh ?: NaviPreheat.heatingKwh(seen.fromC, minOf(NaviPreheat.TARGET_C, bt + rate * toMin), rate)
+                heating = NaviPreheat.Heating(c, seen.fromC, seen.sinceMs, kwh, hinted?.targetC ?: NaviPreheat.TARGET_C)
+                net.prototux.aare.DiagLog.add("battery warm: heating seen - %.1f -> %.1f °C in %.0f min, %.0f min to the %d kW charger; %s".format(java.util.Locale.ROOT,
+                    seen.fromC, bt, (at - seen.sinceMs) / 60_000.0, toMin, c.kw, if (hinted != null) "after the hint" else "without a hint"), area = "CHARGE")
+                if (hinted == null) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    preheatFor = Triple(c, NaviPreheat.Advice(toMin, kwh, seen.fromC, NaviPreheat.TARGET_C), System.currentTimeMillis()) }
+            }
+            val h = heating
+            val shown = if (h != null && bt != null && toMin != null) h.charger to NaviPreheat.heatingNow(h, bt, at, toMin, NaviPreheat.Rates.of(context).at(out)) else null
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { preheat = next; preheatHeat = shown }
             kotlinx.coroutines.delay(30_000)
         }
     } }
     // Navi T-073, L-052: what came of a hint, for looking at it later - the battery at the charger against the plan
-    var preheatFor by remember { mutableStateOf<Triple<Charger, NaviPreheat.Advice, Long>?>(null) }
     val atChargerNow by NaviKeep.atCharger
     LaunchedEffect(atChargerNow) {
         val (c, a, at) = preheatFor ?: return@LaunchedEffect
@@ -1974,8 +2000,12 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         }
         // N-019 step 1: warm the battery now, top right, below the other hints (it waits while one of them shows)
         val chargeHintShown = chargeCheck?.let { it.verdict != chargeCheckLeft } == true
-        if (atStop == null && nextIncident == null && fasterNow == null && !offRoute && !chargeHintShown && panel == NaviStep.None && trip != null)
-            preheat?.takeIf { it.first !== preheatLeft }?.let { (c, a) -> NaviPreheatHint(a, hintMod) { preheatLeft = c } }
+        if (atStop == null && nextIncident == null && fasterNow == null && !offRoute && !chargeHintShown && panel == NaviStep.None && trip != null) {
+            // L-053: heating seen - the same place says so, with what to expect at the charger; else the hint to start it
+            val heatNow = preheatHeat
+            if (heatNow != null && heatNow.first !== preheatLeft) NaviPreheatHint(null, hintMod, heatNow.second) { preheatLeft = heatNow.first }
+            else preheat?.takeIf { it.first !== preheatLeft }?.let { (c, a) -> NaviPreheatHint(a, hintMod) { preheatLeft = c } }
+        }
         // what is left: distance, time, arrival (wish of 16.11.2026), bottom right
         // above the strip naming what plays when the bar shows one (O191: the music as everywhere, its title runs along
         // the bottom edge)
