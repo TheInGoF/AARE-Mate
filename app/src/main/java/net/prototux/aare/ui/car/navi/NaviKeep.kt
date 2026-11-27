@@ -415,10 +415,13 @@ internal object NaviKeep {
                 }
             }
             alert?.let { a ->
-                val l = limits.value?.along(driven)
+                // Navi I-069 ("Auf der Autobahn sollte er, wenn er nicht weiß, dass es unbegrenzt ist, einfach ruhig sein"): only
+                // the limits of the route driven on, and not while off it - else no limit is known and nothing is said
+                val l = limits.value?.takeIf { it.of(r) && !session.offRoute.value }?.along(driven)
                 if (a.update(kmh, l) && speaker.mode != NaviSpeaker.Mode.MUTE) {
                     NaviSpeedAlert.play(tone, volume, a.times)
-                    android.util.Log.i("MateNavi", "speed warning: %.0f km/h at %d".format(kmh ?: 0.0, l ?: 0))
+                    net.prototux.aare.DiagLog.add("speed warning: %.0f km/h where the map says %d, %.1f km along the route".format(java.util.Locale.ROOT,
+                        kmh ?: 0.0, l ?: 0, driven / 1000), area = "NAVI")
                 }
             }
         }

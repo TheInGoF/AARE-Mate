@@ -2,6 +2,8 @@ package net.prototux.aare.ui.car.navi
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.maplibre.spatialk.geojson.Position
 
@@ -27,5 +29,17 @@ class NaviLimitsAlongTest {
 
     @Test fun unknownStaysUnknown() {
         assertNull(NaviLimits(points, IntArray(points.size)).along(500.0))
+    }
+
+    /**
+     * Navi I-069 (27.11.2026: warned at 140 where there is no limit): limits loaded for one route are not read on another -
+     * they came in late after a new route and were read by the distance along it, from somewhere else.
+     */
+    @Test fun onlyOnTheirOwnRoute() {
+        val routeA = Any(); val routeB = Any()
+        val l = NaviLimits(points, IntArray(points.size) { 130 }, routeA)
+        assertTrue(l.of(routeA))
+        assertFalse(l.of(routeB))
+        assertFalse(l.of(null))
     }
 }

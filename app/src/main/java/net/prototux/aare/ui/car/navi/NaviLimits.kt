@@ -19,7 +19,16 @@ import org.maplibre.spatialk.geojson.Position
  * route at the Pariser Platz lay nearer, its 20 showed in the tunnel and stuck (16.11.2026: "er zeigt 20 im tunnel an.
  * das kann nicht stimmen", "die 20 bleiben hängen").
  */
-internal class NaviLimits internal constructor(private val points: List<Position>, private val limit: IntArray) {
+internal class NaviLimits internal constructor(private val points: List<Position>, private val limit: IntArray,
+                                               /** The route these are the limits of; read only on it (Navi I-069). */
+                                               val route: Any? = null) {
+    /**
+     * Whether these limits belong to [guided] (Navi I-069, 27.11.2026: warned at 140 where there is no limit): they load in
+     * the background, and a new route meanwhile got the old route's limits - read by the distance along the new one, from
+     * somewhere else entirely.
+     */
+    fun of(guided: Any?): Boolean = route == null || route === guided
+
     /** Metres from the start to each point. */
     private val metres = DoubleArray(points.size).also { m ->
         for (i in 1 until points.size) m[i] = m[i - 1] + ChargerIndex.distanceM(points[i - 1], points[i])
@@ -46,7 +55,7 @@ internal class NaviLimits internal constructor(private val points: List<Position
          * matched exactly where it can and snapped to the map where not ("walk_or_snap": over charging stops the exact
          * walk failed).
          */
-        suspend fun load(context: Context, points: List<Position>): NaviLimits? = withContext(Dispatchers.IO) {
+        suspend fun load(context: Context, points: List<Position>, route: Any? = null): NaviLimits? = withContext(Dispatchers.IO) {
             val limit = IntArray(points.size)
             val pieces = pieces(points)
             val ok = kotlinx.coroutines.coroutineScope {
@@ -54,7 +63,7 @@ internal class NaviLimits internal constructor(private val points: List<Position
             }.filterNotNull()
             for ((from, l) in ok) for (k in l.indices) if (l[k] != 0) limit[from + k] = l[k]
             android.util.Log.i("MateNavi", "speed limits: ${ok.size} of ${pieces.size} pieces")
-            if (ok.isEmpty()) null else NaviLimits(points, limit)
+            if (ok.isEmpty()) null else NaviLimits(points, limit, route)
         }
 
         private const val PIECE_M = 100_000.0

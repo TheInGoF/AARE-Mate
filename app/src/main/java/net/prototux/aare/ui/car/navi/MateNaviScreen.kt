@@ -353,7 +353,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             session.go(free, simulate = testDrive)
             startRolling(free)
             show(free); drawnLine = NaviRoute.smooth(raw(free)); limits = null
-            scope.launch { limits = NaviLimits.load(context, raw(free)) }
+            scope.launch { limits = NaviLimits.load(context, raw(free), free) }
         }
     }
 
@@ -388,7 +388,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             startRolling(r)
             drawnLine = NaviRoute.smooth(raw(r))
             limits = null
-            scope.launch { limits = NaviLimits.load(context, raw(r)) }
+            scope.launch { limits = NaviLimits.load(context, raw(r), r) }
             chargeLog("charging: plan done while driving - now over " + plan.stops.joinToString { NaviTripPlan.chargerName(it.charger) } +
                 ", %.0f %% at the destination".format(plan.arrivePercent))
         }
@@ -678,7 +678,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         guiding = true
         // the speed limits along it, asked once from Valhalla (the route itself brings none)
         limits = null
-        scope.launch { limits = NaviLimits.load(context, raw(route)).also { Log.i(TAG, "speed limits: " + (if (it == null) "none" else "loaded")) } }
+        scope.launch { limits = NaviLimits.load(context, raw(route), route).also { Log.i(TAG, "speed limits: " + (if (it == null) "none" else "loaded")) } }
         drawnLine = NaviRoute.smooth(raw(route))
         // a new trip plans its stops again (taken out only for the trip it was done on)
         if (!NaviKeep.continuing) NaviKeep.noNewStops = false
@@ -732,7 +732,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             show(r)
             drawnLine = NaviRoute.smooth(raw(r))
             limits = null
-            launch { limits = NaviLimits.load(context, raw(r)) }
+            launch { limits = NaviLimits.load(context, raw(r), r) }
         }
     }
     // F5: chargers along the route shown - in the preview the chosen route and its stops, while guiding the guided one
@@ -793,7 +793,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             chargeStops = keep
             session.go(nr, simulate = testDrive)
             show(nr); drawnLine = NaviRoute.smooth(raw(nr)); limits = null
-            scope.launch { limits = NaviLimits.load(context, raw(nr)) }
+            scope.launch { limits = NaviLimits.load(context, raw(nr), nr) }
             startRolling(nr)
             chargeCheck = null; chargeCheckLeft = null
             chargeLog("charging: new route %.1f km without the stop(s) taken out".format(java.util.Locale.ROOT, nr.distance / 1000))
@@ -838,7 +838,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             chargeStops = keep
             session.go(nr, simulate = testDrive)
             show(nr); drawnLine = NaviRoute.smooth(raw(nr)); limits = null
-            scope.launch { limits = NaviLimits.load(context, raw(nr)) }
+            scope.launch { limits = NaviLimits.load(context, raw(nr), nr) }
             startRolling(nr)
             chargeCheck = null; chargeCheckLeft = null
             chargeLog("charging: new route %.1f km over %s".format(java.util.Locale.ROOT, nr.distance / 1000, NaviTripPlan.chargerName(charger)))
@@ -934,7 +934,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                     chargeStops = timed.stops()
                     session.go(nr, simulate = testDrive)
                     show(nr); drawnLine = NaviRoute.smooth(raw(nr)); limits = null
-                    scope.launch { limits = NaviLimits.load(context, raw(nr)) }
+                    scope.launch { limits = NaviLimits.load(context, raw(nr), nr) }
                     val next = timed.stops().firstOrNull()
                     val text = next?.let { context.getString(net.prototux.aare.R.string.mate_navi_charge_moved, NaviTripPlan.chargerName(it.charger), Math.round(it.atM / 1000).toInt()) }
                         ?: context.getString(net.prototux.aare.R.string.mate_navi_charge_none)
@@ -1852,7 +1852,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
                 }
                 // by the distance driven along the guided route (Ferrostar's progress), not by the nearest point (the tunnel)
                 val driven = guided?.let { it.distance - trip.progress.distanceRemaining }
-                val limit = remember(driven?.let { (it / 5).roundToLong() }, limits) { driven?.let { limits?.along(it) } }
+                // only the guided route's own limits (Navi I-069: an earlier route's came in late and were read on this one)
+                val limit = remember(driven?.let { (it / 5).roundToLong() }, limits, guided) { driven?.let { limits?.takeIf { l -> l.of(guided) }?.along(it) } }
                 // for tests without a picture: each change of the sign, with where along the route
                 // into the diagnosis log too, with where along the route and how fast the car went (18.11.2026: "in der Stadt ...
                 // immer noch 130 angezeigt, obwohl die Stadtautobahn schon auf 80 runtergesetzt war ... bei 50 hat er das aber
@@ -1929,7 +1930,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             NaviKeep.faster.value = null; NaviKeep.aroundClosure.value = false
             session.go(r, simulate = testDrive)
             show(r); drawnLine = NaviRoute.smooth(raw(r)); limits = null
-            scope.launch { limits = NaviLimits.load(context, raw(r)) }
+            scope.launch { limits = NaviLimits.load(context, raw(r), r) }
             net.prototux.aare.DiagLog.add("route: %s taken: %.1f km".format(java.util.Locale.ROOT, why, r.distance / 1000), area = "NAVI")
         }
         // a closed road ahead is no choice (Navi I-064, 24.11.2026: "dass er diese Straßensperrung zwar anzeigt auf der Map,
