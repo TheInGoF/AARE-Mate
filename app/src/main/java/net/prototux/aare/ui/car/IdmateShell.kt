@@ -391,7 +391,8 @@ internal fun IdmateShell(
                     }
                     Inner.CINEMA -> {
                         val pm = LocalContext.current.packageManager
-                        val chosen = state.apps.filter { it.kind == CarAppKind.STANDALONE && runCatching {
+                        // the apps allowed for the drive (Claude, System L-114) are no films: in the Apps, not in the cinema
+                        val chosen = state.apps.filter { it.kind == CarAppKind.STANDALONE && !net.prototux.aare.host.DrivingApps.allowed(it.packageName) && runCatching {
                             pm.getApplicationInfo(it.packageName, 0).category != android.content.pm.ApplicationInfo.CATEGORY_MAPS }.getOrDefault(true) }
                         val app = cinemaApp
                         if (app == null || !state.parkedForFilms) CinemaMenu(chosen) { cinemaApp = it }
@@ -842,7 +843,7 @@ private fun areas(
     // Kino (18.11.2026: "dass ich die YouTube-App dann quasi einfasse in das Mate-System"): the phone apps allowed onto the
     // car screen that are no map apps - shown only while the car stands parked for sure (ParkedGate, CarRuntime)
     val pm = LocalContext.current.packageManager
-    val cinema = state.apps.filter { it.kind == CarAppKind.STANDALONE && runCatching {
+    val cinema = state.apps.filter { it.kind == CarAppKind.STANDALONE && !net.prototux.aare.host.DrivingApps.allowed(it.packageName) && runCatching {
         pm.getApplicationInfo(it.packageName, 0).category != android.content.pm.ApplicationInfo.CATEGORY_MAPS }.getOrDefault(true) }
     // the tile only while the car stands parked for sure (18.11.2026: "Der Bereich Kino, der sollte nur im Stand angezeigt
     // werden, wenn alle Bedingungen erfüllt sind")

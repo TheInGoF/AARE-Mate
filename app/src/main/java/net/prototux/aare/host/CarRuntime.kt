@@ -427,14 +427,17 @@ class CarRuntime(
             val scan = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val pm = context.packageManager
                 val cinema = settings.standaloneApps && AppLauncher.available()
+                fun entry(pkg: String): CarAppEntry? {
+                    val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull() ?: return null
+                    val icon = runCatching { pm.getApplicationIcon(info).toBitmap(128, 128) }.getOrNull()
+                    return CarAppEntry(standaloneId(pkg), pkg, pm.getApplicationLabel(info).toString(), icon, CarAppKind.STANDALONE)
+                }
                 AppScan(CarAppCatalog.query(context), AndroidAutoApps.messagingApps(context),
                     net.prototux.aare.host.projected.ProjectedAppCatalog.query(context),
                     // the cinema's apps only when they can be shown at all
-                    if (cinema) settings.standaloneAppPackages.mapNotNull { pkg ->
-                        val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull() ?: return@mapNotNull null
-                        val icon = runCatching { pm.getApplicationIcon(info).toBitmap(128, 128) }.getOrNull()
-                        CarAppEntry(standaloneId(pkg), pkg, pm.getApplicationLabel(info).toString(), icon, CarAppKind.STANDALONE)
-                    } else emptyList(), cinema)
+                    if (cinema) settings.standaloneAppPackages.mapNotNull { entry(it) } else emptyList(), cinema,
+                    // System L-114: the apps allowed for the drive (Claude) whenever phone apps can be shown, chosen or not
+                    if (AppLauncher.available()) DrivingApps.ALLOWED.mapNotNull { entry(it) } else emptyList())
             }
             lastScan = scan
             applyApps(scan)
@@ -461,7 +464,9 @@ class CarRuntime(
      * [cinema]: whether the phone apps were read (only when the cinema could show them).
      */
     private data class AppScan(val found: List<CarAppInfo>, val messaging: List<PhoneApp>,
-        val projected: List<net.prototux.aare.host.projected.ProjectedAppInfo>, val standalone: List<CarAppEntry>, val cinema: Boolean)
+        val projected: List<net.prototux.aare.host.projected.ProjectedAppInfo>, val standalone: List<CarAppEntry>, val cinema: Boolean,
+        /** System L-114: phone apps allowed while driving (DrivingApps), installed and showable. */
+        val driving: List<CarAppEntry> = emptyList())
 
     /** The last scan, so a changed setting rebuilds the list without asking the package manager again. Main thread. */
     private var lastScan: AppScan? = null
@@ -539,6 +544,12 @@ class CarRuntime(
         }
         if (settings.standaloneApps && AppLauncher.available()) {
             entries += scan.standalone.filter { e -> e.packageName !in hidden && projected.none { it.packageName == e.packageName } }
+        }
+        // System L-114: Claude as a whole app in the Apps (its Android Auto messages entry gives way to it)
+        for (d in scan.driving) {
+            if (d.packageName in hidden || entries.any { it.packageName == d.packageName && it.kind == CarAppKind.STANDALONE }) continue
+            entries.removeAll { it.packageName == d.packageName && it.kind == CarAppKind.MESSAGING }
+            entries += d
         }
         if (settings.browser) {
             entries += CarAppEntry(BROWSER_ID, context.packageName, context.getString(R.string.browser_app_label), builtinIcon(R.drawable.ic_car_browser), CarAppKind.BROWSER)
@@ -1075,7 +1086,9 @@ class CarRuntime(
                                     }
                                     CarAppKind.MESSAGING -> MessagingScreen(app, ui.drivingRestricted, this@CarRuntime, mod)
                                     CarAppKind.PHONE_SCREEN -> MirrorScreen(this@CarRuntime, ui.drivingRestricted, mod)
-                                    CarAppKind.STANDALONE -> StandaloneAppScreen(this@CarRuntime, ui.drivingRestricted || !ui.parkedForFilms, app.packageName, mod)
+                                    // System L-114: an app the driver allowed for the drive (Claude) stays usable while the car moves
+                                    CarAppKind.STANDALONE -> StandaloneAppScreen(this@CarRuntime,
+                                        !DrivingApps.allowed(app.packageName) && (ui.drivingRestricted || !ui.parkedForFilms), app.packageName, mod)
                                     // from the last scan, kept per app across recompositions
                                     CarAppKind.PROJECTED -> androidx.compose.runtime.remember(app.packageName) { projectedApps[app.packageName] }?.let { p ->
                                         // a new size starts the app afresh at that size
