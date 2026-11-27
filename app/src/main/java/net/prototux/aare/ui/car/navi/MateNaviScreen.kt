@@ -170,6 +170,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     // the level on arrival as the tile shows it, for the trip plan
     var arrivalNow by remember { mutableStateOf<NaviCharge.Arrival?>(null) }
     var preview by remember { mutableStateOf<Preview?>(null) }
+    // the kind of route the trip was started on, kept for going on after a stop (Navi L-055)
+    var tripKind by remember { mutableStateOf<NaviSession.Kind?>(null) }
     var routeOptions by remember { mutableStateOf<List<RouteOption>>(emptyList()) }
     // F5: the fast chargers along the shown route, the planned stops apart (GeoJSON: stops, others)
     var chargerJson by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -658,6 +660,16 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         NaviResume.clear(context)
         Log.i(TAG, "guidance ended by the driver")
     }
+    /**
+     * The trip as it is, kept for going on after a stop or an update of the app (Navi L-055): the destination, the own stops
+     * ahead, the route's kind, the charging stops and the guided route's line. A real trip only.
+     */
+    fun saveTrip() {
+        if (testDrive) return
+        val p = target ?: pending ?: return
+        val g = session.route.value
+        runCatching { NaviResume.save(context, p, ownStops, kind = tripKind?.name, stops = chargeStops, line = g?.let { raw(it) }.orEmpty()) }
+    }
     fun start() {
         val route = planned ?: return
         // the charging stops planned for it (O182), so the battery on arrival counts their charge while driving
@@ -672,8 +684,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         target = pending
         session.go(route, simulate = testDrive)
         startRolling(route)
-        // kept for "Fortsetzen" over a lost connection - a real trip only
-        if (!testDrive) pending?.let { NaviResume.save(context, it, pendingOwn) }
+        // kept for "Fortsetzen" over a lost connection - a real trip only; with its charging stops and its line (L-055)
+        tripKind = routeOptions.getOrNull(chosen)?.kind ?: tripKind ?: NaviSession.Kind.FAST
+        saveTrip()
         resume = null
         guiding = true
         // the speed limits along it, asked once from Valhalla (the route itself brings none)
@@ -692,6 +705,39 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         // at first, 16.11.2026 - pictures of the real position would have been allowed)
         Log.i(TAG, "position source: %s; route %.1f km, %d steps".format(if (testDrive) "simulated" else live.source ?: "live", route.distance / 1000, route.steps.size))
     }
+    /**
+     * Navi L-055 (27.11.2026: "wenn die Route einfach fortgeführt werden kann und er nicht eine neue Route und Berechnung
+     * berechnet, sondern einfach weiß: okay, es geht weiter … Problem ist natürlich jetzt unser App-Update"): the trip kept
+     * goes on as it was - over the same charging stops still ahead (the one the car stands at is done), one request for the
+     * way from here, the stops timed from the level now; no preview, no new charging plan. Without the way: as before.
+     */
+    fun continueTrip(r: NaviResume.Saved) {
+        val from = carAt ?: return
+        val to = Position(longitude = r.place.lon, latitude = r.place.lat)
+        val kind = r.kind?.let { k -> runCatching { NaviSession.Kind.valueOf(k) }.getOrNull() } ?: NaviSession.Kind.FAST
+        val stops = r.stopsAhead(from)
+        scope.launch {
+            val via = NaviStops.inOrder(r.line.ifEmpty { listOf(from, to) }, r.own.map { it.first } + stops.map { it.charger.at })
+            val route = runCatching { session.planOne(kind, from, to, via, RouteOptions.of(net.prototux.aare.Settings(context)), stops.map { it.charger.at }) }
+                .onFailure { e -> if (e is kotlinx.coroutines.CancellationException) throw e }.getOrNull()
+            if (guiding) return@launch
+            if (route == null) {
+                net.prototux.aare.DiagLog.add("navigation: going on over the kept stops failed - planned anew from here", area = "NAVI")
+                purpose = Purpose.NEW; choose(r.place, r.own); return@launch
+            }
+            val car = net.prototux.aare.host.CarDataService.car(context)
+            val plan = if (car != null && stops.isNotEmpty()) kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                ChargePlanner.replay(guidedTrack(route, car), car, car.socPercent, stops.map { it.charger }, ChargePlanner.Rules.of(net.prototux.aare.Settings(context)))
+            } else null
+            pending = r.place; pendingOwn = r.own; tripKind = kind
+            planned = route
+            routeOptions = emptyList()
+            preview = optionOf(NaviSession.Choice(kind, route, plan), car, r.place.name, r.own, r.place.name).preview
+            net.prototux.aare.DiagLog.add("navigation: the trip goes on as it was - %d charging stop(s) kept (%d done), %d own stop(s), %.1f km; one request, no new plan".format(
+                java.util.Locale.ROOT, stops.size, r.stops.size - stops.size, r.own.size, route.distance / 1000), area = "NAVI")
+            start()
+        }
+    }
     // the trip goes on by itself after a stop (19.11.2026: "dass nach einem Ladestopp die Route weiterläuft, inklusive
     // Wegstrecke, Linie"): a trip lost with the connection within [AUTO_RESUME_MS] is planned anew from here as soon as
     // the car's position is known - the preview's countdown starts it; the way driven and the time count on
@@ -701,6 +747,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         if (System.currentTimeMillis() - r.atMillis > AUTO_RESUME_MS) return@LaunchedEffect
         NaviKeep.autoResumed = r.atMillis
         NaviKeep.continuing = true
+        // Navi L-055: kept with its line (from 2.5.19 on) - on as it was, over the same stops; else planned anew from here
+        if (r.line.size >= 2) { continueTrip(r); return@LaunchedEffect }
         net.prototux.aare.DiagLog.add("navigation: the trip goes on after the stop (saved ${(System.currentTimeMillis() - r.atMillis) / 60_000} min ago, ${r.own.size} own stop(s)) - planned anew from here", area = "NAVI")
         purpose = Purpose.NEW
         choose(r.place, r.own)
@@ -722,6 +770,8 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
     DisposableEffect(speaker) { onDispose { if (!NaviKeep.guiding.value) speaker.stop() } }
     // the guided route (F1: changes after a new route); the warnings along it come from NaviKeep (O193/O194)
     val guided by session.route.collectAsState()
+    // the trip kept up to date for going on (L-055): a new route, stops moved, an own stop reached
+    LaunchedEffect(guided, chargeStops, guiding) { if (guiding) saveTrip() }
     // F1: a new route after leaving the old one - drawn, its limits loaded, the car glides on along it
     LaunchedEffect(session) {
         var seen = 0
@@ -1079,7 +1129,7 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
         if (testDrive || ownStops.isEmpty()) return@LaunchedEffect
         val left = ownStops.filter { (p, _) -> t.remainingWaypoints.any { w ->
             ChargerIndex.distanceM(Position(longitude = w.coordinate.lng, latitude = w.coordinate.lat), p) < OWN_SNAP_M } }
-        if (left.size != ownStops.size) { ownStops = left; target?.let { NaviResume.save(context, it, left) } }
+        if (left.size != ownStops.size) { ownStops = left; saveTrip() }
     }
     // F4: the spoken instructions, each once when Ferrostar reaches its distance
     val spoken = trip?.spokenInstruction
