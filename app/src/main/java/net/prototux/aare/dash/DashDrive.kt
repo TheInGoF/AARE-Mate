@@ -20,6 +20,9 @@ internal class DashDrive {
     private var bearing: Double? = null
     /** The carried-on place's offset from the new fix at the time it came (degrees of lat/lon), taken out over [BLEND_MS]. */
     private var offLat = 0.0; private var offLon = 0.0
+    /** How far ahead the car is carried on: half again the usual time between places (System I-151: the stick's come some
+     *  seconds apart - carried on for 6 s only, the car stood, then jumped), between [AHEAD_MS] and [AHEAD_MAX_MS]. */
+    private var aheadMs = AHEAD_MS
 
     /** A new place [p] at [atMs] (uptime); [heading] the stick's, null when it sends none. */
     @Synchronized fun place(p: Position, heading: Double?, atMs: Long) {
@@ -29,6 +32,7 @@ internal class DashDrive {
         if (last != null && atMs > fixAt) {
             val d = distanceM(last, p)
             val dt = (atMs - fixAt) / 1000.0
+            aheadMs = (0.7 * aheadMs + 0.3 * 1.5 * (atMs - fixAt)).toLong().coerceIn(AHEAD_MS, AHEAD_MAX_MS)
             if (d > JUMP_M) { speedMs = 0.0; offLat = 0.0; offLon = 0.0 }
             else {
                 speedMs = if (dt > 0) (d / dt).coerceAtMost(MAX_MS) else speedMs
@@ -46,7 +50,7 @@ internal class DashDrive {
 
     private fun atLocked(nowMs: Long): Pair<Position, Double?>? {
         val p = fix ?: return null
-        val t = ((nowMs - fixAt).coerceIn(0, AHEAD_MS)) / 1000.0
+        val t = ((nowMs - fixAt).coerceIn(0, aheadMs)) / 1000.0
         val b = bearing
         var lat = p.latitude; var lon = p.longitude
         if (b != null && speedMs > MOVING_MS) {
@@ -61,6 +65,7 @@ internal class DashDrive {
     companion object {
         /** Carried on no further than this past the last place (the car may have stopped, the stick fallen silent). */
         const val AHEAD_MS = 6_000L
+        const val AHEAD_MAX_MS = 20_000L
         const val BLEND_MS = 1_000L
         /** Moves shorter than this give no direction (the place's own noise). */
         const val TURN_MIN_M = 8.0

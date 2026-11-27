@@ -54,7 +54,7 @@ class LaunchHostService : ILaunchHost.Stub {
         displayId = vd.display.displayId
         val how = launch(ctx, packageName, displayId)
         if (how == null) Log.w(TAG, "created display ${displayId} but could not launch $packageName on it")
-        lastReport = "display $displayId ${width}x$height ${dpi} dpi, flags $usedFlags (${if (usedFlags and FLAG_TRUSTED != 0) "trusted" else "not trusted"}" +
+        lastReport = "display $displayId ${width}x$height ${dpi} dpi, $usedAs, flags $usedFlags (${if (usedFlags and FLAG_TRUSTED != 0) "trusted" else "not trusted"}" +
             "${if (usedFlags and FLAG_SYSTEM_DECORATIONS != 0) ", keyboard and decorations" else ""}); app ${if (how == null) "not launched" else "launched by $how"}"
         return displayId
     }
@@ -100,20 +100,54 @@ class LaunchHostService : ILaunchHost.Stub {
 
     /** Build the virtual display. Trusted + its own display group lets an arbitrary app run and focus on it. */
     private fun createDisplay(ctx: Context, surface: Surface, w: Int, h: Int, dpi: Int): VirtualDisplay? {
-        val dm = ctx.getSystemService(DisplayManager::class.java) ?: return null
-        // Preferred flags for hosting a foreign app interactively; fall back to the plain public ones
-        // if the framework rejects the hidden bits for this uid/version.
-        // Every kind has its own content only: without that flag an empty display mirrors the tablet's screen - the cinema
-        // showed the tablet's screen instead of the app at the car's size (19.11.2026: "Was wirklich ist, dass es einfach eine
-        // Bildschirmspiegelung ist"). Best first: trusted with its own focus, keyboard and decorations, then less.
-        for (flags in intArrayOf(FULL_FLAGS or FLAG_SYSTEM_DECORATIONS or ownFocus(), FULL_FLAGS or ownFocus(), FULL_FLAGS,
-                BASE_FLAGS or FLAG_TRUSTED, BASE_FLAGS)) {
-            val vd = runCatching { dm.createVirtualDisplay("AARE app", w, h, dpi.coerceAtLeast(120), surface, flags) }
-                .onFailure { Log.w(TAG, "createVirtualDisplay(flags=$flags) failed: ${it.message}"); failures += "flags $flags: ${it.javaClass.simpleName} ${it.message}" }
-                .getOrNull()
-            if (vd != null) { usedFlags = flags; return vd }
+        // System I-152 (27.11.2026, every kind refused: "SecurityException packageName must match the owner uid"): the
+        // display service checks that the asking package belongs to the uid this process runs as (the shell's under adb,
+        // none under root) - Mate's own name, which the context Shizuku hands over may carry, does not. First as it is
+        // (it worked so on 22.11.), then in the name of this uid's own package
+        val managers = listOfNotNull(ctx.getSystemService(DisplayManager::class.java)?.let { "as ${ctx.packageName}" to it }) +
+            listOfNotNull(ownUidManager(ctx))
+        for ((who, dm) in managers) {
+            // Preferred flags for hosting a foreign app interactively; fall back to the plain public ones
+            // if the framework rejects the hidden bits for this uid/version.
+            // Every kind has its own content only: without that flag an empty display mirrors the tablet's screen - the cinema
+            // showed the tablet's screen instead of the app at the car's size (19.11.2026: "Was wirklich ist, dass es einfach eine
+            // Bildschirmspiegelung ist"). Best first: trusted with its own focus, keyboard and decorations, then less.
+            for (flags in intArrayOf(FULL_FLAGS or FLAG_SYSTEM_DECORATIONS or ownFocus(), FULL_FLAGS or ownFocus(), FULL_FLAGS,
+                    BASE_FLAGS or FLAG_TRUSTED, BASE_FLAGS)) {
+                val vd = runCatching { dm.createVirtualDisplay("AARE app", w, h, dpi.coerceAtLeast(120), surface, flags) }
+                    .onFailure { Log.w(TAG, "createVirtualDisplay($who, flags=$flags) failed: ${it.message}"); failures += "$who flags $flags: ${it.javaClass.simpleName} ${it.message}" }
+                    .getOrNull()
+                if (vd != null) { usedFlags = flags; usedAs = who; return vd }
+                // the name refused: the other flags would be refused alike
+                if (failures.lastOrNull()?.contains("owner uid") == true) break
+            }
         }
         return null
+    }
+
+    @Volatile private var usedAs = ""
+
+    /**
+     * A DisplayManager asking in the name of the package of this process's uid ("com.android.shell" under adb): a context
+     * of that package, else Mate's context under that name (DisplayManager's hidden constructor). Null where the name is
+     * the same already or none is known (root: any name passes).
+     */
+    @SuppressLint("PrivateApi")
+    private fun ownUidManager(ctx: Context): Pair<String, DisplayManager>? {
+        val uid = android.os.Process.myUid()
+        val pkg = runCatching { ctx.packageManager.getPackagesForUid(uid)?.firstOrNull() }.getOrNull()
+            ?: if (uid == SHELL_UID) "com.android.shell" else return null
+        if (pkg == ctx.packageName) return null
+        runCatching { ctx.createPackageContext(pkg, 0).getSystemService(DisplayManager::class.java) }
+            .onFailure { Log.w(TAG, "no context of $pkg: ${it.message}") }.getOrNull()?.let { return "as $pkg" to it }
+        return runCatching {
+            val named = object : android.content.ContextWrapper(ctx) {
+                override fun getPackageName() = pkg
+                override fun getOpPackageName() = pkg
+            }
+            val c = DisplayManager::class.java.getDeclaredConstructor(Context::class.java).apply { isAccessible = true }
+            "as $pkg (named)" to c.newInstance(named)
+        }.onFailure { Log.w(TAG, "no DisplayManager as $pkg: ${it.message}") }.getOrNull()
     }
 
     /** Launch [pkg]'s main activity onto [onDisplay]; how it went ("the system", "am start"), null when not. */
@@ -181,6 +215,7 @@ class LaunchHostService : ILaunchHost.Stub {
         const val SOURCE_TOUCHSCREEN = 0x00001002 // InputDevice.SOURCE_TOUCHSCREEN
         const val SOURCE_KEYBOARD = 0x00000101 // InputDevice.SOURCE_KEYBOARD
         const val INJECT_INPUT_EVENT_MODE_ASYNC = 0
+        const val SHELL_UID = 2000
 
         // VirtualDisplay flags (public + hidden bits). Hidden ones let a foreign app run and take focus.
         const val FLAG_PUBLIC = 1 shl 0

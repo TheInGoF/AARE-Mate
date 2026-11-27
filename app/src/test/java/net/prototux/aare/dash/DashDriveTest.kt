@@ -27,6 +27,17 @@ class DashDriveTest {
         assertTrue(DashDrive.distanceM(east(0.0), later) > 400)
     }
 
+    @Test fun placesFarApartCarriedOnTillTheNext() {
+        // System I-151: the stick's places 10 s apart at 30 m/s - not standing after 6 s, then jumping
+        val d = DashDrive()
+        for (k in 0..4) d.place(east(300.0 * k), null, 10_000L * k)
+        val at9 = d.at(40_000 + 9_000)!!.first
+        assertEquals(1200.0 + 270.0, DashDrive.distanceM(east(0.0), at9), 20.0)
+        // and still at most the longest look ahead when nothing comes
+        val gone = d.at(40_000 + 60_000)!!.first
+        assertTrue(DashDrive.distanceM(east(0.0), gone) <= 1200.0 + 30.0 * DashDrive.AHEAD_MAX_MS / 1000 + 1)
+    }
+
     @Test fun aNewPlaceCorrectsSoftly() {
         val d = DashDrive()
         d.place(east(0.0), null, 0); d.place(east(180.0), null, 5_000)

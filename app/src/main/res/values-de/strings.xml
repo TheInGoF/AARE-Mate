@@ -344,6 +344,7 @@
     <string name="standalone_need_shizuku">Braucht Shizuku. Richte es auf der Seite „Ton im Auto“ ein und komm dann zurück.</string>
     <string name="standalone_not_native">Keine Android Auto-App · Nutzung beim Parken</string>
     <string name="standalone_starting">Wird gestartet…</string>
+    <string name="standalone_failed">Die App ließ sich nicht starten. Zurück oder Apps tippen.</string>
     <string name="standalone_paused_driving">Nur im Stand: Wählhebel auf P, Auto steht still.</string>
     <!-- browser: the in-car WebView browser -->
     <string name="browser_app_label">Browser</string>

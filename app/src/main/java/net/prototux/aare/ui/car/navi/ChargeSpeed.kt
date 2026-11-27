@@ -27,6 +27,10 @@ internal object ChargeSpeed {
     const val TIE_MIN = 2.0
     /** On the way, slower than planned only when the next stop's level on arrival falls below this (close to empty). */
     const val STEP_AT_PERCENT = 5.0
+    /** …for this long without a break (one look at a level in passing is not enough; Navi I-072), */
+    const val STEP_HOLD_MS = 60_000L
+    /** …and not before a new route has run this long (its stops and the plan on the way taken over first). */
+    const val STEP_SETTLE_MS = 120_000L
     /** A recommendation only where the open stretches a speed changes are this long at least. */
     const val MIN_OPEN_KM = 20.0
 

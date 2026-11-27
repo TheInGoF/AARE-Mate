@@ -790,6 +790,9 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             planned = route
             routeOptions = emptyList()
             preview = optionOf(NaviSession.Choice(kind, route, plan), car, r.place.name, r.own, r.place.name).preview
+            // Navi I-073 ("die Abbiegehinweise kommen, aber die Routenmarkierung fehlt"): the line on the map as a preview
+            // would have drawn it (pick) - going on skips the preview
+            show(route)
             net.prototux.aare.DiagLog.add("navigation: the trip goes on as it was - %d charging stop(s) kept (%d done), %d own stop(s), %.1f km; one request, no new plan".format(
                 java.util.Locale.ROOT, stops.size, r.stops.size - stops.size, r.own.size, route.distance / 1000), area = "NAVI")
             start()
@@ -2089,17 +2092,34 @@ internal fun MateNaviScreen(modifier: Modifier, driving: Boolean = false, carNam
             val nextAt = NaviKeep.stillToCharge(trip).firstOrNull { it !== NaviKeep.atCharger.value }?.charger?.at
             val stepNow = NaviKeep.speedStep.value?.takeIf { (at, _) -> if (at == null) nextAt == null else nextAt != null && ChargerIndex.distanceM(at, nextAt) < 150 }
             val adviseKmh = legsNow?.before(nextAt)?.let { base -> stepNow?.second?.let { minOf(it, base) } ?: base }
-            LaunchedEffect(tileArrival?.percent?.roundToLong(), nextAt, legsNow) {
+            // the route of the moment, since when (a new one settles first)
+            val routeSince = remember(guided) { android.os.SystemClock.elapsedRealtime() }
+            // since when the stop is in doubt without a break (Navi I-072: not on one look)
+            val doubtSince = remember(nextAt, guided) { longArrayOf(0L) }
+            LaunchedEffect(tileArrival?.percent?.roundToLong(), nextAt, legsNow, guided) {
                 val l = legsNow ?: return@LaunchedEffect
                 val t = tileArrival ?: return@LaunchedEffect
                 val car = net.prototux.aare.host.CarDataService.car(context) ?: return@LaunchedEffect
                 if (testDrive || (nextAt != null) != t.atCharger) return@LaunchedEffect
+                // Navi I-072 ("unbegrenzt, 150 laut Navi … und ich bekomme die Ansage, ich soll 100 fahren"): started before
+                // the charging plan was done, the route did not have its stop yet - the destination's level without that
+                // charge (-4 %) made 100 at once. Only with the plan's own reckoning on this route, every stop ahead on it, the
+                // route settled, and the stop in doubt for a while
+                val g = guided ?: return@LaunchedEffect
+                val driven = g.distance - trip.progress.distanceRemaining
+                val now = android.os.SystemClock.elapsedRealtime()
+                val missing = nextAt == null && chargeStops.any { it.atM > driven + 500 }
+                if (rollNow == null || startedPending != null || missing || now - routeSince < ChargeSpeed.STEP_SETTLE_MS) { doubtSince[0] = 0L; return@LaunchedEffect }
                 val base = l.before(nextAt)
                 val held = stepNow?.second ?: base
                 val used = car.socPercent - t.percent
                 val least = minOf(NaviCharge.chargerWarnPercent(context), ChargeSpeed.STEP_AT_PERCENT)
-                val step = ChargeSpeed.stepDown(held, least) { v -> car.socPercent - used * ChargeSpeed.energyRatio(base, v, car) } ?: return@LaunchedEffect
-                if (step >= held) return@LaunchedEffect
+                val step = ChargeSpeed.stepDown(held, least) { v -> car.socPercent - used * ChargeSpeed.energyRatio(base, v, car) }
+                if (step == null || step >= held) { doubtSince[0] = 0L; return@LaunchedEffect }
+                if (doubtSince[0] == 0L) doubtSince[0] = now
+                // the rest of the hold waited out here: a level back above it (a new run of this, the tile changed) starts afresh
+                val wait = ChargeSpeed.STEP_HOLD_MS - (now - doubtSince[0])
+                if (wait > 0) kotlinx.coroutines.delay(wait)
                 NaviKeep.speedStep.value = nextAt to step
                 chargeLog("charging: %.1f %% on arrival at the %s at %d km/h - below %.0f %%; advised %d km/h until there".format(java.util.Locale.ROOT,
                     t.percent, if (nextAt != null) "next charger" else "destination", held, least, step))

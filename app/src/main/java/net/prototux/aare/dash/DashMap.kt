@@ -170,16 +170,30 @@ private fun DashMap(go: (String) -> Unit) {
     var car by remember { mutableStateOf<Position?>(null) }
     var heading by remember { mutableStateOf<Double?>(null) }
     var rangeKm by remember { mutableStateOf<Double?>(null) }
+    // System I-151 (27.11.2026, after I-150: "Der Pfeil läuft, bleibt stehen, springt … ob er sich mehrere GPS-Quellen
+    // reinholt"): the car's own GPS as Mate Navi takes it - about once a second, with its direction - while the car sends
+    // it; IDmate's position (stick or server, some seconds apart) only without it
+    var fromCar by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) {
+        net.prototux.aare.ui.car.navi.CarFixes.last.collect { l ->
+            if (l == null || (l.latitude == 0.0 && l.longitude == 0.0)) return@collect
+            if (fromCar != true) { fromCar = true; net.prototux.aare.DiagLog.add("dashboard map: the car's place from the car's own GPS (as the navigation's)") }
+            car = Position(longitude = l.longitude, latitude = l.latitude)
+            if (l.hasBearing() && l.hasSpeed() && l.speed > DashDrive.MOVING_MS) heading = l.bearing.toDouble()
+        }
+    }
     LaunchedEffect(Unit) {
         while (true) {
             val lat = DashData.number(context, "lat", Long.MAX_VALUE); val lon = DashData.number(context, "lon", Long.MAX_VALUE)
-            if (lat != null && lon != null && (lat != 0.0 || lon != 0.0)) {
+            val carGps = net.prototux.aare.ui.car.navi.CarFixes.ageMs() < net.prototux.aare.ui.car.navi.NaviLiveLocation.CAR_STALE_MS
+            if (!carGps && fromCar == true) { fromCar = false; net.prototux.aare.DiagLog.add("dashboard map: the car's GPS silent - its place from " + (DashData.sourceOf(context, "lat") ?: "?")) }
+            if (!carGps && lat != null && lon != null && (lat != 0.0 || lon != 0.0)) {
                 val p = Position(longitude = lon, latitude = lat)
                 // System I-087: the exported log said nothing of the dashboard's map - where its car comes from, once
                 if (car == null) net.prototux.aare.DiagLog.add("dashboard map: car's place known (from " + (DashData.sourceOf(context, "lat") ?: "?") + ")")
                 if (car?.let { it.latitude != lat || it.longitude != lon } != false) car = p
             }
-            heading = DashData.number(context, "heading", 10 * 60_000L)
+            if (!carGps) heading = DashData.number(context, "heading", 10 * 60_000L)
             rangeKm = DashData.rangeKm(context)
             delay(POLL_MS)
         }
