@@ -266,6 +266,12 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                 Column(Modifier.weight(1f)) {
                     Text(r.name.ifBlank { stringResource(R.string.mate_navi_plan_stop) }, style = MaterialTheme.typography.titleMedium,
                         color = Mate.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // Navi L-051: where the charger stands, small under its name ("Hermsdorf · A 9")
+                    r.charger?.let { ch ->
+                        val ctx = androidx.compose.ui.platform.LocalContext.current
+                        androidx.compose.runtime.LaunchedEffect(ch) { ChargerPlaces.load(ctx, ch) }
+                        ChargerPlaces.of(ch)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Mate.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
                     val detail = when (r.kind) {
                         NaviTripPlan.Kind.CHARGE -> stringResource(R.string.mate_navi_plan_charge, pct(r.arrivePercent), (r.chargeMinutes ?: 0.0).roundToInt(), pct(r.leavePercent))
                         NaviTripPlan.Kind.DESTINATION -> r.arrivePercent?.let { stringResource(R.string.mate_navi_plan_destination, pct(it)) }
@@ -334,6 +340,10 @@ internal fun androidx.compose.foundation.layout.ColumnScope.NaviTripPlanPanel(ro
                             Column(Modifier.weight(1f)) {
                                 Text(NaviTripPlan.chargerName(o.charger, stringResource(R.string.mate_navi_charger)), style = MaterialTheme.typography.titleSmall,
                                     color = Mate.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                // L-051: the alternative's place too
+                                val ctx = androidx.compose.ui.platform.LocalContext.current
+                                androidx.compose.runtime.LaunchedEffect(o.charger) { ChargerPlaces.load(ctx, o.charger) }
+                                ChargerPlaces.of(o.charger)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Mate.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                                 val kmText = String.format(java.util.Locale.getDefault(), "%.0f", Math.abs(o.shiftM) / 1000)
                                 val where = stringResource(if (o.shiftM < 0) R.string.mate_navi_alt_earlier else R.string.mate_navi_alt_later, kmText)
                                 Text(o.arrivePercent?.let { stringResource(R.string.mate_navi_alt_arrive, where, pct(it)) } ?: where,

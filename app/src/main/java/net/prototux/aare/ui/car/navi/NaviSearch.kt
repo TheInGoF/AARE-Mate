@@ -49,6 +49,22 @@ internal object NaviSearch {
         }.getOrNull()
     }
 
+    /** Photon's properties of the place nearest [at] (within a kilometre); null without the server or an answer (Navi L-051). */
+    suspend fun reverse(context: Context, at: Position): JSONObject? = withContext(Dispatchers.IO) {
+        val b = base(context) ?: return@withContext null
+        runCatching {
+            val url = (b + "/reverse").toHttpUrl().newBuilder()
+                .addQueryParameter("lat", "%.6f".format(java.util.Locale.ROOT, at.latitude))
+                .addQueryParameter("lon", "%.6f".format(java.util.Locale.ROOT, at.longitude))
+                .addQueryParameter("radius", "1").addQueryParameter("limit", "1")
+                .addQueryParameter("lang", net.prototux.aare.Language.code).build()
+            NaviServer.client(context).newCall(Request.Builder().url(url).build()).execute().use { r ->
+                if (!r.isSuccessful) return@runCatching null
+                JSONObject(r.body.string()).optJSONArray("features")?.optJSONObject(0)?.optJSONObject("properties")
+            }
+        }.getOrNull()
+    }
+
     /** A hit of the search: what it is called, its address line, where it lies; [own] one of the driver's places. */
     /** [charger]: a charger found by category, with its [network] for the logo (O210). */
     class Hit(val name: String, val address: String, val at: Position, val own: Boolean = false,
